@@ -2,8 +2,10 @@ const API_BASE_URL = 'http://localhost:8001'
 
 class ApiService {
   constructor() {
-    // Em desenvolvimento usa localhost, em produção usa a URL relativa
-    this.baseURL = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:8001';
+    // Em desenvolvimento usa localhost, em produção usa a URL do Render
+    this.baseURL = process.env.NODE_ENV === 'production' 
+      ? (process.env.REACT_APP_API_URL || 'https://atende-ai-backend.onrender.com')
+      : 'http://localhost:8001';
   }
 
   async request(endpoint, options = {}) {
