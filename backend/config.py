@@ -1,0 +1,76 @@
+import os
+import json
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Carregar variáveis de ambiente globais
+load_dotenv()
+
+class Config:
+    # Database
+    POSTGRES_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/atendeai")
+    
+    # Redis
+    REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+    
+    # JWT
+    SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here-change-in-production")
+    ALGORITHM = "HS256"
+    
+    # Twilio
+    TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
+    TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
+    
+    # OpenAI
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+    
+    # Google
+    GOOGLE_CREDENTIALS = os.getenv("GOOGLE_CREDENTIALS", "")
+    
+    # Chatwoot
+    CHATWOOT_API_KEY = os.getenv("CHATWOOT_API_KEY", "")
+    CHATWOOT_BASE_URL = os.getenv("CHATWOOT_BASE_URL", "")
+
+    # Caminho para as empresas
+    EMPRESAS_PATH = Path('../empresas')
+
+    @classmethod
+    def get_empresa_config(cls, empresa_slug):
+        """Carrega configuração de uma empresa específica"""
+        empresa_path = cls.EMPRESAS_PATH / empresa_slug
+
+        if not empresa_path.exists():
+            raise ValueError(f"Empresa '{empresa_slug}' não encontrada")
+
+        # Carregar config.json
+        config_file = empresa_path / 'config.json'
+        if config_file.exists():
+            with open(config_file, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+        else:
+            config = {}
+
+        # Carregar prompt.txt
+        prompt_file = empresa_path / 'prompt.txt'
+        if prompt_file.exists():
+            with open(prompt_file, 'r', encoding='utf-8') as f:
+                config['prompt'] = f.read().strip()
+
+        return config
+
+    @classmethod
+    def list_empresas(cls):
+        """Lista todas as empresas disponíveis"""
+        empresas = []
+        for empresa_dir in cls.EMPRESAS_PATH.iterdir():
+            if empresa_dir.is_dir():
+                config_file = empresa_dir / 'config.json'
+                if config_file.exists():
+                    with open(config_file, 'r', encoding='utf-8') as f:
+                        config = json.load(f)
+                        empresas.append({
+                            'slug': empresa_dir.name,
+                            'nome': config.get('nome', empresa_dir.name),
+                            'status': 'ativo'
+                        })
+        return empresas 

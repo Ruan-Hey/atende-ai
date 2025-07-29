@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: atendeai
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - atendeai-network
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - atendeai-network
+
+  # Backend API
+  backend:
+    build: ./backend
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/atendeai
+      - REDIS_URL=redis://redis:6379
+      - SECRET_KEY=your-secret-key-here-change-in-production
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - atendeai-network
+    restart: unless-stopped
+
+  # Frontend
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - atendeai-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  atendeai-network:
+    driver: bridge 
