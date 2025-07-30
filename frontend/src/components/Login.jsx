@@ -52,7 +52,7 @@ const Login = () => {
       <form className="login-form" onSubmit={handleSubmit}>
         <div className="login-logo">
           <img 
-            src="/tinyteams-logo-login.png" 
+            src="https://img.icons8.com/ios/160/000000/team.png" 
             alt="TinyTeams" 
             style={{ 
               width: 160, 

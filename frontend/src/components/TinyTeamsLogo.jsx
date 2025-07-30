@@ -4,7 +4,7 @@ const TinyTeamsLogo = ({ className = "logo", width = 120, height = "auto" }) => 
   return (
     <>
       <img 
-        src="/tinyteams-logo.png" 
+        src="https://img.icons8.com/ios/120/000000/team.png" 
         alt="TinyTeams" 
         className={className}
         style={{
