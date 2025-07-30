@@ -51,30 +51,11 @@ const Login = () => {
     <div className="login-fullscreen">
       <form className="login-form" onSubmit={handleSubmit}>
         <div className="login-logo">
-          {/* Tentar carregar logo externa, fallback para texto */}
-          <img 
-            src="https://via.placeholder.com/160x60/ffffff/000000?text=TinyTeams" 
-            alt="TinyTeams" 
-            style={{ 
-              width: 160, 
-              height: 60,
-              marginBottom: 12, 
-              display: 'block', 
-              marginLeft: 'auto', 
-              marginRight: 'auto',
-              borderRadius: '8px'
-            }}
-            onError={(e) => {
-              // Se falhar, substituir por div com texto
-              e.target.style.display = 'none';
-              e.target.nextSibling.style.display = 'flex';
-            }}
-          />
           <div style={{ 
             width: 160, 
             height: 60, 
             marginBottom: 12, 
-            display: 'none', 
+            display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'center',
             backgroundColor: '#fff',
