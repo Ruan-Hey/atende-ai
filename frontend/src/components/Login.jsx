@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../services/api';
 import './Login.css';
+import logoLogin from '../assets/tinyteams-logo-login.png';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -51,7 +52,7 @@ const Login = () => {
     <div className="login-fullscreen">
       <form className="login-form" onSubmit={handleSubmit}>
         <div className="login-logo">
-          <img src="/tinyteams-logo-login.png" alt="TinyTeams" style={{ width: 160, marginBottom: 12, display: 'block', marginLeft: 'auto', marginRight: 'auto' }} />
+          <img src={logoLogin} alt="TinyTeams" style={{ width: 160, marginBottom: 12, display: 'block', marginLeft: 'auto', marginRight: 'auto' }} />
         </div>
         <h2>Login</h2>
         <input

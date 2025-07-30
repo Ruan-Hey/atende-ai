@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import logo from '../assets/tinyteams-logo.png'
 
 const TinyTeamsLogo = ({ className = "logo", width = 120, height = "auto" }) => {
   const [imageError, setImageError] = useState(false)
@@ -34,7 +35,7 @@ const TinyTeamsLogo = ({ className = "logo", width = 120, height = "auto" }) => 
 
   return (
     <img 
-      src="/tinyteams-logo.png" 
+      src={logo} 
       alt="TinyTeams" 
       className={className}
       style={{ width, height }}

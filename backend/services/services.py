@@ -608,6 +608,24 @@ class MetricsService:
         try:
             config = Config.get_empresa_config(empresa_slug)
             
+            # Buscar status da empresa no banco de dados
+            from sqlalchemy import create_engine
+            from sqlalchemy.orm import sessionmaker
+            from models import Empresa
+            
+            engine = create_engine(Config.POSTGRES_URL)
+            SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+            session = SessionLocal()
+            
+            try:
+                empresa_db = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
+                status = empresa_db.status if empresa_db else 'ativo'
+            except Exception as e:
+                logger.warning(f"Erro ao buscar status da empresa {empresa_slug}: {e}")
+                status = 'ativo'
+            finally:
+                session.close()
+            
             # Buscar dados reais do Redis
             attendance_key = f"attendance:{empresa_slug}"
             atendimentos = int(self.redis_service.redis_client.get(attendance_key) or 0)
@@ -653,7 +671,7 @@ class MetricsService:
                 'atendimentos': atendimentos,
                 'reservas': 0,  # TODO: Implementar contador de reservas
                 'clientes': clientes,
-                'status': 'ativo',
+                'status': status,
                 'recent_activity': recent_activity_list
             }
                 
