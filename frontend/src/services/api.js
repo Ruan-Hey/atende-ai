@@ -3,7 +3,7 @@ const API_BASE_URL = 'http://localhost:8001'
 class ApiService {
   constructor() {
     this.baseURL = process.env.NODE_ENV === 'production' 
-      ? (process.env.REACT_APP_API_URL || 'http://api.tinyteams.app') // Mudado para HTTP temporariamente
+      ? (process.env.REACT_APP_API_URL || 'https://api.tinyteams.app') // Voltando para HTTPS
       : 'http://localhost:8001';
   }
 
