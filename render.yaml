@@ -16,8 +16,9 @@ services:
         sync: false
 
   # Frontend React
-  - type: static
+  - type: web
     name: atende-ai-frontend
+    env: static
     buildCommand: cd frontend && npm ci && npm run build
     staticPublishPath: frontend/dist
     envVars:
