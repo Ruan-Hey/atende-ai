@@ -22,8 +22,7 @@ const Usuarios = () => {
 
   const loadUsuarios = async () => {
     try {
-      const response = await api.authenticatedRequest('/api/admin/usuarios');
-      const data = await response.json();
+      const data = await api.authenticatedRequest('/api/admin/usuarios');
       setUsuarios(data);
     } catch (error) {
       console.error('Erro ao carregar usuários:', error);
@@ -34,8 +33,7 @@ const Usuarios = () => {
 
   const loadEmpresas = async () => {
     try {
-      const response = await api.authenticatedRequest('/api/admin/empresas');
-      const data = await response.json();
+      const data = await api.authenticatedRequest('/api/admin/empresas');
       setEmpresas(data);
     } catch (error) {
       console.error('Erro ao carregar empresas:', error);
