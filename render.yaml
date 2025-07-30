@@ -28,7 +28,4 @@ services:
 databases:
   - name: atende-ai-db
     databaseName: atendeai
-    user: atendeai
-
-redis:
-  - name: atende-ai-redis 
+    user: atendeai 
