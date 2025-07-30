@@ -147,7 +147,7 @@ class ApiService {
     
     if (response.status === 401) {
       this.logout();
-      window.location.href = '/login';
+      window.location.href = '/#/login';
       throw new Error('Sessão expirada');
     }
     
