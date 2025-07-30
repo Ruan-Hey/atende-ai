@@ -35,5 +35,5 @@ https://api.tinyteams.app/webhook/umas-e-ostras
 - **Event Types:** `message`
 
 ## URLs do Frontend:
-- **App:** https://app.tinyteams.app
+- **App:** https://tinyteams.app
 - **API:** https://api.tinyteams.app 
