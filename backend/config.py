@@ -13,6 +13,11 @@ class Config:
     if not POSTGRES_URL or POSTGRES_URL == "postgresql://postgres:postgres@localhost:5432/atendeai":
         POSTGRES_URL = os.getenv("POSTGRES_URL", "postgresql://postgres:postgres@localhost:5432/atendeai")
     
+    # Se a URL não parece uma URL válida, usar fallback
+    if not POSTGRES_URL.startswith("postgresql://"):
+        print(f"⚠️ URL inválida detectada: {POSTGRES_URL}")
+        POSTGRES_URL = "postgresql://atendeai:atendeai@localhost:5432/atendeai"
+    
     # Redis
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
     
