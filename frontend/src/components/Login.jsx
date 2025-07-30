@@ -51,9 +51,8 @@ const Login = () => {
     <div className="login-fullscreen">
       <form className="login-form" onSubmit={handleSubmit}>
         <div className="login-logo">
-          {/* Tentar carregar logo, fallback para texto */}
           <img 
-            src="https://via.placeholder.com/160x60/ffffff/000000?text=TinyTeams" 
+            src="/tinyteams-logo-login.png" 
             alt="TinyTeams" 
             style={{ 
               width: 160, 
