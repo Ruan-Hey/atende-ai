@@ -1,0 +1,235 @@
+# Atende Ai - Arquitetura do Projeto
+
+## 🏗️ Visão Geral da Arquitetura
+
+O **Atende Ai** é um sistema de atendimento virtual multi-empresa com arquitetura distribuída baseada em microserviços. O projeto utiliza uma arquitetura moderna com separação clara entre frontend, backend e serviços externos.
+
+### **Arquitetura Principal:**
+- **Frontend:** React 18 com Vite (SPA)
+- **Backend:** FastAPI (Python) com SQLAlchemy
+- **Banco de Dados:** PostgreSQL
+- **Cache:** Redis
+- **Containerização:** Docker + Docker Compose
+- **Integrações:** OpenAI, Twilio, Google Sheets, Chatwoot
+
+## 📁 Estrutura de Diretórios
+
+### **Backend (`backend/`)**
+```
+backend/
+├── main.py                 # Aplicação FastAPI principal
+├── config.py              # Configurações e variáveis de ambiente
+├── models.py              # Modelos SQLAlchemy e Pydantic
+├── services.py            # Lógica de negócio principal
+├── requirements.txt       # Dependências Python
+├── integrations/          # Integrações com APIs externas
+│   ├── openai_service.py
+│   ├── twilio_service.py
+│   ├── google_sheets_service.py
+│   ├── google_calendar_service.py
+│   └── chatwoot_service.py
+└── services/              # Serviços internos
+    ├── message_buffer.py  # Sistema de buffer de mensagens
+    └── services.py        # Serviços de processamento
+```
+
+### **Frontend (`frontend/`)**
+```
+frontend/
+├── src/
+│   ├── components/        # Componentes React
+│   │   ├── AdminDashboard.jsx
+│   │   ├── EmpresaDashboard.jsx
+│   │   ├── BufferStatus.jsx
+│   │   ├── LogsViewer.jsx
+│   │   ├── ConversationView.jsx
+│   │   ├── Sidebar.jsx
+│   │   ├── Login.jsx
+│   │   └── Usuarios.jsx
+│   ├── services/
+│   │   └── api.js        # Cliente HTTP para backend
+│   ├── App.jsx           # Componente principal
+│   └── main.jsx          # Ponto de entrada
+├── package.json
+└── vite.config.js
+```
+
+## 🔧 Componentes Principais
+
+### **1. Backend FastAPI ([main.py](mdc:backend/main.py))**
+- **Framework:** FastAPI com autenticação JWT
+- **Autenticação:** OAuth2PasswordBearer com tokens JWT
+- **Rotas principais:**
+  - `/api/admin/*` - Endpoints administrativos
+  - `/webhook/{empresa_slug}` - Webhooks do Twilio
+  - `/api/logs` - Sistema de logs
+  - `/api/conversation/*` - Histórico de conversas
+
+### **2. Modelos de Dados ([models.py](mdc:backend/models.py))**
+- **Empresa:** Configurações por empresa (slug, nome, integrações)
+- **Mensagem:** Histórico de mensagens por cliente
+- **Usuario:** Sistema de usuários com roles
+- **Log:** Sistema de logs estruturado
+
+### **3. Sistema de Buffer ([message_buffer.py](mdc:backend/services/message_buffer.py))**
+- **Agrupamento:** Mensagens em buffer de 10 segundos
+- **Processamento:** Texto e áudio separadamente
+- **Otimização:** Reduz spam de respostas
+
+### **4. Integrações Externas**
+- **OpenAI:** GPT-4o + Whisper para processamento de linguagem natural
+- **Twilio:** WhatsApp Business API para envio/recebimento
+- **Google Sheets:** Gestão de reservas e dados
+- **Chatwoot:** CRM e gestão de contatos
+- **Google Calendar:** Agendamento de reuniões
+
+## 🗄️ Banco de Dados
+
+### **PostgreSQL (via Docker)**
+- **Tabelas principais:**
+  - `empresas` - Configurações por empresa
+  - `messages` - Histórico de mensagens
+  - `usuarios` - Sistema de usuários
+  - `logs` - Logs estruturados
+
+### **Redis (Cache)**
+- **Contexto de conversa:** Manutenção de estado
+- **Buffer temporário:** Mensagens em processamento
+- **Sessões:** Dados temporários
+
+## 🚀 Deploy e Infraestrutura
+
+### **Docker Compose ([docker-compose.yml](mdc:docker-compose.yml))**
+- **PostgreSQL:** Banco de dados principal
+- **Redis:** Cache e sessões
+- **Backend:** API FastAPI
+- **Frontend:** React com Nginx
+
+### **Configurações de Ambiente**
+- **Desenvolvimento:** `.env` local
+- **Produção:** Variáveis de ambiente no Docker
+- **Empresas:** Configurações por empresa em JSON
+
+## 🔐 Segurança e Autenticação
+
+### **Sistema de Usuários**
+- **Superusuários:** Acesso total ao sistema
+- **Usuários por empresa:** Acesso limitado à empresa específica
+- **JWT Tokens:** Autenticação stateless
+
+### **Proteção de Rotas**
+- **Admin routes:** Requer superusuário
+- **Empresa routes:** Requer usuário da empresa
+- **Webhooks:** Autenticação por empresa
+
+## 📊 Painel Administrativo
+
+### **Dashboards**
+- **Dashboard Geral:** Métricas macro do sistema
+- **Dashboard por Empresa:** Métricas específicas
+- **Status do Buffer:** Monitoramento em tempo real
+- **Logs e Erros:** Sistema de observabilidade
+
+### **Funcionalidades**
+- **Gestão de Empresas:** CRUD completo
+- **Gestão de Usuários:** Sistema de roles
+- **Monitoramento:** Buffer status e logs
+- **Conversas:** Visualização de histórico
+
+## 🔄 Fluxo de Dados
+
+### **1. Recebimento de Mensagem**
+```
+Twilio Webhook → FastAPI → Buffer → OpenAI → Processamento → Resposta
+```
+
+### **2. Processamento Inteligente**
+```
+Buffer (10s) → Agrupamento → OpenAI (GPT-4o) → Integrações → Twilio
+```
+
+### **3. Sistema de Logs**
+```
+Ações → Logs estruturados → PostgreSQL → Painel Admin
+```
+
+## 🛠️ Tecnologias e Dependências
+
+### **Backend**
+- **FastAPI:** Framework web moderno
+- **SQLAlchemy:** ORM para PostgreSQL
+- **Redis:** Cache e sessões
+- **JWT:** Autenticação stateless
+- **Pydantic:** Validação de dados
+
+### **Frontend**
+- **React 18:** Framework frontend
+- **Vite:** Build tool moderna
+- **React Router:** Navegação SPA
+- **Axios:** Cliente HTTP
+
+### **DevOps**
+- **Docker:** Containerização
+- **Docker Compose:** Orquestração local
+- **Nginx:** Proxy reverso (produção)
+
+## 📈 Escalabilidade
+
+### **Arquitetura Multi-empresa**
+- **Isolamento:** Configurações por empresa
+- **Slugs únicos:** Identificação de empresas
+- **Prompts personalizados:** IA específica por negócio
+
+### **Performance**
+- **Processamento assíncrono:** asyncio
+- **Buffer inteligente:** Reduz chamadas de API
+- **Cache Redis:** Contexto de conversa
+- **Logs estruturados:** Observabilidade
+
+## 🔍 Pontos de Entrada Principais
+
+### **Desenvolvimento**
+- **Backend:** `uvicorn main:app --reload --port 8000`
+- **Frontend:** `npm run dev`
+- **Docker:** `docker-compose up`
+
+### **Produção**
+- **Docker Compose:** `docker-compose.prod.yml`
+- **Nginx:** Proxy reverso para frontend
+- **SSL:** Certificados automáticos
+
+## 📝 Convenções de Código
+
+### **Backend (Python)**
+- **FastAPI:** Decorators para rotas
+- **SQLAlchemy:** Models com relationships
+- **Pydantic:** Validação de dados
+- **Async/await:** Processamento assíncrono
+
+### **Frontend (React)**
+- **Componentes funcionais:** Hooks modernos
+- **CSS Modules:** Estilização modular
+- **Props drilling:** Comunicação entre componentes
+- **Context API:** Estado global quando necessário
+
+## 🚨 Monitoramento e Logs
+
+### **Sistema de Logs**
+- **Níveis:** INFO, WARNING, ERROR
+- **Estrutura:** JSON com metadados
+- **Empresa:** Filtros por empresa
+- **Tempo:** Timestamps precisos
+
+### **Métricas**
+- **Admin:** Métricas macro do sistema
+- **Empresa:** Métricas específicas
+- **Buffer:** Status em tempo real
+- **Erros:** Monitoramento de falhas
+
+---
+
+**Desenvolvido com ❤️ pela TinyTeams**
+description:
+globs:
+alwaysApply: false
+---

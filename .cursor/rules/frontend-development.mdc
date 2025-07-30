@@ -1,0 +1,311 @@
+# Frontend Development Guidelines
+
+## ⚛️ React Development
+
+### **Estrutura de Componentes**
+- **Componentes funcionais:** Hooks modernos (useState, useEffect, useContext)
+- **Props drilling:** Comunicação entre componentes
+- **Context API:** Estado global quando necessário
+- **Custom hooks:** Lógica reutilizável
+
+### **Roteamento ([App.jsx](mdc:frontend/src/App.jsx))**
+```jsx
+// Estrutura de rotas protegidas
+<Route path="/admin" element={
+  <ProtectedRoute>
+    <AdminDashboard />
+  </ProtectedRoute>
+} />
+```
+
+### **Componentes Principais**
+- **AdminDashboard:** Dashboard geral do sistema
+- **EmpresaDashboard:** Dashboard específico por empresa
+- **BufferStatus:** Monitoramento do buffer em tempo real
+- **LogsViewer:** Visualização de logs e erros
+- **ConversationView:** Histórico de conversas
+- **Sidebar:** Navegação lateral
+- **Login:** Autenticação de usuários
+
+## 🎨 Design System
+
+### **Tema Preto e Branco**
+- **Cores principais:** Preto (#000000) e Branco (#FFFFFF)
+- **Cinzas:** Tons de cinza para elementos secundários
+- **Acentos:** Azul para links e ações
+- **Logo TinyTeams:** Identidade visual consistente
+
+### **Layout Responsivo**
+- **Mobile-first:** Design adaptativo
+- **Breakpoints:** 768px, 1024px, 1200px
+- **Sidebar:** Colapsável em mobile
+- **Grid system:** Flexbox e CSS Grid
+
+### **Componentes UI**
+```css
+/* Estilos base */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.card {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  padding: 20px;
+}
+```
+
+## 🔧 Estrutura de Arquivos
+
+### **Organização de Componentes**
+```
+src/
+├── components/           # Componentes React
+│   ├── AdminDashboard.jsx
+│   ├── EmpresaDashboard.jsx
+│   ├── BufferStatus.jsx
+│   ├── LogsViewer.jsx
+│   ├── ConversationView.jsx
+│   ├── Sidebar.jsx
+│   ├── Login.jsx
+│   ├── Usuarios.jsx
+│   └── NovaEmpresa.jsx
+├── services/            # Serviços e APIs
+│   └── api.js          # Cliente HTTP
+├── assets/             # Recursos estáticos
+├── App.jsx             # Componente principal
+└── main.jsx           # Ponto de entrada
+```
+
+### **Serviços de API ([api.js](mdc:frontend/src/services/api.js))**
+- **Axios:** Cliente HTTP para backend
+- **Interceptors:** Tratamento de tokens JWT
+- **Error handling:** Tratamento de erros centralizado
+- **Base URL:** Configuração de ambiente
+
+## 🔐 Autenticação
+
+### **Sistema de Login**
+- **JWT Tokens:** Armazenamento em localStorage
+- **Protected Routes:** Redirecionamento automático
+- **Token refresh:** Renovação automática
+- **Logout:** Limpeza de dados
+
+### **Proteção de Rotas**
+```jsx
+// ProtectedRoute component
+const ProtectedRoute = ({ children }) => {
+  const token = localStorage.getItem('token');
+  
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  return children;
+};
+```
+
+## 📊 Dashboards
+
+### **Admin Dashboard**
+- **Métricas macro:** Total de empresas, clientes, reservas
+- **Lista de empresas:** Status e métricas básicas
+- **Navegação:** Links para dashboards específicos
+- **Responsivo:** Adaptação para mobile
+
+### **Empresa Dashboard**
+- **Métricas específicas:** Atendimentos, reservas, clientes
+- **Atividade recente:** Últimas interações
+- **Status da empresa:** Ativo/inativo
+- **Ações rápidas:** Links para funcionalidades
+
+### **Buffer Status**
+- **Tempo real:** WebSocket ou polling
+- **Buffers ativos:** Lista de conversas em processamento
+- **Timers:** Contagem regressiva
+- **Ações:** Forçar processamento
+
+## 📝 Convenções de Código
+
+### **Componentes Funcionais**
+```jsx
+import React, { useState, useEffect } from 'react';
+
+const ComponentName = ({ prop1, prop2 }) => {
+  const [state, setState] = useState(initialValue);
+  
+  useEffect(() => {
+    // Side effects
+  }, [dependencies]);
+  
+  const handleClick = () => {
+    // Event handlers
+  };
+  
+  return (
+    <div className="component">
+      {/* JSX content */}
+    </div>
+  );
+};
+
+export default ComponentName;
+```
+
+### **Hooks Customizados**
+```jsx
+// hooks/useApi.js
+const useApi = (endpoint) => {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  useEffect(() => {
+    // API call logic
+  }, [endpoint]);
+  
+  return { data, loading, error };
+};
+```
+
+### **Estilização**
+- **CSS Modules:** Para estilos específicos
+- **CSS-in-JS:** Para estilos dinâmicos
+- **Tailwind CSS:** Para utilitários (se configurado)
+- **Variáveis CSS:** Para temas consistentes
+
+## 🚀 Performance
+
+### **Otimizações**
+- **React.memo:** Para componentes pesados
+- **useMemo/useCallback:** Para cálculos custosos
+- **Lazy loading:** Para componentes grandes
+- **Code splitting:** Para reduzir bundle size
+
+### **Bundle Optimization**
+- **Vite:** Build tool moderna
+- **Tree shaking:** Remoção de código não usado
+- **Minificação:** Redução de tamanho
+- **Gzip:** Compressão de assets
+
+## 📱 Responsividade
+
+### **Mobile-First**
+```css
+/* Base styles (mobile) */
+.container {
+  padding: 10px;
+}
+
+/* Tablet */
+@media (min-width: 768px) {
+  .container {
+    padding: 20px;
+  }
+}
+
+/* Desktop */
+@media (min-width: 1024px) {
+  .container {
+    padding: 30px;
+  }
+}
+```
+
+### **Sidebar Responsiva**
+- **Desktop:** Sempre visível
+- **Tablet:** Colapsável
+- **Mobile:** Overlay com overlay
+
+## 🔄 Estado Global
+
+### **Context API**
+```jsx
+// Context for global state
+const AppContext = createContext();
+
+export const AppProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(false);
+  
+  return (
+    <AppContext.Provider value={{ user, setUser, loading, setLoading }}>
+      {children}
+    </AppContext.Provider>
+  );
+};
+```
+
+### **Local State**
+- **useState:** Para estado local
+- **useReducer:** Para estado complexo
+- **useContext:** Para estado compartilhado
+
+## 🧪 Testes
+
+### **Estrutura de Testes**
+```jsx
+// Component.test.jsx
+import { render, screen } from '@testing-library/react';
+import Component from './Component';
+
+test('renders component', () => {
+  render(<Component />);
+  expect(screen.getByText('Text')).toBeInTheDocument();
+});
+```
+
+### **Mocks**
+- **API calls:** Mock de serviços
+- **LocalStorage:** Mock de storage
+- **Router:** Mock de navegação
+
+## 🔧 Configuração
+
+### **Vite ([vite.config.js](mdc:frontend/vite.config.js))**
+- **Build tool:** Vite para desenvolvimento rápido
+- **Hot reload:** Recarregamento automático
+- **Environment variables:** Configuração de ambiente
+- **Proxy:** Para desenvolvimento local
+
+### **Package.json**
+- **Dependencies:** React, React Router, Axios
+- **Dev dependencies:** Vite, testing libraries
+- **Scripts:** Build, dev, test, preview
+
+## 📊 Monitoramento
+
+### **Error Boundaries**
+```jsx
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+  
+  render() {
+    if (this.state.hasError) {
+      return <h1>Algo deu errado.</h1>;
+    }
+    
+    return this.props.children;
+  }
+}
+```
+
+### **Analytics**
+- **User interactions:** Tracking de cliques
+- **Performance:** Métricas de carregamento
+- **Errors:** Captura de erros
+- **Usage:** Métricas de uso
+description:
+globs:
+alwaysApply: false
+---

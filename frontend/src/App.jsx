@@ -108,7 +108,11 @@ function AppRoutes() {
               <Usuarios />
             </ProtectedRoute>
           } />
-          <Route path="/" element={<AdminDashboard />} />
+          <Route path="/" element={
+            <ProtectedRoute>
+              <AdminDashboard />
+            </ProtectedRoute>
+          } />
           <Route path="*" element={
             <div style={{ padding: '2rem', textAlign: 'center' }}>
               <h2>Página não encontrada</h2>

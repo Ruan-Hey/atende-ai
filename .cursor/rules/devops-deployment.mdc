@@ -1,0 +1,292 @@
+# DevOps e Deploy Guidelines
+
+## 🐳 Docker e Containerização
+
+### **Docker Compose ([docker-compose.yml](mdc:docker-compose.yml))**
+```yaml
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: atendeai
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - atendeai-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - atendeai-network
+
+  backend:
+    build: ./backend
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/atendeai
+      - REDIS_URL=redis://redis:6379
+      - SECRET_KEY=your-secret-key-here-change-in-production
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - atendeai-network
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - atendeai-network
+    restart: unless-stopped
+```
+
+### **Backend Dockerfile ([backend/Dockerfile](mdc:backend/Dockerfile))**
+- **Multi-stage build:** Para otimização de tamanho
+- **Python 3.11:** Versão estável
+- **Dependências:** Instalação via requirements.txt
+- **Health checks:** Verificação de saúde do container
+
+### **Frontend Dockerfile ([frontend/Dockerfile](mdc:frontend/Dockerfile))**
+- **Nginx:** Servidor web para produção
+- **Build estático:** Otimização para produção
+- **Configuração:** Nginx config para SPA
+- **SSL:** Suporte a HTTPS
+
+## 🚀 Deploy em Produção
+
+### **Docker Compose Production ([docker-compose.prod.yml](mdc:docker-compose.prod.yml))**
+- **Volumes persistentes:** Para dados críticos
+- **Networks isoladas:** Para segurança
+- **Environment variables:** Configurações de produção
+- **Health checks:** Monitoramento de saúde
+
+### **Render Deployment ([render.yaml](mdc:render.yaml))**
+```yaml
+services:
+  - type: web
+    name: atendeai-backend
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        value: postgresql://...
+      - key: REDIS_URL
+        value: redis://...
+```
+
+### **SSL Setup ([setup-ssl.sh](mdc:setup-ssl.sh))**
+- **Certbot:** Certificados Let's Encrypt
+- **Auto-renewal:** Renovação automática
+- **Nginx config:** Configuração SSL
+- **Security headers:** Headers de segurança
+
+## 🔧 Configuração de Ambiente
+
+### **Variáveis de Ambiente**
+```bash
+# Backend (.env)
+DATABASE_URL=postgresql://user:pass@host:port/db
+REDIS_URL=redis://host:port
+SECRET_KEY=your-secret-key-here
+OPENAI_API_KEY=your-openai-key
+TWILIO_ACCOUNT_SID=your-twilio-sid
+TWILIO_AUTH_TOKEN=your-twilio-token
+
+# Frontend
+VITE_API_URL=http://localhost:8000
+VITE_APP_NAME=Atende Ai
+```
+
+### **Configuração por Empresa**
+- **Slug único:** Identificação da empresa
+- **Configurações JSON:** Integrações e settings
+- **Prompts personalizados:** IA específica por negócio
+- **Webhooks:** URLs específicas por empresa
+
+## 📊 Monitoramento e Logs
+
+### **Sistema de Logs**
+- **Structured logging:** JSON format
+- **Log levels:** INFO, WARNING, ERROR
+- **Log aggregation:** Centralização de logs
+- **Log retention:** Política de retenção
+
+### **Health Checks**
+```python
+@app.get("/health")
+def health() -> HealthCheck:
+    return HealthCheck(
+        status="healthy",
+        timestamp=datetime.now(),
+        version="1.0.0"
+    )
+```
+
+### **Métricas**
+- **Application metrics:** Tempo de resposta, throughput
+- **Business metrics:** Atendimentos, reservas, clientes
+- **Infrastructure metrics:** CPU, memory, disk
+- **Error rates:** Taxa de erros e falhas
+
+## 🔐 Segurança
+
+### **SSL/TLS**
+- **Let's Encrypt:** Certificados gratuitos
+- **Auto-renewal:** Renovação automática
+- **Security headers:** HSTS, CSP, etc.
+- **Redirect HTTP to HTTPS:** Forçar HTTPS
+
+### **Network Security**
+- **Firewall rules:** Regras de firewall
+- **VPN access:** Acesso seguro
+- **Port restrictions:** Limitação de portas
+- **DDoS protection:** Proteção contra ataques
+
+### **Application Security**
+- **JWT tokens:** Autenticação stateless
+- **Password hashing:** bcrypt para senhas
+- **Input validation:** Validação de entradas
+- **SQL injection protection:** ORM com SQLAlchemy
+
+## 🗄️ Banco de Dados
+
+### **PostgreSQL**
+- **Connection pooling:** PgBouncer para performance
+- **Backup strategy:** Backups automáticos
+- **Replication:** Read replicas se necessário
+- **Monitoring:** pg_stat_statements para queries
+
+### **Redis**
+- **Persistence:** RDB e AOF para durabilidade
+- **Memory management:** Configuração de memória
+- **Backup:** Snapshots automáticos
+- **Monitoring:** Redis INFO para métricas
+
+## 🔄 CI/CD Pipeline
+
+### **GitHub Actions**
+```yaml
+name: Deploy
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Deploy to Render
+        run: |
+          # Deploy steps
+```
+
+### **Automated Testing**
+- **Unit tests:** Testes de unidades
+- **Integration tests:** Testes de integração
+- **E2E tests:** Testes end-to-end
+- **Security scans:** Verificação de vulnerabilidades
+
+## 📈 Escalabilidade
+
+### **Horizontal Scaling**
+- **Load balancer:** Distribuição de carga
+- **Multiple instances:** Múltiplas instâncias
+- **Database sharding:** Particionamento de dados
+- **CDN:** Distribuição de conteúdo estático
+
+### **Vertical Scaling**
+- **Resource monitoring:** Monitoramento de recursos
+- **Auto-scaling:** Escalabilidade automática
+- **Performance tuning:** Otimização de performance
+- **Caching strategy:** Estratégia de cache
+
+## 🚨 Disaster Recovery
+
+### **Backup Strategy**
+- **Database backups:** Backups diários
+- **File backups:** Backups de arquivos
+- **Configuration backups:** Backups de configuração
+- **Recovery testing:** Testes de recuperação
+
+### **High Availability**
+- **Redundant servers:** Servidores redundantes
+- **Failover strategy:** Estratégia de failover
+- **Data replication:** Replicação de dados
+- **Monitoring alerts:** Alertas de monitoramento
+
+## 📋 Deploy Checklist
+
+### **Pre-deploy**
+- [ ] **Environment variables:** Configuradas corretamente
+- [ ] **Database migrations:** Executadas
+- [ ] **SSL certificates:** Válidos e renovados
+- [ ] **Backup:** Backup recente realizado
+- [ ] **Testing:** Testes passando
+
+### **Deploy**
+- [ ] **Docker images:** Builds atualizados
+- [ ] **Health checks:** Verificando saúde
+- [ ] **Logs monitoring:** Monitorando logs
+- [ ] **Performance:** Verificando performance
+- [ ] **Rollback plan:** Plano de rollback pronto
+
+### **Post-deploy**
+- [ ] **Functionality:** Funcionalidades testadas
+- [ ] **Performance:** Métricas verificadas
+- [ ] **Error monitoring:** Monitoramento de erros
+- [ ] **User feedback:** Feedback de usuários
+- [ ] **Documentation:** Documentação atualizada
+
+## 🔧 Troubleshooting
+
+### **Common Issues**
+- **Database connections:** Verificar conexões
+- **Redis connectivity:** Verificar Redis
+- **SSL certificates:** Verificar certificados
+- **Memory leaks:** Monitorar uso de memória
+- **Slow queries:** Otimizar queries
+
+### **Debug Commands**
+```bash
+# Verificar containers
+docker ps
+docker logs <container_name>
+
+# Verificar banco de dados
+docker exec -it postgres psql -U postgres -d atendeai
+
+# Verificar Redis
+docker exec -it redis redis-cli
+
+# Verificar logs
+docker-compose logs -f backend
+```
+
+## 📚 Documentação
+
+### **Deploy Guide ([DEPLOY.md](mdc:DEPLOY.md))**
+- **Setup instructions:** Instruções de configuração
+- **Environment setup:** Configuração de ambiente
+- **Deploy steps:** Passos de deploy
+- **Troubleshooting:** Solução de problemas
+
+### **API Documentation**
+- **Swagger UI:** Documentação automática
+- **OpenAPI spec:** Especificação da API
+- **Examples:** Exemplos de uso
+- **Error codes:** Códigos de erro
+description:
+globs:
+alwaysApply: false
+---

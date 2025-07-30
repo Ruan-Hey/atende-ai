@@ -1,0 +1,183 @@
+# Backend Development Guidelines
+
+## 🐍 FastAPI Development
+
+### **Estrutura de Rotas**
+- **Admin routes:** `/api/admin/*` - Requer autenticação de superusuário
+- **Empresa routes:** `/api/admin/empresa/{slug}/*` - Requer usuário da empresa
+- **Webhooks:** `/webhook/{empresa_slug}` - Recebimento de mensagens
+- **Health check:** `/health` - Status do sistema
+
+### **Autenticação JWT**
+```python
+# Usar dependências para proteção de rotas
+async def get_current_user(token: str = Depends(OAuth2PasswordBearer(tokenUrl="api/login"))):
+    # Validação de token JWT
+    pass
+
+async def get_current_superuser(current_user: Usuario = Depends(get_current_user)):
+    # Verificação de superusuário
+    pass
+```
+
+### **Modelos SQLAlchemy ([models.py](mdc:backend/models.py))**
+- **Empresa:** Configurações por empresa com integrações
+- **Mensagem:** Histórico de conversas por cliente
+- **Usuario:** Sistema de usuários com roles
+- **Log:** Sistema de logs estruturado
+
+### **Validação com Pydantic**
+- **WebhookData:** Dados recebidos do Twilio
+- **MessageResponse:** Resposta de mensagem processada
+- **AdminMetrics:** Métricas para painel admin
+- **EmpresaMetrics:** Métricas específicas de empresa
+
+## 🔄 Sistema de Buffer
+
+### **Message Buffer ([message_buffer.py](mdc:backend/services/message_buffer.py))**
+- **Agrupamento:** 10 segundos de buffer para mensagens
+- **Processamento:** Texto e áudio separadamente
+- **Otimização:** Reduz spam de respostas
+
+### **Fluxo de Processamento**
+1. **Recebimento:** Webhook do Twilio
+2. **Buffer:** Agrupamento de mensagens
+3. **OpenAI:** Processamento com GPT-4o
+4. **Integrações:** Google Sheets, Chatwoot
+5. **Resposta:** Envio via Twilio
+
+## 🔌 Integrações Externas
+
+### **OpenAI Service ([openai_service.py](mdc:backend/integrations/openai_service.py))**
+- **GPT-4o:** Processamento de texto
+- **Whisper:** Transcrição de áudio
+- **Prompts personalizados:** Por empresa
+
+### **Twilio Service ([twilio_service.py](mdc:backend/integrations/twilio_service.py))**
+- **WhatsApp Business API:** Envio/recebimento
+- **Webhooks:** Recebimento de mensagens
+- **Templates:** Mensagens estruturadas
+
+### **Google Services**
+- **Google Sheets ([google_sheets_service.py](mdc:backend/integrations/google_sheets_service.py)):** Gestão de reservas
+- **Google Calendar ([google_calendar_service.py](mdc:backend/integrations/google_calendar_service.py)):** Agendamento
+
+### **Chatwoot Service ([chatwoot_service.py](mdc:backend/integrations/chatwoot_service.py))**
+- **CRM:** Gestão de contatos
+- **Conversas:** Histórico estruturado
+- **Integração:** Registro automático
+
+## 🗄️ Banco de Dados
+
+### **PostgreSQL com SQLAlchemy**
+- **Engine:** Configurado em [main.py](mdc:backend/main.py)
+- **Sessions:** SessionLocal para operações
+- **Migrations:** Alembic para controle de versão
+
+### **Redis Cache**
+- **Contexto:** Manutenção de estado de conversa
+- **Buffer:** Dados temporários de processamento
+- **Sessões:** Tokens e dados temporários
+
+## 📝 Convenções de Código
+
+### **Estrutura de Funções**
+```python
+@app.post("/api/endpoint")
+async def endpoint_function(
+    data: ModelType,
+    current_user: Usuario = Depends(get_current_user)
+) -> ResponseType:
+    """Docstring explicando a função"""
+    try:
+        # Lógica principal
+        return response
+    except Exception as e:
+        logger.error(f"Erro: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno")
+```
+
+### **Logging**
+```python
+import logging
+logger = logging.getLogger(__name__)
+
+# Logs estruturados
+logger.info(f"Processando mensagem para empresa {empresa_slug}")
+logger.error(f"Erro na integração: {error}")
+```
+
+### **Tratamento de Erros**
+- **HTTPException:** Para erros de API
+- **Logging:** Para debug e monitoramento
+- **Try/catch:** Para operações críticas
+
+## 🔐 Segurança
+
+### **Autenticação**
+- **JWT Tokens:** Stateless authentication
+- **Password Hashing:** bcrypt para senhas
+- **Role-based Access:** Superusuário vs usuário empresa
+
+### **Validação de Dados**
+- **Pydantic:** Validação automática
+- **SQLAlchemy:** Validação de banco
+- **Sanitização:** Limpeza de inputs
+
+## 🚀 Performance
+
+### **Processamento Assíncrono**
+- **async/await:** Para operações I/O
+- **Background tasks:** Para processamento pesado
+- **Connection pooling:** Para banco de dados
+
+### **Cache Strategy**
+- **Redis:** Contexto de conversa
+- **In-memory:** Dados temporários
+- **TTL:** Expiração automática
+
+## 📊 Monitoramento
+
+### **Logs Estruturados**
+- **Níveis:** INFO, WARNING, ERROR
+- **Empresa:** Filtros por empresa
+- **Timestamps:** Precisão temporal
+- **Contexto:** Metadados relevantes
+
+### **Métricas**
+- **Health checks:** Status do sistema
+- **Performance:** Tempo de resposta
+- **Erros:** Taxa de falhas
+- **Uso:** Métricas de negócio
+
+## 🧪 Testes
+
+### **Estrutura de Testes**
+```python
+# test_main.py
+def test_endpoint():
+    response = client.post("/api/endpoint", json=data)
+    assert response.status_code == 200
+```
+
+### **Mocks**
+- **Integrações externas:** OpenAI, Twilio
+- **Banco de dados:** Test database
+- **Cache:** Redis mock
+
+## 🔧 Configuração
+
+### **Variáveis de Ambiente**
+- **DATABASE_URL:** PostgreSQL connection
+- **REDIS_URL:** Redis connection
+- **SECRET_KEY:** JWT signing key
+- **API Keys:** OpenAI, Twilio, etc.
+
+### **Configuração por Empresa**
+- **Slug único:** Identificação da empresa
+- **Configurações:** JSON com integrações
+- **Prompts:** Personalizados por negócio
+description:
+globs:
+alwaysApply: false
+---

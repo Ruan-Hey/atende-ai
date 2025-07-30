@@ -1,0 +1,345 @@
+# Integrações e Serviços Externos
+
+## 🤖 OpenAI Integration ([openai_service.py](mdc:backend/integrations/openai_service.py))
+
+### **Funcionalidades**
+- **GPT-4o:** Processamento de linguagem natural
+- **Whisper:** Transcrição de áudio para texto
+- **Prompts personalizados:** Por empresa e contexto
+- **Context management:** Manutenção de contexto de conversa
+
+### **Configuração**
+```python
+# Configuração OpenAI
+OPENAI_API_KEY = "your-openai-api-key"
+OPENAI_MODEL = "gpt-4o"  # ou "gpt-4o-mini"
+WHISPER_MODEL = "whisper-1"
+```
+
+### **Uso Típico**
+```python
+# Processamento de texto
+response = await openai_service.process_message(
+    message="Olá, quero fazer uma reserva",
+    empresa_slug="umas-e-ostras",
+    context=conversation_history
+)
+
+# Transcrição de áudio
+transcription = await openai_service.transcribe_audio(
+    audio_url="https://example.com/audio.wav"
+)
+```
+
+### **Prompts Personalizados**
+- **Restaurante:** Foco em reservas e cardápio
+- **Pizzaria:** Foco em pedidos e delivery
+- **Contexto:** Histórico de conversa mantido
+- **Tone:** Tom apropriado para cada negócio
+
+## 📞 Twilio WhatsApp Integration ([twilio_service.py](mdc:backend/integrations/twilio_service.py))
+
+### **Funcionalidades**
+- **WhatsApp Business API:** Envio e recebimento de mensagens
+- **Webhooks:** Recebimento automático de mensagens
+- **Templates:** Mensagens estruturadas
+- **Media handling:** Imagens, áudio, documentos
+
+### **Configuração**
+```python
+# Configuração Twilio
+TWILIO_ACCOUNT_SID = "your-account-sid"
+TWILIO_AUTH_TOKEN = "your-auth-token"
+TWILIO_PHONE_NUMBER = "whatsapp:+1234567890"
+```
+
+### **Webhook Handler**
+```python
+@app.post("/webhook/{empresa_slug}")
+async def webhook_handler(empresa_slug: str, request: Request):
+    # Recebimento de mensagens do WhatsApp
+    data = await request.form()
+    message = data.get("Body")
+    from_number = data.get("From")
+    
+    # Processamento da mensagem
+    await process_incoming_message(empresa_slug, message, from_number)
+```
+
+### **Envio de Mensagens**
+```python
+# Envio de texto
+await twilio_service.send_message(
+    to="whatsapp:+1234567890",
+    body="Sua reserva foi confirmada!",
+    empresa_slug="umas-e-ostras"
+)
+
+# Envio de mídia
+await twilio_service.send_media(
+    to="whatsapp:+1234567890",
+    media_url="https://example.com/image.jpg",
+    caption="Confira nosso cardápio"
+)
+```
+
+## 📊 Google Sheets Integration ([google_sheets_service.py](mdc:backend/integrations/google_sheets_service.py))
+
+### **Funcionalidades**
+- **Gestão de reservas:** Adicionar, atualizar, cancelar
+- **Listagem de dados:** Consulta de reservas existentes
+- **Sincronização:** Dados em tempo real
+- **Formatação:** Layout personalizado
+
+### **Configuração**
+```python
+# Configuração Google Sheets
+GOOGLE_SHEETS_CREDENTIALS = {
+    "type": "service_account",
+    "project_id": "your-project-id",
+    "private_key_id": "your-private-key-id",
+    "private_key": "-----BEGIN PRIVATE KEY-----\n...",
+    "client_email": "your-service-account@project.iam.gserviceaccount.com"
+}
+```
+
+### **Operações Principais**
+```python
+# Adicionar reserva
+await sheets_service.add_reservation(
+    sheet_id="your-sheet-id",
+    data={
+        "data": "2024-01-15",
+        "hora": "19:00",
+        "nome": "João Silva",
+        "telefone": "+5511999999999",
+        "pessoas": 4,
+        "status": "confirmada"
+    }
+)
+
+# Listar reservas
+reservations = await sheets_service.list_reservations(
+    sheet_id="your-sheet-id",
+    date_filter="2024-01-15"
+)
+```
+
+### **Estrutura da Planilha**
+- **Colunas:** Data, Hora, Nome, Telefone, Pessoas, Status
+- **Formatação:** Cores por status
+- **Filtros:** Por data e status
+- **Validação:** Dados obrigatórios
+
+## 📅 Google Calendar Integration ([google_calendar_service.py](mdc:backend/integrations/google_calendar_service.py))
+
+### **Funcionalidades**
+- **Agendamento de reuniões:** Criação automática de eventos
+- **Slots disponíveis:** Consulta de horários livres
+- **Sincronização:** Com Google Sheets
+- **Notificações:** Lembretes automáticos
+
+### **Configuração**
+```python
+# Configuração Google Calendar
+GOOGLE_CALENDAR_ID = "primary"  # ou ID específico
+GOOGLE_CALENDAR_CREDENTIALS = {
+    # Mesmas credenciais do Google Sheets
+}
+```
+
+### **Operações**
+```python
+# Criar evento
+event = await calendar_service.create_event(
+    summary="Reserva - João Silva",
+    description="4 pessoas, telefone: +5511999999999",
+    start_time="2024-01-15T19:00:00",
+    end_time="2024-01-15T21:00:00",
+    attendees=["joao@email.com"]
+)
+
+# Consultar slots disponíveis
+available_slots = await calendar_service.get_available_slots(
+    date="2024-01-15",
+    business_hours="09:00-22:00"
+)
+```
+
+## 💬 Chatwoot Integration ([chatwoot_service.py](mdc:backend/integrations/chatwoot_service.py))
+
+### **Funcionalidades**
+- **CRM completo:** Gestão de contatos e conversas
+- **Registro automático:** Conversas do WhatsApp
+- **Histórico:** Manutenção de histórico completo
+- **Tags e filtros:** Organização de conversas
+
+### **Configuração**
+```python
+# Configuração Chatwoot
+CHATWOOT_API_URL = "https://app.chatwoot.com/api/v1"
+CHATWOOT_ACCESS_TOKEN = "your-access-token"
+CHATWOOT_ACCOUNT_ID = "your-account-id"
+CHATWOOT_INBOX_ID = "your-inbox-id"
+```
+
+### **Operações Principais**
+```python
+# Criar conversa
+conversation = await chatwoot_service.create_conversation(
+    contact_identifier="+5511999999999",
+    message="Olá, quero fazer uma reserva",
+    empresa_slug="umas-e-ostras"
+)
+
+# Adicionar mensagem
+await chatwoot_service.add_message(
+    conversation_id=conversation_id,
+    message="Sua reserva foi confirmada!",
+    message_type="outgoing"
+)
+
+# Listar conversas
+conversations = await chatwoot_service.list_conversations(
+    status="open",
+    empresa_slug="umas-e-ostras"
+)
+```
+
+### **Estrutura de Dados**
+- **Contatos:** Informações do cliente
+- **Conversas:** Histórico de mensagens
+- **Tags:** Categorização (reserva, pedido, dúvida)
+- **Agentes:** Atribuição de conversas
+
+## 🔄 Sistema de Buffer ([message_buffer.py](mdc:backend/services/message_buffer.py))
+
+### **Funcionalidades**
+- **Agrupamento:** Mensagens em buffer de 10 segundos
+- **Processamento inteligente:** Texto e áudio separadamente
+- **Otimização:** Reduz spam de respostas
+- **Contexto:** Manutenção de contexto de conversa
+
+### **Fluxo de Processamento**
+```python
+# 1. Recebimento de mensagem
+await buffer_service.add_message(
+    empresa_slug="umas-e-ostras",
+    cliente_id="+5511999999999",
+    message="Olá",
+    message_type="text"
+)
+
+# 2. Timer de 10 segundos
+# 3. Processamento em lote
+# 4. Resposta única
+```
+
+### **Configuração**
+```python
+# Configuração do Buffer
+BUFFER_TIMEOUT = 10  # segundos
+BUFFER_MAX_SIZE = 5  # mensagens
+PROCESSING_DELAY = 2  # segundos
+```
+
+## 🔧 Configuração por Empresa
+
+### **Estrutura de Configuração**
+```json
+{
+  "nome": "Umas e Ostras",
+  "slug": "umas-e-ostras",
+  "whatsapp_number": "+5511999999999",
+  "google_sheets_id": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
+  "chatwoot_token": "your-chatwoot-token",
+  "openai_key": "your-openai-key",
+  "twilio_sid": "your-twilio-sid",
+  "twilio_token": "your-twilio-token",
+  "twilio_number": "+5511888888888",
+  "horario_funcionamento": "11:00-23:00",
+  "filtros_chatwoot": ["reserva", "pedido"],
+  "usar_buffer": true,
+  "mensagem_quebrada": false
+}
+```
+
+### **Prompts Personalizados**
+```txt
+# Prompt para restaurante (umas-e-ostras)
+Você é o atendente virtual do restaurante Umas e Ostras. 
+Seu papel é ajudar clientes com:
+- Reservas de mesa
+- Informações sobre o cardápio
+- Horários de funcionamento
+- Localização e estacionamento
+
+Horário de funcionamento: 11:00 às 23:00
+Endereço: Rua das Flores, 123 - Centro
+
+Sempre seja cordial e profissional.
+```
+
+## 🚨 Tratamento de Erros
+
+### **Estratégias de Retry**
+```python
+# Retry automático para APIs externas
+async def api_call_with_retry(func, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            return await func()
+        except Exception as e:
+            if attempt == max_retries - 1:
+                raise e
+            await asyncio.sleep(2 ** attempt)  # Exponential backoff
+```
+
+### **Logging de Erros**
+```python
+# Log estruturado para integrações
+logger.error(f"Erro na integração {service}: {error}", extra={
+    "empresa_slug": empresa_slug,
+    "cliente_id": cliente_id,
+    "service": service_name,
+    "error_code": error.code if hasattr(error, 'code') else None
+})
+```
+
+### **Fallbacks**
+- **OpenAI:** Fallback para respostas padrão
+- **Twilio:** Retry com delay
+- **Google Services:** Cache local temporário
+- **Chatwoot:** Log local se indisponível
+
+## 📊 Métricas e Monitoramento
+
+### **Métricas por Integração**
+- **OpenAI:** Tokens usados, tempo de resposta
+- **Twilio:** Mensagens enviadas/recebidas, taxa de entrega
+- **Google Sheets:** Operações realizadas, erros
+- **Chatwoot:** Conversas criadas, mensagens processadas
+
+### **Alertas**
+- **API limits:** Limites de uso próximos
+- **Error rates:** Taxa de erro alta
+- **Response times:** Tempo de resposta lento
+- **Service availability:** Serviços indisponíveis
+
+## 🔐 Segurança
+
+### **API Keys**
+- **Environment variables:** Nunca hardcoded
+- **Rotation:** Rotação regular de chaves
+- **Access control:** Permissões mínimas necessárias
+- **Monitoring:** Uso anômalo detectado
+
+### **Data Privacy**
+- **PII handling:** Dados pessoais protegidos
+- **Encryption:** Dados em trânsito e repouso
+- **Retention:** Política de retenção de dados
+- **GDPR compliance:** Conformidade com regulamentações
+description:
+globs:
+alwaysApply: false
+---

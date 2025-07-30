@@ -26,7 +26,9 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
-    if (userData) {
+    const token = localStorage.getItem('token');
+    
+    if (userData && token) {
       setUser(JSON.parse(userData));
       loadData();
     } else {
