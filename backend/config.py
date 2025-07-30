@@ -9,6 +9,9 @@ load_dotenv()
 class Config:
     # Database
     POSTGRES_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/atendeai")
+    # Fallback para compatibilidade
+    if not POSTGRES_URL or POSTGRES_URL == "postgresql://postgres:postgres@localhost:5432/atendeai":
+        POSTGRES_URL = os.getenv("POSTGRES_URL", "postgresql://postgres:postgres@localhost:5432/atendeai")
     
     # Redis
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
