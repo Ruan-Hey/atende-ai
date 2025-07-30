@@ -28,9 +28,12 @@ const AdminDashboard = () => {
     const userData = localStorage.getItem('user');
     if (userData) {
       setUser(JSON.parse(userData));
+      loadData();
+    } else {
+      // Se não está logado, redirecionar para login
+      navigate('/login');
     }
-    loadData();
-  }, []);
+  }, [navigate]);
 
   const loadData = async () => {
     try {
