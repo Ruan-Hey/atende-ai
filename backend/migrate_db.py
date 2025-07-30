@@ -13,6 +13,12 @@ def migrate_database():
     
     # Configuração
     config = Config()
+    
+    # Debug: verificar a URL
+    print(f"🔍 DATABASE_URL: {os.getenv('DATABASE_URL', 'NÃO DEFINIDA')}")
+    print(f"🔍 POSTGRES_URL: {os.getenv('POSTGRES_URL', 'NÃO DEFINIDA')}")
+    print(f"🔍 Config.POSTGRES_URL: {config.POSTGRES_URL}")
+    
     engine = create_engine(config.POSTGRES_URL)
     
     try:
