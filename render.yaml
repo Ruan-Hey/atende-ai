@@ -20,10 +20,7 @@ services:
     name: atende-ai-frontend
     env: static
     buildCommand: cd frontend && npm ci && npm run build
-    staticPublishPath: ./frontend/dist
-    envVars:
-      - key: REACT_APP_API_URL
-        value: https://atende-ai-backend.onrender.com
+    staticPublishPath: frontend/dist
 
 databases:
   - name: atende-ai-db
