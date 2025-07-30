@@ -23,7 +23,7 @@ services:
     staticPublishPath: frontend/dist
     envVars:
       - key: REACT_APP_API_URL
-        value: https://atende-ai-backend.onrender.com
+        value: https://api.tinyteams.app
 
 databases:
   - name: atende-ai-db

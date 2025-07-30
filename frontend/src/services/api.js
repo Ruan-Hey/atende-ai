@@ -2,9 +2,9 @@ const API_BASE_URL = 'http://localhost:8001'
 
 class ApiService {
   constructor() {
-    // Em desenvolvimento usa localhost, em produção usa a URL do Render
+    // Em desenvolvimento usa localhost, em produção usa o novo domínio
     this.baseURL = process.env.NODE_ENV === 'production' 
-      ? (process.env.REACT_APP_API_URL || 'https://atende-ai-backend.onrender.com')
+      ? (process.env.REACT_APP_API_URL || 'https://api.tinyteams.app')
       : 'http://localhost:8001';
   }
 
