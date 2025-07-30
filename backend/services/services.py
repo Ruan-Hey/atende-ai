@@ -671,7 +671,7 @@ class MetricsService:
                 'atendimentos': atendimentos,
                 'reservas': 0,  # TODO: Implementar contador de reservas
                 'clientes': clientes,
-                'status': status,
+                'status': 'ativo',  # Forçar status ativo
                 'recent_activity': recent_activity_list
             }
                 
