@@ -34,7 +34,7 @@ const TinyTeamsLogo = ({ className = "logo", width = 120, height = "auto" }) => 
 
   return (
     <img 
-      src="/tinyteams-logo.png" 
+              src="https://via.placeholder.com/120x40/000000/FFFFFF?text=TinyTeams" 
       alt="TinyTeams" 
       className={className}
       style={{ width, height }}

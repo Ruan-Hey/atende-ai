@@ -51,7 +51,7 @@ const Login = () => {
     <div className="login-fullscreen">
       <form className="login-form" onSubmit={handleSubmit}>
         <div className="login-logo">
-          <img src="/tinyteams-logo-login.png" alt="TinyTeams" style={{ width: 160, marginBottom: 12, display: 'block', marginLeft: 'auto', marginRight: 'auto' }} />
+          <img src="https://via.placeholder.com/160x60/000000/FFFFFF?text=TinyTeams" alt="TinyTeams" style={{ width: 160, marginBottom: 12, display: 'block', marginLeft: 'auto', marginRight: 'auto' }} />
         </div>
         <h2>Login</h2>
         <input
