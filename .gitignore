@@ -119,4 +119,8 @@ Thumbs.db
 *.backup
 
 # Alembic
-alembic/versions/ 
+alembic/versions/
+
+# Development files (local only)
+dev.sh
+DEV.md 

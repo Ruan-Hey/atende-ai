@@ -4,13 +4,14 @@ const TinyTeamsLogo = ({ className = "logo", width = 120, height = "auto" }) => 
   return (
     <>
       <img 
-        src="https://img.icons8.com/ios/120/000000/team.png" 
+        src="/tinyteams-logo.png" 
         alt="TinyTeams" 
         className={className}
         style={{
           width: width,
           height: height,
-          borderRadius: '8px'
+          borderRadius: '8px',
+          display: 'block'
         }}
         onError={(e) => {
           // Se falhar, substituir por div com texto

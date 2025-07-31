@@ -2,9 +2,12 @@ const API_BASE_URL = 'http://localhost:8001'
 
 class ApiService {
   constructor() {
-    this.baseURL = process.env.NODE_ENV === 'production' 
-      ? (process.env.REACT_APP_API_URL || 'https://api.tinyteams.app') // Voltando para HTTPS
-      : 'http://localhost:8001';
+    // Detecta se está em desenvolvimento local ou produção
+    const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    
+    this.baseURL = isLocalDev 
+      ? 'http://localhost:8001'  // Desenvolvimento local
+      : (process.env.REACT_APP_API_URL || 'https://api.tinyteams.app'); // Produção
   }
 
   async request(endpoint, options = {}) {

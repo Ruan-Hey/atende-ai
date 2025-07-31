@@ -254,44 +254,47 @@ def get_empresa_clientes(
         if not current_user.is_superuser and current_user.empresa_id != empresa.id:
             raise HTTPException(status_code=403, detail="Acesso negado a esta empresa")
         
-        # Buscar clientes únicos do Redis
+        # Buscar clientes únicos do Redis baseado em atividades
         clientes = []
         
         try:
-            # Buscar todas as chaves que começam com o padrão da empresa
-            pattern = f"context:{empresa_slug}:*"
+            # Buscar todas as atividades da empresa
+            activity_pattern = f"activity:{empresa_slug}:*"
+            clientes_unicos = {}
             
-            for key in message_processor.redis_service.redis_client.scan_iter(match=pattern):
-                # Decodificar a chave se for bytes
-                key_str = key.decode('utf-8') if isinstance(key, bytes) else key
-                
-                # Extrair cliente_id do key (context:empresa:cliente_id)
-                parts = key_str.split(':')
-                
-                if len(parts) >= 3:
-                    cliente_id = parts[2]
-                    context = message_processor.redis_service.get_context(cliente_id, empresa_slug)
-                    
-                    # Buscar última atividade para este cliente
-                    last_activity = None
-                    activity_pattern = f"activity:{empresa_slug}:*"
-                    for activity_key in message_processor.redis_service.redis_client.scan_iter(match=activity_pattern):
-                        activity_data = message_processor.redis_service.redis_client.get(activity_key)
-                        if activity_data:
-                            try:
-                                activity = json.loads(activity_data)
-                                if activity.get('cliente') == cliente_id:
-                                    last_activity = activity
-                                    break
-                            except:
-                                pass
-                    
-                    clientes.append({
-                        "cliente_id": cliente_id,
-                        "nome": context.get('cliente_name', cliente_id),
-                        "ultima_atividade": last_activity.get('timestamp') if last_activity else None,
-                        "total_mensagens": len(context.get('messages', []))
-                    })
+            for activity_key in message_processor.redis_service.redis_client.scan_iter(match=activity_pattern):
+                activity_data = message_processor.redis_service.redis_client.get(activity_key)
+                if activity_data:
+                    try:
+                        activity = json.loads(activity_data)
+                        cliente_id = activity.get('cliente', '')
+                        
+                        if cliente_id and cliente_id not in clientes_unicos:
+                            # Buscar contexto se existir
+                            context = message_processor.redis_service.get_context(cliente_id, empresa_slug)
+                            
+                            clientes_unicos[cliente_id] = {
+                                "cliente_id": cliente_id,
+                                "nome": context.get('cliente_name', cliente_id) if context else cliente_id,
+                                "ultima_atividade": activity.get('timestamp'),
+                                "total_mensagens": len(context.get('messages', [])) if context else 0,
+                                "tipo_atividade": activity.get('type', 'mensagem')
+                            }
+                        elif cliente_id in clientes_unicos:
+                            # Atualizar última atividade se for mais recente
+                            current_timestamp = activity.get('timestamp', '')
+                            existing_timestamp = clientes_unicos[cliente_id]['ultima_atividade']
+                            
+                            if current_timestamp > existing_timestamp:
+                                clientes_unicos[cliente_id]['ultima_atividade'] = current_timestamp
+                                clientes_unicos[cliente_id]['tipo_atividade'] = activity.get('type', 'mensagem')
+                                
+                    except Exception as e:
+                        logger.error(f"Erro ao processar atividade: {e}")
+                        continue
+            
+            # Converter para lista
+            clientes = list(clientes_unicos.values())
                     
         except Exception as redis_error:
             logger.error(f"Erro ao buscar clientes no Redis: {redis_error}")
@@ -347,12 +350,32 @@ def force_process_buffer(cliente_id: str, empresa: str):
 async def webhook_handler(empresa_slug: str, request: Request):
     """Endpoint para receber webhooks do Twilio com buffer ou resposta direta"""
     try:
-        # Verificar se a empresa existe
+        # Verificar se a empresa existe no banco de dados
+        session = SessionLocal()
         try:
-            empresa_config = Config.get_empresa_config(empresa_slug)
-        except ValueError:
-            logger.error(f"Empresa não encontrada: {empresa_slug}")
+            empresa_db = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
+            if not empresa_db:
+                logger.error(f"Empresa não encontrada: {empresa_slug}")
+                raise HTTPException(status_code=404, detail="Empresa não encontrada")
+            
+            empresa_config = {
+                'nome': empresa_db.nome,
+                'openai_key': empresa_db.openai_key,
+                'twilio_sid': empresa_db.twilio_sid,
+                'twilio_token': empresa_db.twilio_token,
+                'twilio_number': empresa_db.twilio_number,
+                'chatwoot_url': empresa_db.chatwoot_origem,
+                'chatwoot_token': empresa_db.chatwoot_token,
+                'chatwoot_account_id': 2,
+                'mensagem_quebrada': empresa_db.mensagem_quebrada or False,
+                'prompt': empresa_db.prompt,
+                'usar_buffer': empresa_db.usar_buffer or True
+            }
+        except Exception as e:
+            logger.error(f"Erro ao buscar empresa {empresa_slug}: {e}")
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
+        finally:
+            session.close()
         
         # Processar dados do webhook
         form_data = await request.form()

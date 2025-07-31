@@ -40,7 +40,7 @@ class Config:
     CHATWOOT_BASE_URL = os.getenv("CHATWOOT_BASE_URL", "")
 
     # Caminho para as empresas
-    EMPRESAS_PATH = Path('../empresas')
+    EMPRESAS_PATH = Path('../../empresas')
 
     @classmethod
     def get_empresa_config(cls, empresa_slug):

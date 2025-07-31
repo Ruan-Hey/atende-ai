@@ -52,11 +52,11 @@ const Login = () => {
       <form className="login-form" onSubmit={handleSubmit}>
         <div className="login-logo">
           <img 
-            src="https://img.icons8.com/ios/160/000000/team.png" 
+            src="/tinyteams-logo-login.png" 
             alt="TinyTeams" 
             style={{ 
               width: 160, 
-              height: 60,
+              height: 'auto',
               marginBottom: 12, 
               display: 'block', 
               marginLeft: 'auto', 
@@ -87,7 +87,6 @@ const Login = () => {
             TinyTeams
           </div>
         </div>
-        <h2>Login</h2>
         <input
           type="email"
           placeholder="Email"

@@ -144,7 +144,14 @@ const AdminDashboard = () => {
             placeholder="Buscar empresa..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            style={{ padding: 6, borderRadius: 4, border: '1px solid #ccc', minWidth: 200 }}
+            style={{ 
+              padding: 6, 
+              borderRadius: 4, 
+              border: '1px solid #ccc', 
+              minWidth: 200,
+              background: '#fff',
+              color: '#333'
+            }}
           />
         </div>
         <table className="table">
