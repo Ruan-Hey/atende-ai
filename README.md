@@ -1,6 +1,6 @@
 # Atende Ai
 
-Sistema de atendimento virtual multi-empresa com painel admin moderno e agrupamento inteligente de mensagens.
+Sistema de atendimento virtual multi-empresa com painel admin moderno, autenticação JWT e métricas em tempo real.
 
 ## 🚀 Funcionalidades Principais
 
@@ -14,12 +14,21 @@ Sistema de atendimento virtual multi-empresa com painel admin moderno e agrupame
 - **Configurações isoladas** por empresa
 - **Prompts personalizados** para cada negócio
 - **Integrações independentes** (Twilio, OpenAI, Google Sheets, Chatwoot)
+- **Status ativo/inativo** por empresa
+
+### **🔐 Sistema de Autenticação**
+- **JWT (JSON Web Tokens)** para segurança
+- **Login com email/senha** criptografado
+- **Controle de acesso** por empresa
+- **Superusuários** com acesso total
+- **Usuários por empresa** com acesso restrito
 
 ### **📊 Painel Admin Moderno**
 - **Dashboard geral** com métricas macro
 - **Dashboards específicos** por empresa
 - **Monitoramento de buffer** em tempo real
 - **Visualização de logs** e erros
+- **Lista de clientes** por empresa
 - **Design preto e branco** com logo TinyTeams
 
 ### **⚡ Performance Otimizada**
@@ -27,6 +36,7 @@ Sistema de atendimento virtual multi-empresa com painel admin moderno e agrupame
 - **Buffer de mensagens** para reduzir respostas
 - **Cache Redis** para contexto
 - **Escalabilidade** para múltiplas empresas
+- **Métricas em tempo real** baseadas em atividades
 
 ## 📁 Estrutura do Projeto
 
@@ -34,10 +44,9 @@ Sistema de atendimento virtual multi-empresa com painel admin moderno e agrupame
 AtendeAi/
 │
 ├── backend/                    # Backend FastAPI
-│   ├── main.py                # Aplicação principal
+│   ├── main.py                # Aplicação principal + JWT
 │   ├── config.py              # Configurações
-│   ├── models.py              # Modelos Pydantic
-│   ├── services.py            # Lógica de negócio
+│   ├── models.py              # Modelos SQLAlchemy + Pydantic
 │   ├── requirements.txt       # Dependências Python
 │   │
 │   ├── integrations/          # Integrações externas
@@ -47,89 +56,105 @@ AtendeAi/
 │   │   └── chatwoot_service.py
 │   │
 │   └── services/              # Serviços internos
+│       ├── services.py        # Métricas e processamento
 │       └── message_buffer.py  # Buffer de mensagens
 │
 ├── frontend/                   # Frontend React
 │   ├── src/
 │   │   ├── components/
+│   │   │   ├── Login.jsx      # Tela de login
 │   │   │   ├── AdminDashboard.jsx
 │   │   │   ├── EmpresaDashboard.jsx
 │   │   │   ├── BufferStatus.jsx
 │   │   │   ├── LogsViewer.jsx
 │   │   │   └── Sidebar.jsx
 │   │   ├── services/
-│   │   │   └── api.js
+│   │   │   └── api.js         # API com autenticação
 │   │   ├── App.jsx
 │   │   └── App.css
 │   └── package.json
 │
-├── empresas/                   # Configurações por empresa
-│   ├── umas-e-ostras/
-│   │   ├── prompt.txt
-│   │   └── config.json
-│   └── pancia-piena/
-│       ├── prompt.txt
-│       └── config.json
-│
 ├── static/                     # Arquivos estáticos
-│   └── tinyteams-logo.png     # Logo TinyTeams
+│   └── tinyteams-logo-login.png # Logo TinyTeams
 │
 └── README.md                   # Este arquivo
 ```
 
 ## 🛠️ Como rodar localmente
 
-### **1. Backend (FastAPI)**
+### **1. Pré-requisitos**
+```bash
+# Instalar Redis
+brew install redis  # macOS
+# ou
+sudo apt-get install redis-server  # Ubuntu
+
+# Instalar PostgreSQL
+brew install postgresql  # macOS
+# ou
+sudo apt-get install postgresql  # Ubuntu
+```
+
+### **2. Backend (FastAPI)**
 
 ```bash
 # Ativar ambiente virtual
 source backend/venv/bin/activate
 
-# Instalar dependências (se necessário)
+# Instalar dependências
 pip install -r backend/requirements.txt
 
-# Rodar o servidor
+# Configurar banco de dados
 cd backend
-uvicorn main:app --reload --port 8000
+alembic upgrade head
+
+# Rodar o servidor
+uvicorn main:app --reload --port 8001
 ```
 
-O backend estará disponível em: **http://localhost:8000**
+O backend estará disponível em: **http://localhost:8001**
 
-### **2. Frontend (React)**
+### **3. Frontend (React)**
 
 ```bash
 # Em outro terminal
 cd frontend
+npm install
 npm run dev
 ```
 
-O frontend estará disponível em: **http://localhost:5173**
+O frontend estará disponível em: **http://localhost:5175**
 
-### **3. Acessar o painel admin**
+### **4. Acessar o painel admin**
 
-- **Dashboard Geral:** http://localhost:5173/admin
-- **Status do Buffer:** http://localhost:5173/admin/buffer/status
-- **Logs e Erros:** http://localhost:5173/admin/logs
-- **Umas e Ostras:** http://localhost:5173/admin/umas-e-ostras
-- **Pancia Piena:** http://localhost:5173/admin/pancia-piena
+- **Login:** http://localhost:5175/#/login
+- **Dashboard Geral:** http://localhost:5175/#/admin
+- **Dashboard TinyTeams:** http://localhost:5175/#/admin/tinyteams
+- **Status do Buffer:** http://localhost:5175/#/admin/buffer
+- **Logs e Erros:** http://localhost:5175/#/admin/logs
+
+**Credenciais padrão:**
+- **Email:** ruangimeneshey@gmail.com
+- **Senha:** admin123
 
 ---
 
-## 🏢 Empresas de exemplo
+## 🏢 Empresas Configuradas
 
-### **Umas e Ostras** - Restaurante
-- **Slug:** `umas-e-ostras`
-- **Tipo:** Restaurante
-- **Configurações:** Prompt personalizado para atendimento gastronômico
+### **TinyTeams** - Empresa Principal
+- **Slug:** `tinyteams`
+- **Status:** Ativo
+- **Configurações:** Sistema principal de atendimento
 
 ### **Pancia Piena** - Pizzaria
 - **Slug:** `pancia-piena`
-- **Tipo:** Pizzaria
-- **Configurações:** Prompt personalizado para pedidos de pizza
+- **Status:** Ativo
+- **Configurações:** Atendimento para pedidos de pizza
 
-Cada empresa tem sua própria pasta com:
-- `prompt.txt` - Prompt do atendente virtual
-- `config.json` - Configurações (chaves API, etc.)
+### **Umas e Ostras** - Restaurante
+- **Slug:** `umas-e-ostras`
+- **Status:** Ativo
+- **Configurações:** Atendimento gastronômico
 
 ---
 
@@ -137,24 +162,55 @@ Cada empresa tem sua própria pasta com:
 
 ### **Backend (.env)**
 ```env
-PORT=8000
-REDIS_URL=redis://localhost:6379/0
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/atendeai
+
+# Redis
+REDIS_URL=redis://localhost:6379
+
+# JWT
+SECRET_KEY=your-secret-key-here-change-in-production
+ALGORITHM=HS256
+
+# APIs
+TWILIO_ACCOUNT_SID=your-twilio-sid
+TWILIO_AUTH_TOKEN=your-twilio-token
+OPENAI_API_KEY=your-openai-key
+GOOGLE_CREDENTIALS=your-google-credentials
+CHATWOOT_API_KEY=your-chatwoot-key
+CHATWOOT_BASE_URL=your-chatwoot-url
 ```
 
-### **Empresa (config.json)**
-```json
-{
-  "nome": "Nome da Empresa",
-  "whatsapp_number": "",
-  "google_sheets_id": "",
-  "chatwoot_token": "",
-  "openai_key": "",
-  "twilio_sid": "",
-  "twilio_token": "",
-  "twilio_number": "",
-  "horario_funcionamento": "",
-  "filtros_chatwoot": []
-}
+### **Empresa (Database)**
+```sql
+-- Tabela empresas
+CREATE TABLE empresas (
+    id SERIAL PRIMARY KEY,
+    nome VARCHAR(255) NOT NULL,
+    slug VARCHAR(100) UNIQUE NOT NULL,
+    status VARCHAR(20) DEFAULT 'ativo',
+    openai_key TEXT,
+    twilio_sid VARCHAR(255),
+    twilio_token VARCHAR(255),
+    twilio_number VARCHAR(50),
+    chatwoot_origem VARCHAR(500),
+    chatwoot_token VARCHAR(255),
+    prompt TEXT,
+    webhook_url VARCHAR(500),
+    usar_buffer BOOLEAN DEFAULT true,
+    mensagem_quebrada BOOLEAN DEFAULT false,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Tabela usuários
+CREATE TABLE usuarios (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    senha_hash VARCHAR(255) NOT NULL,
+    is_superuser BOOLEAN DEFAULT false,
+    empresa_id INTEGER REFERENCES empresas(id),
+    created_at TIMESTAMP DEFAULT NOW()
+);
 ```
 
 ---
@@ -181,13 +237,16 @@ REDIS_URL=redis://localhost:6379/0
 
 ### **Dashboard Geral**
 - Total de empresas ativas
-- Métricas macro do sistema
+- Total de clientes únicos
+- Total de atendimentos
 - Lista de empresas com status
 
 ### **Dashboard por Empresa**
 - Métricas específicas da empresa
 - Atendimentos e reservas
+- Clientes únicos
 - Atividade recente
+- Lista de clientes da empresa
 
 ### **Status do Buffer**
 - Buffers ativos em tempo real
@@ -198,6 +257,12 @@ REDIS_URL=redis://localhost:6379/0
 - Visualização de logs do sistema
 - Filtros por empresa e nível
 - Monitoramento de erros
+
+### **Gestão de Usuários**
+- Lista de usuários
+- Criação de novos usuários
+- Edição de permissões
+- Controle de acesso por empresa
 
 ---
 
@@ -227,19 +292,35 @@ REDIS_URL=redis://localhost:6379/0
 - **Cache** de contexto de conversa
 - **Buffer** de mensagens
 - **Sessões** temporárias
+- **Métricas** em tempo real
+
+### **PostgreSQL**
+- **Dados persistentes** de empresas
+- **Usuários** e autenticação
+- **Logs** e histórico
+- **Configurações** por empresa
 
 ---
 
-## 🚀 Próximos passos
+## 🚀 Deploy em Produção
 
-- [ ] **Configurar credenciais** das empresas
-- [ ] **Implementar logs reais** no backend
-- [ ] **Adicionar métricas reais** do banco de dados
-- [ ] **Implementar autenticação** no painel admin
-- [ ] **Deploy em produção** com Docker
-- [ ] **Monitoramento** com Prometheus/Grafana
-- [ ] **Notificações** de erros críticos
-- [ ] **Backup automático** de configurações
+### **Render (PaaS)**
+- **Backend:** https://api.tinyteams.app
+- **Frontend:** https://tinyteams.app
+- **Database:** PostgreSQL gerenciado
+- **Redis:** Redis gerenciado
+
+### **Configurações de Produção**
+- ✅ **SSL/HTTPS** automático
+- ✅ **Deploy automático** via GitHub
+- ✅ **Variáveis de ambiente** seguras
+- ✅ **DNS** configurado (Cloudflare)
+- ✅ **Monitoramento** de logs
+
+### **Domínios**
+- **API:** api.tinyteams.app
+- **Web:** tinyteams.app
+- **Documentação:** docs.tinyteams.app
 
 ---
 
@@ -247,23 +328,83 @@ REDIS_URL=redis://localhost:6379/0
 
 ### **Backend:**
 - **FastAPI** (Python) - Framework web
+- **SQLAlchemy** - ORM para PostgreSQL
+- **Alembic** - Migrações de banco
 - **Redis** - Cache e contexto
+- **JWT** - Autenticação segura
 - **OpenAI API** - Processamento de linguagem natural
 - **Google Sheets API** - Gestão de reservas
 - **Twilio API** - WhatsApp Business
 - **Chatwoot API** - CRM e atendimento
 
 ### **Frontend:**
-- **React 18** - Framework frontend
+- **React 19** - Framework frontend
 - **Vite** - Build tool
 - **React Router** - Navegação
 - **Axios** - Requisições HTTP
+- **HashRouter** - Compatibilidade com static hosting
 
 ### **Design:**
 - **Layout preto e branco** - Design moderno
 - **Logo TinyTeams** - Identidade visual
 - **Responsivo** - Mobile-first
 - **Animações suaves** - UX otimizada
+
+### **Infraestrutura:**
+- **Render** - PaaS para deploy
+- **PostgreSQL** - Banco de dados
+- **Redis** - Cache e sessões
+- **Cloudflare** - DNS e CDN
+
+---
+
+## 📈 Métricas e Monitoramento
+
+### **Métricas em Tempo Real**
+- **Clientes únicos** por empresa
+- **Total de atendimentos** por empresa
+- **Atividade recente** dos clientes
+- **Status** das empresas (ativo/inativo)
+
+### **Monitoramento**
+- **Logs** em tempo real
+- **Erros** de 24h
+- **Status** do buffer
+- **Performance** das APIs
+
+---
+
+## 🔧 Comandos Úteis
+
+### **Desenvolvimento Local**
+```bash
+# Backend
+cd backend
+source venv/bin/activate
+uvicorn main:app --reload --port 8001
+
+# Frontend
+cd frontend
+npm run dev
+
+# Redis
+redis-cli
+
+# PostgreSQL
+psql -U postgres -d atendeai
+```
+
+### **Deploy**
+```bash
+# Commit e push
+git add .
+git commit -m "🚀 Deploy: Nova funcionalidade"
+git push origin main
+
+# Build frontend
+cd frontend
+npm run build
+```
 
 ---
 
