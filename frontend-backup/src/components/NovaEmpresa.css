@@ -1,0 +1,100 @@
+.nova-empresa-title {
+  font-size: 2.6rem;
+  font-weight: 700;
+  margin-bottom: 36px;
+  margin-top: 18px;
+  letter-spacing: -1px;
+}
+.nova-empresa-form {
+  max-width: 820px;
+  margin: 0 auto;
+  background: #fff;
+  padding: 36px 32px 32px 32px;
+  border-radius: 12px;
+  box-shadow: 0 2px 16px #0001;
+}
+.form-grid {
+  display: flex;
+  gap: 36px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.form-grid > div {
+  flex: 1 1 320px;
+  min-width: 260px;
+}
+.empresa-form label {
+  display: flex;
+  flex-direction: column;
+  font-weight: 500;
+  margin-bottom: 18px;
+  font-size: 1rem;
+  color: #222;
+}
+.empresa-form input,
+.empresa-form textarea {
+  margin-top: 7px;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 1rem;
+  background: #fafbfc;
+}
+.empresa-form textarea {
+  min-height: 60px;
+  resize: vertical;
+}
+.checkbox-group {
+  display: flex;
+  gap: 18px;
+  margin-bottom: 14px;
+}
+.webhook-info {
+  margin: 22px 0 10px 0;
+  font-size: 1.08em;
+  color: #444;
+  background: #f6f6f6;
+  padding: 10px 14px;
+  border-radius: 6px;
+}
+.form-actions {
+  display: flex;
+  gap: 18px;
+  margin-top: 22px;
+}
+.success-msg {
+  color: #1a7f37;
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+.error-msg {
+  color: #b91c1c;
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+.token-hints {
+  background: #f3f3f3;
+  border-radius: 5px;
+  padding: 7px 10px;
+  margin-top: 6px;
+  font-size: 0.98em;
+  color: #555;
+  box-shadow: 0 1px 4px #0001;
+}
+.token-hint-empresas {
+  color: #888;
+  font-size: 0.93em;
+  margin-left: 6px;
+}
+@media (max-width: 900px) {
+  .nova-empresa-form {
+    padding: 18px 6px;
+  }
+  .form-grid {
+    flex-direction: column;
+    gap: 0;
+  }
+  .form-grid > div {
+    min-width: 0;
+  }
+} 
