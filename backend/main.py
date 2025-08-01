@@ -697,4 +697,104 @@ def root():
             "Integração Chatwoot",
             "Painel admin multi-empresa"
         ]
-    } 
+    }
+
+# Rotas para configurações da empresa
+@app.get("/api/empresas/{empresa_slug}/configuracoes")
+def get_empresa_configuracoes(
+    empresa_slug: str,
+    current_user: Usuario = Depends(get_current_user)
+):
+    """Buscar configurações da empresa (sem expor tokens sensíveis)"""
+    session = SessionLocal()
+    try:
+        # Verificar se usuário tem acesso à empresa
+        if not current_user.is_superuser:
+            if not current_user.empresa_id:
+                raise HTTPException(status_code=403, detail="Acesso negado")
+            
+            empresa = session.query(Empresa).filter(Empresa.id == current_user.empresa_id).first()
+            if not empresa or empresa.slug != empresa_slug:
+                raise HTTPException(status_code=403, detail="Acesso negado à empresa")
+        else:
+            empresa = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
+            if not empresa:
+                raise HTTPException(status_code=404, detail="Empresa não encontrada")
+        
+        # Retornar configurações sem expor tokens sensíveis
+        return {
+            "prompt": empresa.prompt or "",
+            "configuracoes": {
+                "mensagemQuebrada": empresa.mensagem_quebrada or False,
+                "buffer": empresa.usar_buffer or False
+            },
+            "apis": {
+                "openai": {
+                    "ativo": bool(empresa.openai_key),
+                    "token": "***" if empresa.openai_key else ""
+                },
+                "google": {
+                    "ativo": bool(empresa.google_sheets_id),
+                    "token": "***" if empresa.google_sheets_id else ""
+                },
+                "chatwoot": {
+                    "ativo": bool(empresa.chatwoot_token),
+                    "token": "***" if empresa.chatwoot_token else ""
+                }
+            }
+        }
+    finally:
+        session.close()
+
+@app.put("/api/empresas/{empresa_slug}/configuracoes")
+def update_empresa_configuracoes(
+    empresa_slug: str,
+    configuracoes: dict,
+    current_user: Usuario = Depends(get_current_user)
+):
+    """Atualizar configurações da empresa"""
+    session = SessionLocal()
+    try:
+        # Verificar se usuário tem acesso à empresa
+        if not current_user.is_superuser:
+            if not current_user.empresa_id:
+                raise HTTPException(status_code=403, detail="Acesso negado")
+            
+            empresa = session.query(Empresa).filter(Empresa.id == current_user.empresa_id).first()
+            if not empresa or empresa.slug != empresa_slug:
+                raise HTTPException(status_code=403, detail="Acesso negado à empresa")
+        else:
+            empresa = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
+            if not empresa:
+                raise HTTPException(status_code=404, detail="Empresa não encontrada")
+        
+        # Atualizar prompt
+        if "prompt" in configuracoes:
+            empresa.prompt = configuracoes["prompt"]
+        
+        # Atualizar configurações
+        if "configuracoes" in configuracoes:
+            config = configuracoes["configuracoes"]
+            if "mensagemQuebrada" in config:
+                empresa.mensagem_quebrada = config["mensagemQuebrada"]
+            if "buffer" in config:
+                empresa.usar_buffer = config["buffer"]
+        
+        # Atualizar APIs (apenas se o token não for "***")
+        if "apis" in configuracoes:
+            apis = configuracoes["apis"]
+            
+            if "openai" in apis and apis["openai"].get("token") != "***":
+                empresa.openai_key = apis["openai"]["token"] if apis["openai"]["token"] else None
+            
+            if "google" in apis and apis["google"].get("token") != "***":
+                empresa.google_sheets_id = apis["google"]["token"] if apis["google"]["token"] else None
+            
+            if "chatwoot" in apis and apis["chatwoot"].get("token") != "***":
+                empresa.chatwoot_token = apis["chatwoot"]["token"] if apis["chatwoot"]["token"] else None
+        
+        session.commit()
+        
+        return {"message": "Configurações atualizadas com sucesso"}
+    finally:
+        session.close() 

@@ -13,6 +13,7 @@ import NovaEmpresa from './components/NovaEmpresa'
 import Login from './components/Login'
 import ProtectedRoute from './components/ProtectedRoute'
 import Usuarios from './components/Usuarios'
+import ConfiguracoesEmpresa from './components/ConfiguracoesEmpresa'
 
 function AppRoutes() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -108,6 +109,11 @@ function AppRoutes() {
           <Route path="/admin/usuarios" element={
             <ProtectedRoute>
               <Usuarios />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/:empresa/configuracoes" element={
+            <ProtectedRoute>
+              <ConfiguracoesEmpresa />
             </ProtectedRoute>
           } />
           <Route path="/" element={

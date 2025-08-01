@@ -98,6 +98,19 @@ class ApiService {
     return this.authenticatedRequest(`/api/admin/empresa/${empresaSlug}/clientes`)
   }
 
+  // Buscar configurações de uma empresa
+  async getEmpresaConfiguracoes(empresaSlug) {
+    return this.authenticatedRequest(`/api/empresas/${empresaSlug}/configuracoes`)
+  }
+
+  // Atualizar configurações de uma empresa
+  async updateEmpresaConfiguracoes(empresaSlug, configuracoes) {
+    return this.authenticatedRequest(`/api/empresas/${empresaSlug}/configuracoes`, {
+      method: 'PUT',
+      body: JSON.stringify(configuracoes)
+    })
+  }
+
   // Login do usuário
   async login(email, password) {
     const formData = new URLSearchParams();
