@@ -1,0 +1,24 @@
+import React from 'react';
+import { ThemeProvider } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
+import materialTheme from './theme';
+
+// Importar seus componentes existentes aqui
+// import AdminDashboard from './components/AdminDashboard';
+// import Login from './components/Login';
+
+function App() {
+  return (
+    <ThemeProvider theme={materialTheme}>
+      <CssBaseline />
+      {/* Seus componentes aqui */}
+      <div>
+        <h1>App com Material Dashboard</h1>
+        {/* <AdminDashboard /> */}
+        {/* <Login /> */}
+      </div>
+    </ThemeProvider>
+  );
+}
+
+export default App;

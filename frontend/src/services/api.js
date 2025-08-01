@@ -7,7 +7,7 @@ class ApiService {
     
     this.baseURL = isLocalDev 
       ? 'http://localhost:8001'  // Desenvolvimento local
-      : (process.env.REACT_APP_API_URL || 'https://api.tinyteams.app'); // Produção
+      : (import.meta.env.VITE_API_URL || 'https://api.tinyteams.app'); // Produção
   }
 
   async request(endpoint, options = {}) {

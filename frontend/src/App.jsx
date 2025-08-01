@@ -40,16 +40,18 @@ function AppRoutes() {
 
   return (
     <div className="app">
-      {/* Botão hamburguer */}
-      {!isLoginPage && (
-        <button 
-          className="hamburger-btn" 
-          onClick={toggleSidebar}
-          style={{ display: isMobile ? 'block' : 'none' }}
-        >
-          ☰
-        </button>
+      {/* Barra de navegação superior para mobile */}
+      {!isLoginPage && isMobile && (
+        <nav className="mobile-navbar">
+          <button 
+            className="mobile-hamburger-btn" 
+            onClick={toggleSidebar}
+          >
+            ☰
+          </button>
+        </nav>
       )}
+      
       {/* Overlay para mobile */}
       {!isLoginPage && (
         <div 
@@ -65,7 +67,7 @@ function AppRoutes() {
           onClose={closeSidebar}
         />
       )}
-      <main className="main-content">
+      <main className={`main-content ${!isLoginPage && isMobile ? 'with-mobile-navbar' : ''}`}>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/admin" element={

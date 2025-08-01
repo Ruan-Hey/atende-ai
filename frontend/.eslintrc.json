@@ -1,0 +1,10 @@
+{
+  "extends": [
+    "react-app",
+    "react-app/jest"
+  ],
+  "rules": {
+    "import/no-unresolved": "off",
+    "import/extensions": "off"
+  }
+}
