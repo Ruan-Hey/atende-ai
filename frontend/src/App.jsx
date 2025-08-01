@@ -15,6 +15,9 @@ import ProtectedRoute from './components/ProtectedRoute'
 import Usuarios from './components/Usuarios'
 import ConfiguracoesEmpresa from './components/ConfiguracoesEmpresa'
 
+// Força a inclusão do componente no build
+console.log('ConfiguracoesEmpresa component loaded:', ConfiguracoesEmpresa)
+
 function AppRoutes() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
