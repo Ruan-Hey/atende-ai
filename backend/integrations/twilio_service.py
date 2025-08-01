@@ -20,7 +20,9 @@ class TwilioService:
         try:
             # Formatar número para WhatsApp
             if not to_number.startswith('whatsapp:'):
-                to_number = f"whatsapp:+{to_number}"
+                # Remover + se já existir para evitar duplicação
+                clean_number = to_number.lstrip('+')
+                to_number = f"whatsapp:+{clean_number}"
             
             from_number = f"whatsapp:{self.from_number}"
             
@@ -66,7 +68,9 @@ class TwilioService:
         """Envia template WhatsApp via Twilio"""
         try:
             if not to_number.startswith('whatsapp:'):
-                to_number = f"whatsapp:+{to_number}"
+                # Remover + se já existir para evitar duplicação
+                clean_number = to_number.lstrip('+')
+                to_number = f"whatsapp:+{clean_number}"
             
             from_number = f"whatsapp:{self.from_number}"
             
