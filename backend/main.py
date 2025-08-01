@@ -364,9 +364,7 @@ async def webhook_handler(empresa_slug: str, request: Request):
                 'twilio_sid': empresa_db.twilio_sid,
                 'twilio_token': empresa_db.twilio_token,
                 'twilio_number': empresa_db.twilio_number,
-                'chatwoot_url': empresa_db.chatwoot_origem,
-                'chatwoot_token': empresa_db.chatwoot_token,
-                'chatwoot_account_id': 2,
+                # Chatwoot removido - não mais necessário
                 'mensagem_quebrada': empresa_db.mensagem_quebrada or False,
                 'prompt': empresa_db.prompt,
                 'usar_buffer': empresa_db.usar_buffer or True

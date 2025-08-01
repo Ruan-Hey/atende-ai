@@ -10,7 +10,7 @@ import asyncio
 from integrations.openai_service import OpenAIService
 from integrations.twilio_service import TwilioService
 from integrations.google_sheets_service import GoogleSheetsService
-from integrations.chatwoot_service import ChatwootService
+# Chatwoot removido - não mais necessário
 from integrations.google_calendar_service import GoogleCalendarService
 from services.message_buffer import MessageBuffer
 
@@ -161,11 +161,7 @@ class MessageProcessor:
                 empresa_config.get('twilio_token', ''),
                 empresa_config.get('twilio_number', '')
             )
-            chatwoot_service = ChatwootService(
-                empresa_config.get('chatwoot_url', ''),
-                empresa_config.get('chatwoot_token', ''),
-                empresa_config.get('chatwoot_account_id', 2)
-            )
+            # Chatwoot removido - não mais necessário
             
             # Obter contexto da conversa
             context = self.redis_service.get_context(cliente_id, empresa)
@@ -200,9 +196,7 @@ class MessageProcessor:
             for part in parts:
                 twilio_result = twilio_service.send_whatsapp_message(cliente_id, part)
                 twilio_results.append(twilio_result)
-                # Registrar no Chatwoot
-                profile_name = webhook_data.get('ProfileName', 'Cliente')
-                self._register_chatwoot_conversation(chatwoot_service, cliente_id, profile_name, message_text, part)
+                # Chatwoot removido - histórico mantido no próprio sistema
                 # Adicionar resposta ao contexto
                 self.redis_service.add_message(cliente_id, empresa, part, is_bot=True)
                 if mensagem_quebrada:
@@ -276,23 +270,7 @@ class MessageProcessor:
             self.redis_service.add_message(cliente_id, empresa, transcribed_text, is_bot=False)
             self.redis_service.add_message(cliente_id, empresa, ai_response, is_bot=True)
             
-            # Enviar transcrição para o Chatwoot (prefixado com 'Audio')
-            chatwoot_service = ChatwootService(
-                empresa_config.get('chatwoot_url', ''),
-                empresa_config.get('chatwoot_token', ''),
-                empresa_config.get('chatwoot_account_id', 2),
-                empresa_config.get('chatwoot_inbox_id', 2),
-                empresa_config.get('chatwoot_origem', 'atendeai')
-            )
-            profile_name = webhook_data.get('ProfileName', 'Cliente')
-            transcribed_message = f"Audio\n{transcribed_text}"
-            self._register_chatwoot_conversation(
-                chatwoot_service,
-                cliente_id,
-                profile_name,
-                transcribed_message,
-                ai_response
-            )
+            # Chatwoot removido - histórico mantido no próprio sistema
             
             return {
                 'success': True,
@@ -312,37 +290,7 @@ class MessageProcessor:
                 'cliente_id': webhook_data.get('WaId', '')
             }
     
-    def _register_chatwoot_conversation(self, chatwoot_service: ChatwootService, phone_number: str, name: str, incoming_message: str, outgoing_message: str):
-        """Registra conversa no Chatwoot, reutilizando conversa aberta se existir"""
-        try:
-            # Buscar ou criar contato
-            contact_result = chatwoot_service.find_contact_by_phone(phone_number)
-            if not contact_result.get('found'):
-                # Criar novo contato
-                contact_result = chatwoot_service.create_contact(name, phone_number)
-            if contact_result.get('success'):
-                contact_id = contact_result.get('contact_id') or contact_result.get('contact', {}).get('id')
-                if contact_id:
-                    # Buscar conversas existentes
-                    conversations_result = chatwoot_service.get_conversations_by_contact(contact_id)
-                    conversation_id = None
-                    if conversations_result.get('success'):
-                        for conv in conversations_result.get('conversations', []):
-                            # Verifica se está na inbox correta e aberta
-                            if (conv.get('inbox_id') == chatwoot_service.inbox_id and conv.get('status') in ['open', 'pending']):
-                                conversation_id = conv.get('id')
-                                break
-                    # Se não encontrou conversa aberta, cria nova
-                    if not conversation_id:
-                        conversation_result = chatwoot_service.create_conversation(contact_id)
-                        if conversation_result.get('success'):
-                            conversation_id = conversation_result.get('conversation_id')
-                    # Enviar mensagens se tiver conversa
-                    if conversation_id:
-                        chatwoot_service.send_message(conversation_id, incoming_message, 'incoming')
-                        chatwoot_service.send_message(conversation_id, outgoing_message, 'outgoing')
-        except Exception as e:
-            logger.error(f"Erro ao registrar no Chatwoot: {e}")
+    # Função _register_chatwoot_conversation removida - Chatwoot não mais necessário
     
     def get_buffer_status(self) -> Dict[str, Any]:
         """Retorna status do buffer de mensagens"""
