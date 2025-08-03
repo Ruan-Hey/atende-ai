@@ -104,8 +104,8 @@ app.add_middleware(
 )
 
 # Instanciar serviços
-# message_processor = MessageProcessor(buffer_timeout=10)  # 10 segundos de buffer
-# metrics_service = MetricsService()
+message_processor = MessageProcessor(buffer_timeout=10)  # 10 segundos de buffer
+metrics_service = MetricsService()
 
 # Inicializar engine do banco
 # engine = create_engine(Config.POSTGRES_URL)
@@ -354,11 +354,87 @@ async def test_webhook():
 @app.post("/webhook/{empresa_slug}")
 async def webhook_handler(empresa_slug: str, request: Request):
     """Endpoint para receber webhooks do Twilio com buffer ou resposta direta"""
-    return JSONResponse(content={
-        'success': True,
-        'message': 'Webhook recebido com sucesso',
-        'empresa': empresa_slug
-    })
+    try:
+        # Verificar se a empresa existe no banco de dados
+        session = SessionLocal()
+        try:
+            empresa_db = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
+            if not empresa_db:
+                logger.error(f"Empresa não encontrada: {empresa_slug}")
+                raise HTTPException(status_code=404, detail="Empresa não encontrada")
+            
+            empresa_config = {
+                'nome': empresa_db.nome,
+                'openai_key': empresa_db.openai_key,
+                'twilio_sid': empresa_db.twilio_sid,
+                'twilio_token': empresa_db.twilio_token,
+                'twilio_number': empresa_db.twilio_number,
+                'mensagem_quebrada': empresa_db.mensagem_quebrada or False,
+                'prompt': empresa_db.prompt,
+                'usar_buffer': empresa_db.usar_buffer or True
+            }
+        except Exception as e:
+            logger.error(f"Erro ao buscar empresa {empresa_slug}: {e}")
+            raise HTTPException(status_code=404, detail="Empresa não encontrada")
+        finally:
+            session.close()
+        
+        # Processar dados do webhook
+        form_data = await request.form()
+        webhook_data = dict(form_data)
+        
+        logger.info(f"Webhook recebido para {empresa_slug}: {webhook_data}")
+        
+        # Verificar se é uma mensagem válida
+        if not webhook_data.get('Body') or not webhook_data.get('WaId'):
+            logger.warning(f"Webhook inválido recebido: {webhook_data}")
+            return JSONResponse(content={
+                'success': True,
+                'message': 'Webhook recebido (dados inválidos)',
+                'empresa': empresa_slug
+            })
+        
+        # Processar mensagem
+        try:
+            if empresa_config.get('usar_buffer', True):
+                # Adicionar mensagem ao buffer
+                message_processor.add_message_to_buffer(webhook_data, empresa_slug)
+                logger.info(f"Mensagem adicionada ao buffer para {empresa_slug}")
+                return JSONResponse(content={
+                    'success': True,
+                    'message': 'Mensagem recebida e adicionada ao buffer',
+                    'empresa': empresa_slug,
+                    'cliente_id': webhook_data.get('WaId', ''),
+                    'buffered': True
+                })
+            else:
+                # Processar mensagem imediatamente
+                result = await message_processor._process_buffered_message(webhook_data, empresa_slug)
+                logger.info(f"Mensagem processada imediatamente para {empresa_slug}: {result}")
+                return JSONResponse(content={
+                    'success': result.get('success', True),
+                    'message': 'Mensagem processada imediatamente',
+                    'empresa': empresa_slug,
+                    'cliente_id': webhook_data.get('WaId', ''),
+                    'buffered': False,
+                    'result': result
+                })
+        except Exception as e:
+            logger.error(f"Erro ao processar mensagem para {empresa_slug}: {e}")
+            # Retornar sucesso mesmo com erro para não quebrar o webhook
+            return JSONResponse(content={
+                'success': True,
+                'message': 'Mensagem recebida (erro no processamento)',
+                'empresa': empresa_slug,
+                'cliente_id': webhook_data.get('WaId', ''),
+                'error': str(e)
+            })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro no webhook handler: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 @app.get("/api/logs")
 def get_logs(empresa: str = None, limit: int = 100):
