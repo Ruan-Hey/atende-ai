@@ -1,56 +1,131 @@
 #!/usr/bin/env python3
 """
-Script para migrar o banco de dados existente
+Script para migrar o banco de dados
 """
 
 import os
 import sys
 from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
+from models import Base, Empresa, Mensagem, Log, Usuario, Atendimento, Cliente, Atividade
 from config import Config
 
-def migrate_database():
-    """Migra o banco de dados para adicionar novas colunas"""
-    
-    # Configuração
-    config = Config()
-    
-    # Debug: verificar a URL
-    print(f"🔍 DATABASE_URL: {os.getenv('DATABASE_URL', 'NÃO DEFINIDA')}")
-    print(f"🔍 POSTGRES_URL: {os.getenv('POSTGRES_URL', 'NÃO DEFINIDA')}")
-    print(f"🔍 Config.POSTGRES_URL: {config.POSTGRES_URL}")
-    
-    engine = create_engine(config.POSTGRES_URL)
-    
+def create_tables():
+    """Cria todas as tabelas no banco de dados"""
     try:
+        engine = create_engine(Config.POSTGRES_URL)
+        
+        # Criar todas as tabelas
+        Base.metadata.create_all(engine)
+        
+        print("✅ Tabelas criadas com sucesso!")
+        
+        # Verificar se as tabelas foram criadas
         with engine.connect() as conn:
-            # Verificar se as colunas já existem
             result = conn.execute(text("""
-                SELECT column_name 
-                FROM information_schema.columns 
-                WHERE table_name = 'empresas' 
-                AND column_name IN ('prompt', 'webhook_url', 'status')
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public'
+                ORDER BY table_name
             """))
-            existing_columns = [row[0] for row in result]
             
-            # Adicionar colunas se não existirem
-            if 'prompt' not in existing_columns:
-                print("Adicionando coluna 'prompt'...")
-                conn.execute(text("ALTER TABLE empresas ADD COLUMN prompt TEXT"))
-            
-            if 'webhook_url' not in existing_columns:
-                print("Adicionando coluna 'webhook_url'...")
-                conn.execute(text("ALTER TABLE empresas ADD COLUMN webhook_url VARCHAR(500)"))
-            
-            if 'status' not in existing_columns:
-                print("Adicionando coluna 'status'...")
-                conn.execute(text("ALTER TABLE empresas ADD COLUMN status VARCHAR(20) DEFAULT 'ativo'"))
-            
-            conn.commit()
-            print("✅ Migração concluída com sucesso!")
+            tables = [row[0] for row in result]
+            print(f"📋 Tabelas encontradas: {', '.join(tables)}")
             
     except Exception as e:
-        print(f"❌ Erro na migração: {e}")
+        print(f"❌ Erro ao criar tabelas: {e}")
         sys.exit(1)
 
+def create_admin_user():
+    """Cria usuário admin padrão"""
+    try:
+        engine = create_engine(Config.POSTGRES_URL)
+        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+        session = SessionLocal()
+        
+        # Verificar se já existe um usuário admin
+        admin_user = session.query(Usuario).filter(Usuario.email == "admin@atende.ai").first()
+        
+        if not admin_user:
+            from passlib.hash import bcrypt
+            
+            admin_user = Usuario(
+                email="admin@atende.ai",
+                senha_hash=bcrypt.hash("admin123"),
+                is_superuser=True
+            )
+            
+            session.add(admin_user)
+            session.commit()
+            print("✅ Usuário admin criado: admin@atende.ai / admin123")
+        else:
+            print("ℹ️  Usuário admin já existe")
+            
+        session.close()
+        
+    except Exception as e:
+        print(f"❌ Erro ao criar usuário admin: {e}")
+
+def create_sample_empresas():
+    """Cria empresas de exemplo"""
+    try:
+        engine = create_engine(Config.POSTGRES_URL)
+        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+        session = SessionLocal()
+        
+        # Verificar se já existem empresas
+        existing_empresas = session.query(Empresa).count()
+        
+        if existing_empresas == 0:
+            empresas = [
+                {
+                    'slug': 'tinyteams',
+                    'nome': 'TinyTeams',
+                    'status': 'ativo',
+                    'prompt': 'Você é um assistente virtual da TinyTeams, uma empresa de tecnologia especializada em soluções de produtividade e colaboração.',
+                    'whatsapp_number': '+554184447366',
+                    'usar_buffer': True,
+                    'mensagem_quebrada': False
+                },
+                {
+                    'slug': 'pancia-piena',
+                    'nome': 'Pancia Piena',
+                    'status': 'ativo',
+                    'prompt': 'Você é um assistente virtual da Pancia Piena, um restaurante italiano autêntico.',
+                    'whatsapp_number': '+554184447366',
+                    'usar_buffer': True,
+                    'mensagem_quebrada': False
+                },
+                {
+                    'slug': 'umas-e-ostras',
+                    'nome': 'Umas e Ostras',
+                    'status': 'ativo',
+                    'prompt': 'Você é um assistente virtual da Umas e Ostras, um restaurante especializado em frutos do mar.',
+                    'whatsapp_number': '+554184447366',
+                    'usar_buffer': True,
+                    'mensagem_quebrada': False
+                }
+            ]
+            
+            for empresa_data in empresas:
+                empresa = Empresa(**empresa_data)
+                session.add(empresa)
+            
+            session.commit()
+            print("✅ Empresas de exemplo criadas")
+        else:
+            print(f"ℹ️  Já existem {existing_empresas} empresas no banco")
+            
+        session.close()
+        
+    except Exception as e:
+        print(f"❌ Erro ao criar empresas de exemplo: {e}")
+
 if __name__ == "__main__":
-    migrate_database() 
+    print("🚀 Iniciando migração do banco de dados...")
+    
+    create_tables()
+    create_admin_user()
+    create_sample_empresas()
+    
+    print("✅ Migração concluída com sucesso!") 

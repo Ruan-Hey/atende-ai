@@ -14,9 +14,134 @@ from integrations.google_sheets_service import GoogleSheetsService
 from integrations.google_calendar_service import GoogleCalendarService
 from services.message_buffer import MessageBuffer
 
-# Configurar logging
-logging.basicConfig(level=logging.INFO)
+import asyncio
+import json
+import logging
+from typing import Dict, Any, List, Optional
+from datetime import datetime, timedelta
+import redis
+from config import Config
+from sqlalchemy import create_engine, func
+from sqlalchemy.orm import sessionmaker
+from models import Mensagem, Empresa, Atendimento, Cliente, Atividade
+
 logger = logging.getLogger(__name__)
+
+class DatabaseService:
+    """Serviço para gerenciar dados no banco de dados"""
+    
+    def __init__(self):
+        self.engine = create_engine(Config.POSTGRES_URL)
+        self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+    
+    def save_message(self, empresa_id: int, cliente_id: str, text: str, is_bot: bool = False):
+        """Salva mensagem no banco de dados"""
+        session = self.SessionLocal()
+        try:
+            mensagem = Mensagem(
+                empresa_id=empresa_id,
+                cliente_id=cliente_id,
+                text=text,
+                is_bot=is_bot
+            )
+            session.add(mensagem)
+            session.commit()
+            session.refresh(mensagem)  # Atualiza o objeto com o ID gerado
+            logger.info(f"Mensagem salva no banco: {empresa_id}:{cliente_id}")
+            return mensagem
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Erro ao salvar mensagem: {e}")
+            raise
+        finally:
+            session.close()
+    
+    def get_conversation_history(self, empresa_id: int, cliente_id: str, limit: int = 20) -> List[Dict]:
+        """Busca histórico de conversa do banco de dados"""
+        session = self.SessionLocal()
+        try:
+            mensagens = session.query(Mensagem).filter(
+                Mensagem.empresa_id == empresa_id,
+                Mensagem.cliente_id == cliente_id
+            ).order_by(Mensagem.timestamp.desc()).limit(limit).all()
+            
+            # Converter para formato esperado pelo frontend
+            history = []
+            for msg in reversed(mensagens):  # Ordem cronológica
+                history.append({
+                    'text': msg.text,
+                    'is_bot': msg.is_bot,
+                    'timestamp': msg.timestamp.isoformat()
+                })
+            
+            return history
+        except Exception as e:
+            logger.error(f"Erro ao buscar histórico: {e}")
+            return []
+        finally:
+            session.close()
+    
+    def count_attendances(self, empresa_id: int) -> int:
+        """Conta total de atendimentos de uma empresa"""
+        session = self.SessionLocal()
+        try:
+            # Conta clientes únicos que interagiram hoje
+            hoje = datetime.now().date()
+            count = session.query(func.count(func.distinct(Mensagem.cliente_id))).filter(
+                Mensagem.empresa_id == empresa_id,
+                func.date(Mensagem.timestamp) == hoje
+            ).scalar()
+            return count or 0
+        except Exception as e:
+            logger.error(f"Erro ao contar atendimentos: {e}")
+            return 0
+        finally:
+            session.close()
+    
+    def count_unique_clients(self, empresa_id: int) -> int:
+        """Conta total de clientes únicos de uma empresa"""
+        session = self.SessionLocal()
+        try:
+            count = session.query(func.count(func.distinct(Mensagem.cliente_id))).filter(
+                Mensagem.empresa_id == empresa_id
+            ).scalar()
+            return count or 0
+        except Exception as e:
+            logger.error(f"Erro ao contar clientes únicos: {e}")
+            return 0
+        finally:
+            session.close()
+    
+    def get_recent_activities(self, empresa_id: int, limit: int = 10) -> List[Dict]:
+        """Busca atividades recentes do banco de dados"""
+        session = self.SessionLocal()
+        try:
+            # Buscar mensagens recentes agrupadas por cliente
+            recent_messages = session.query(
+                Mensagem.cliente_id,
+                func.max(Mensagem.timestamp).label('ultima_mensagem'),
+                func.count(Mensagem.id).label('total_mensagens')
+            ).filter(
+                Mensagem.empresa_id == empresa_id
+            ).group_by(Mensagem.cliente_id).order_by(
+                func.max(Mensagem.timestamp).desc()
+            ).limit(limit).all()
+            
+            activities = []
+            for msg in recent_messages:
+                activities.append({
+                    'cliente': msg.cliente_id,
+                    'tipo_atividade': 'mensagem',
+                    'timestamp': msg.ultima_mensagem.isoformat(),
+                    'total_mensagens': msg.total_mensagens
+                })
+            
+            return activities
+        except Exception as e:
+            logger.error(f"Erro ao buscar atividades: {e}")
+            return []
+        finally:
+            session.close()
 
 class RedisService:
     """Serviço para gerenciar contexto e cache no Redis"""
@@ -65,6 +190,7 @@ class MessageProcessor:
     
     def __init__(self, buffer_timeout: int = 10):
         self.redis_service = RedisService()
+        self.database_service = DatabaseService()
         self.message_buffer = MessageBuffer(buffer_timeout)
         
         # Inicializar serviços de integração (será configurado por empresa)
@@ -122,7 +248,13 @@ class MessageProcessor:
             finally:
                 session.close()
             
-            # Adicionar mensagem ao contexto
+            # Salvar mensagem no banco de dados
+            try:
+                self.database_service.save_message(empresa_db.id, cliente_id, message_text, is_bot=False)
+            except Exception as e:
+                logger.error(f"Erro ao salvar mensagem no banco: {e}")
+            
+            # Adicionar mensagem ao contexto (apenas para processamento atual)
             self.redis_service.add_message(cliente_id, empresa, message_text, is_bot=False)
             
             # Processar baseado no tipo de mensagem
@@ -196,8 +328,19 @@ class MessageProcessor:
             for part in parts:
                 twilio_result = twilio_service.send_whatsapp_message(cliente_id, part)
                 twilio_results.append(twilio_result)
-                # Chatwoot removido - histórico mantido no próprio sistema
-                # Adicionar resposta ao contexto
+                
+                # Salvar resposta do bot no banco de dados
+                try:
+                    # Buscar empresa_id
+                    session = self.database_service.SessionLocal()
+                    empresa_db = session.query(Empresa).filter(Empresa.slug == empresa).first()
+                    if empresa_db:
+                        self.database_service.save_message(empresa_db.id, cliente_id, part, is_bot=True)
+                    session.close()
+                except Exception as e:
+                    logger.error(f"Erro ao salvar resposta do bot no banco: {e}")
+                
+                # Adicionar resposta ao contexto (apenas para processamento atual)
                 self.redis_service.add_message(cliente_id, empresa, part, is_bot=True)
                 if mensagem_quebrada:
                     await asyncio.sleep(0.5)
@@ -266,11 +409,22 @@ class MessageProcessor:
             # Enviar resposta
             twilio_result = twilio_service.send_whatsapp_message(cliente_id, ai_response)
             
-            # Adicionar ao contexto
+            # Salvar mensagens no banco de dados
+            try:
+                session = self.database_service.SessionLocal()
+                empresa_db = session.query(Empresa).filter(Empresa.slug == empresa).first()
+                if empresa_db:
+                    # Salvar transcrição do áudio
+                    self.database_service.save_message(empresa_db.id, cliente_id, transcribed_text, is_bot=False)
+                    # Salvar resposta do bot
+                    self.database_service.save_message(empresa_db.id, cliente_id, ai_response, is_bot=True)
+                session.close()
+            except Exception as e:
+                logger.error(f"Erro ao salvar mensagens de áudio no banco: {e}")
+            
+            # Adicionar ao contexto (apenas para processamento atual)
             self.redis_service.add_message(cliente_id, empresa, transcribed_text, is_bot=False)
             self.redis_service.add_message(cliente_id, empresa, ai_response, is_bot=True)
-            
-            # Chatwoot removido - histórico mantido no próprio sistema
             
             return {
                 'success': True,
@@ -301,38 +455,10 @@ class MessageProcessor:
         self.message_buffer.force_process_buffer(cliente_id, empresa)
     
     def _increment_attendance_count(self, empresa: str, cliente_id: str):
-        """Incrementa contador de atendimentos para uma empresa por sessão de 30 minutos"""
-        try:
-            context = self.redis_service.get_context(cliente_id, empresa)
-            now = datetime.now()
-            last_session = context.get('last_session')
-            if last_session:
-                last_session_dt = datetime.fromisoformat(last_session)
-                if (now - last_session_dt) < timedelta(minutes=30):
-                    # Menos de 30 minutos desde o último atendimento, não conta novo
-                    return
-            # Atualiza timestamp da última sessão
-            context['last_session'] = now.isoformat()
-            self.redis_service.set_context(cliente_id, empresa, context)
-            # Incrementa contador de atendimentos
-            attendance_key = f"attendance:{empresa}"
-            self.redis_service.redis_client.incr(attendance_key)
-            # Marcar cliente como único (expira em 24h)
-            client_key = f"client:{empresa}:{cliente_id}"
-            self.redis_service.redis_client.setex(client_key, 86400, 1)
-            # Registrar atividade recente
-            activity_key = f"activity:{empresa}:{now.timestamp()}"
-            activity_data = {
-                'type': 'atendimento',
-                'message': f'Novo atendimento realizado',
-                'timestamp': now.isoformat(),
-                'cliente': cliente_id,
-                'empresa': empresa
-            }
-            self.redis_service.redis_client.setex(activity_key, 86400, json.dumps(activity_data))
-            logger.info(f"Atendimento contabilizado para {empresa}:{cliente_id}")
-        except Exception as e:
-            logger.error(f"Erro ao incrementar contador de atendimentos: {e}")
+        """Função mantida para compatibilidade - atendimentos agora são contados do banco"""
+        # Atendimentos são contados automaticamente do banco de dados
+        # Não é mais necessário incrementar contadores no Redis
+        pass
     
     def get_available_slots(self, date: str = None) -> Dict[str, Any]:
         """Retorna horários disponíveis para agendamento"""
@@ -519,6 +645,7 @@ class MetricsService:
     
     def __init__(self):
         self.redis_service = RedisService()
+        self.database_service = DatabaseService()
     
     def get_admin_metrics(self) -> Dict[str, Any]:
         """Retorna métricas para o painel admin - versão otimizada"""
@@ -548,7 +675,7 @@ class MetricsService:
             finally:
                 session.close()
             
-            # Buscar dados do Redis de forma otimizada
+            # Buscar dados do banco de dados
             total_atendimentos = 0
             total_clientes = 0
             total_reservas = 0
@@ -556,40 +683,19 @@ class MetricsService:
             empresas_metrics = []
             for empresa in empresas:
                 try:
-                    # Buscar contadores do Redis de forma mais eficiente
-                    attendance_key = f"attendance:{empresa['slug']}"
-                    atendimentos = int(self.redis_service.redis_client.get(attendance_key) or 0)
-                    
-                    # Contar clientes únicos de forma otimizada
-                    clientes = 0
-                    try:
-                        # Usar pipeline para operações Redis mais eficientes
-                        pipeline = self.redis_service.redis_client.pipeline()
-                        activity_pattern = f"activity:{empresa['slug']}:*"
-                        
-                        # Buscar apenas as primeiras 100 chaves para performance
-                        keys = list(self.redis_service.redis_client.scan_iter(match=activity_pattern, count=100))
-                        if keys:
-                            pipeline.mget(keys)
-                            results = pipeline.execute()
-                            
-                            clientes_unicos = set()
-                            for result in results:
-                                if result:
-                                    try:
-                                        activity = json.loads(result)
-                                        cliente_id = activity.get('cliente', '')
-                                        if cliente_id:
-                                            clientes_unicos.add(cliente_id)
-                                    except:
-                                        pass
-                            clientes = len(clientes_unicos)
-                    except Exception as e:
-                        logger.warning(f"Erro ao contar clientes para {empresa['slug']}: {e}")
+                    # Buscar empresa_id
+                    empresa_db = session.query(Empresa).filter(Empresa.slug == empresa['slug']).first()
+                    if empresa_db:
+                        # Contar atendimentos (clientes únicos que interagiram hoje)
+                        atendimentos = self.database_service.count_attendances(empresa_db.id)
+                        # Contar clientes únicos totais
+                        clientes = self.database_service.count_unique_clients(empresa_db.id)
+                    else:
+                        atendimentos = 0
                         clientes = 0
                         
                 except Exception as e:
-                    logger.warning(f"Erro ao acessar Redis para {empresa['slug']}: {e}")
+                    logger.warning(f"Erro ao buscar dados do banco para {empresa['slug']}: {e}")
                     atendimentos = 0
                     clientes = 0
                 
@@ -662,55 +768,10 @@ class MetricsService:
             finally:
                 session.close()
             
-            # Buscar dados reais do Redis
-            attendance_key = f"attendance:{empresa_slug}"
-            atendimentos = int(self.redis_service.redis_client.get(attendance_key) or 0)
-            
-            # Contar clientes únicos baseado em atividades
-            clientes = 0
-            activity_pattern = f"activity:{empresa_slug}:*"
-            clientes_unicos = set()
-            for key in self.redis_service.redis_client.scan_iter(match=activity_pattern):
-                activity_data = self.redis_service.redis_client.get(key)
-                if activity_data:
-                    try:
-                        activity = json.loads(activity_data)
-                        cliente_id = activity.get('cliente', '')
-                        if cliente_id:
-                            clientes_unicos.add(cliente_id)
-                    except:
-                        pass
-            clientes = len(clientes_unicos)
-            
-            # Buscar atividades recentes do Redis agrupadas por número
-            recent_activity = {}
-            activity_pattern = f"activity:{empresa_slug}:*"
-            
-            # Buscar todas as atividades
-            activity_keys = list(self.redis_service.redis_client.scan_iter(match=activity_pattern))
-            activity_keys.sort(reverse=True)  # Mais recentes primeiro
-            
-            for key in activity_keys:
-                activity_data = self.redis_service.redis_client.get(key)
-                if activity_data:
-                    try:
-                        activity = json.loads(activity_data)
-                        cliente_id = activity.get('cliente', '')
-                        
-                        # Agrupar por número, mantendo apenas a mais recente
-                        if cliente_id not in recent_activity:
-                            recent_activity[cliente_id] = activity
-                        
-                        # Limitar a 10 números únicos
-                        if len(recent_activity) >= 10:
-                            break
-                            
-                    except:
-                        pass
-            
-            # Converter para lista ordenada por timestamp
-            recent_activity_list = list(recent_activity.values())
-            recent_activity_list.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+            # Buscar dados do banco de dados
+            atendimentos = self.database_service.count_attendances(empresa_db.id)
+            clientes = self.database_service.count_unique_clients(empresa_db.id)
+            recent_activity_list = self.database_service.get_recent_activities(empresa_db.id, limit=10)
             
             logger.info(f"DEBUG: Retornando status '{status}' para empresa {empresa_slug}")
             return {

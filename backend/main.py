@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 from config import Config
-from models import WebhookData, MessageResponse, AdminMetrics, EmpresaMetrics, HealthCheck, Base, Empresa, Mensagem, Log, Usuario, gerar_hash_senha
+from models import WebhookData, MessageResponse, AdminMetrics, EmpresaMetrics, HealthCheck, Base, Empresa, Mensagem, Log, Usuario, gerar_hash_senha, Atendimento, Cliente, Atividade
 from services import MessageProcessor, MetricsService
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
@@ -508,12 +508,8 @@ def get_conversation_history(
         if not current_user.is_superuser and current_user.empresa_id != empresa_obj.id:
             raise HTTPException(status_code=403, detail="Acesso negado a esta empresa")
         
-        # Buscar contexto do Redis
-        context = message_processor.redis_service.get_context(cliente_id, empresa)
-        all_messages = context.get('messages', [])
-        
-        # Ordenar mensagens por timestamp crescente
-        all_messages.sort(key=lambda x: x.get('timestamp', ''))
+        # Buscar histórico do banco de dados
+        all_messages = message_processor.database_service.get_conversation_history(empresa_obj.id, cliente_id, limit=100)
         
         # Filtrar por 'before' se fornecido
         if before:
@@ -522,20 +518,9 @@ def get_conversation_history(
         # Pegar as últimas 'limit' mensagens
         paginated_messages = all_messages[-limit:]
         
-        # Buscar atividades do cliente
-        activities = []
-        activity_pattern = f"activity:{empresa}:*"
-        for key in message_processor.redis_service.redis_client.scan_iter(match=activity_pattern):
-            activity_data = message_processor.redis_service.redis_client.get(key)
-            if activity_data:
-                try:
-                    activity = json.loads(activity_data)
-                    if activity.get('cliente') == cliente_id:
-                        activities.append(activity)
-                except:
-                    pass
-        
-        activities.sort(key=lambda x: x.get('timestamp', ''))
+        # Buscar atividades do cliente do banco de dados
+        activities = message_processor.database_service.get_recent_activities(empresa_obj.id, limit=20)
+        activities = [a for a in activities if a.get('cliente') == cliente_id]
         
         return {
             "empresa": empresa,

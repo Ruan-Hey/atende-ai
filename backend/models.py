@@ -43,6 +43,34 @@ class Mensagem(Base):
     timestamp = Column(TIMESTAMP, server_default=func.now())
     empresa = relationship('Empresa', back_populates='mensagens')
 
+class Atendimento(Base):
+    __tablename__ = 'atendimentos'
+    id = Column(Integer, primary_key=True)
+    empresa_id = Column(Integer, ForeignKey('empresas.id'))
+    cliente_id = Column(String(100), nullable=False)
+    data_atendimento = Column(TIMESTAMP, server_default=func.now())
+    empresa = relationship('Empresa')
+
+class Cliente(Base):
+    __tablename__ = 'clientes'
+    id = Column(Integer, primary_key=True)
+    empresa_id = Column(Integer, ForeignKey('empresas.id'))
+    cliente_id = Column(String(100), nullable=False)
+    primeiro_atendimento = Column(TIMESTAMP, server_default=func.now())
+    ultimo_atendimento = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+    empresa = relationship('Empresa')
+    __table_args__ = (UniqueConstraint('empresa_id', 'cliente_id', name='_cliente_empresa_uc'),)
+
+class Atividade(Base):
+    __tablename__ = 'atividades'
+    id = Column(Integer, primary_key=True)
+    empresa_id = Column(Integer, ForeignKey('empresas.id'))
+    cliente_id = Column(String(100), nullable=False)
+    tipo = Column(String(50), nullable=False)  # 'atendimento', 'reserva', etc.
+    descricao = Column(Text, nullable=False)
+    timestamp = Column(TIMESTAMP, server_default=func.now())
+    empresa = relationship('Empresa')
+
 class WebhookData(BaseModel):
     """Dados recebidos do webhook do Twilio"""
     Body: str
