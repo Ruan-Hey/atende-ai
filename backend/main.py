@@ -386,14 +386,35 @@ async def webhook_handler(empresa_slug: str, request: Request):
         
         logger.info(f"Webhook recebido para {empresa_slug}: {webhook_data}")
         
-        # Verificar se é uma mensagem válida
-        if not webhook_data.get('Body') or not webhook_data.get('WaId'):
+        # Verificar se é uma mensagem válida (incluindo áudio, imagem, etc.)
+        wa_id = webhook_data.get('WaId')
+        body = webhook_data.get('Body', '')
+        message_type = webhook_data.get('MessageType', 'text')
+        num_media = webhook_data.get('NumMedia', '0')
+        
+        if not wa_id:
             logger.warning(f"Webhook inválido recebido: {webhook_data}")
             return JSONResponse(content={
                 'success': True,
                 'message': 'Webhook recebido (dados inválidos)',
                 'empresa': empresa_slug
             })
+        
+        # Se é uma mensagem de mídia (áudio, imagem, etc.) mas não tem texto, criar um texto descritivo
+        if (message_type != 'text' or int(num_media) > 0) and not body:
+            if message_type == 'audio':
+                body = "[Mensagem de áudio]"
+            elif message_type == 'image':
+                body = "[Imagem enviada]"
+            elif message_type == 'video':
+                body = "[Vídeo enviado]"
+            elif message_type == 'document':
+                body = "[Documento enviado]"
+            else:
+                body = f"[Mensagem de {message_type}]"
+            
+            # Atualizar o webhook_data com o texto descritivo
+            webhook_data['Body'] = body
         
         # Processar mensagem
         try:
@@ -405,7 +426,7 @@ async def webhook_handler(empresa_slug: str, request: Request):
                     'success': True,
                     'message': 'Mensagem recebida e adicionada ao buffer',
                     'empresa': empresa_slug,
-                    'cliente_id': webhook_data.get('WaId', ''),
+                    'cliente_id': wa_id,
                     'buffered': True
                 })
             else:
@@ -416,7 +437,7 @@ async def webhook_handler(empresa_slug: str, request: Request):
                     'success': result.get('success', True),
                     'message': 'Mensagem processada imediatamente',
                     'empresa': empresa_slug,
-                    'cliente_id': webhook_data.get('WaId', ''),
+                    'cliente_id': wa_id,
                     'buffered': False,
                     'result': result
                 })
@@ -427,7 +448,7 @@ async def webhook_handler(empresa_slug: str, request: Request):
                 'success': True,
                 'message': 'Mensagem recebida (erro no processamento)',
                 'empresa': empresa_slug,
-                'cliente_id': webhook_data.get('WaId', ''),
+                'cliente_id': wa_id,
                 'error': str(e)
             })
         
