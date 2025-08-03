@@ -15,4 +15,10 @@ google-api-python-client
 psycopg2-binary>=2.9.0
 SQLAlchemy>=1.4.0
 passlib[bcrypt]
-python-jose[cryptography] 
+python-jose[cryptography]
+# Test dependencies
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+httpx>=0.24.0
+pytest-mock>=3.10.0
+factory-boy>=3.2.0 

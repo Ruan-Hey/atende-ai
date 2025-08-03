@@ -306,7 +306,7 @@ def get_empresa_clientes(
             "clientes": clientes
         }
     except Exception as e:
-        logger.error(f"Erro ao buscar clientes da empresa {empresa_slug}: {e}")
+        logging.error(f"Erro ao buscar clientes da empresa {empresa_slug}: {e}")
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
     finally:
         session.close()
@@ -347,6 +347,7 @@ def force_process_buffer(cliente_id: str, empresa: str):
 async def test_webhook():
     """Endpoint de teste simples"""
     return JSONResponse(content={
+        'status': 'ok',
         'success': True,
         'message': 'Teste funcionando'
     })
