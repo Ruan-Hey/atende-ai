@@ -262,4 +262,58 @@ class GoogleCalendarService:
             
         except Exception as e:
             logger.error(f"Erro ao agendar reunião: {e}")
-            return {'success': False, 'message': f'Erro ao agendar: {str(e)}'} 
+            return {'success': False, 'message': f'Erro ao agendar: {str(e)}'}
+    
+    def list_events(self, start_date: str, end_date: str) -> List[Dict]:
+        """
+        Lista eventos em um período específico
+        Args:
+            start_date: Data de início (YYYY-MM-DD)
+            end_date: Data de fim (YYYY-MM-DD)
+        """
+        if not self.service:
+            logger.warning("Google Calendar não autenticado")
+            return []
+        
+        try:
+            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            
+            events_result = self.service.events().list(
+                calendarId='primary',
+                timeMin=start_dt.isoformat() + 'Z',
+                timeMax=end_dt.isoformat() + 'Z',
+                singleEvents=True,
+                orderBy='startTime'
+            ).execute()
+            
+            return events_result.get('items', [])
+            
+        except Exception as e:
+            logger.error(f"Erro ao listar eventos: {e}")
+            return []
+    
+    def create_event(self, event_data: Dict) -> Dict:
+        """
+        Cria um evento no Google Calendar
+        Args:
+            event_data: Dados do evento (summary, start, end, attendees, etc.)
+        """
+        if not self.service:
+            logger.warning("Google Calendar não autenticado")
+            return {'success': False, 'message': 'Calendário não configurado'}
+        
+        try:
+            event = self.service.events().insert(calendarId='primary', body=event_data).execute()
+            
+            logger.info(f'Evento criado: {event.get("id")}')
+            return {
+                'success': True,
+                'id': event.get('id'),
+                'summary': event.get('summary'),
+                'link': event.get('htmlLink')
+            }
+            
+        except Exception as e:
+            logger.error(f"Erro ao criar evento: {e}")
+            return {'success': False, 'message': f'Erro ao criar evento: {str(e)}'} 

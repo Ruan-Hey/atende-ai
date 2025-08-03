@@ -17,19 +17,19 @@ class TestWebhookWhatsApp:
             "MessageType": "text",
             "ProfileName": "João Silva"
         }
-        
-        with patch('integrations.twilio_service.Client') as mock_twilio:
-            mock_client = Mock()
-            mock_twilio.return_value = mock_client
+    
+        with patch('integrations.twilio_service.TwilioService') as mock_twilio_service:
+            mock_service = Mock()
+            mock_service.send_whatsapp_message.return_value = {
+                'success': True,
+                'message_sid': 'test-sid'
+            }
+            mock_twilio_service.return_value = mock_service
             
-            response = client.post(
-                f"/webhook/{sample_empresa.slug}",
-                data=webhook_data
-            )
+            response = client.post(f"/webhook/{sample_empresa.slug}", data=webhook_data)
             
             assert response.status_code == 200
-            data = response.json()
-            assert "success" in data
+            mock_service.send_whatsapp_message.assert_called_once()
     
     def test_webhook_handler_empresa_not_found(self, client):
         """Testa webhook para empresa inexistente"""
@@ -75,15 +75,18 @@ class TestWebhookWhatsApp:
             "MediaUrl0": "https://example.com/image.jpg"
         }
         
-        with patch('integrations.twilio_service.Client') as mock_twilio:
-            mock_client = Mock()
-            mock_twilio.return_value = mock_client
+        with patch('integrations.twilio_service.TwilioService') as mock_twilio_service:
+            mock_service = Mock()
+            mock_service.send_whatsapp_message.return_value = {
+                'success': True,
+                'message_sid': 'test-sid'
+            }
+            mock_twilio_service.return_value = mock_service
             
             response = client.post(f"/webhook/{sample_empresa.slug}", data=webhook_data)
             
             assert response.status_code == 200
-            data = response.json()
-            assert "success" in data
+            mock_service.send_whatsapp_message.assert_called_once()
     
     def test_webhook_handler_openai_integration(self, client, sample_empresa, mock_openai):
         """Testa integração com OpenAI no processamento de webhook"""
@@ -99,9 +102,13 @@ class TestWebhookWhatsApp:
             choices=[Mock(message=Mock(content="Nosso horário de funcionamento é de segunda a sexta, das 8h às 18h."))]
         )
         
-        with patch('integrations.twilio_service.Client') as mock_twilio:
-            mock_client = Mock()
-            mock_twilio.return_value = mock_client
+        with patch('integrations.twilio_service.TwilioService') as mock_twilio_service:
+            mock_service = Mock()
+            mock_service.send_whatsapp_message.return_value = {
+                'success': True,
+                'message_sid': 'test-sid'
+            }
+            mock_twilio_service.return_value = mock_service
             
             response = client.post(f"/webhook/{sample_empresa.slug}", data=webhook_data)
             
@@ -137,10 +144,10 @@ class TestWebhookWhatsApp:
         }
         
         # Mock para simular erro no Twilio
-        with patch('integrations.twilio_service.Client') as mock_twilio:
-            mock_client = Mock()
-            mock_client.messages.create.side_effect = Exception("Twilio error")
-            mock_twilio.return_value = mock_client
+        with patch('integrations.twilio_service.TwilioService') as mock_twilio_service:
+            mock_service = Mock()
+            mock_service.send_whatsapp_message.side_effect = Exception("Twilio error")
+            mock_twilio_service.return_value = mock_service
             
             response = client.post(f"/webhook/{sample_empresa.slug}", data=webhook_data)
             
@@ -156,9 +163,13 @@ class TestWebhookWhatsApp:
             "WaId": "5511999999999"
         }
         
-        with patch('integrations.twilio_service.Client') as mock_twilio:
-            mock_client = Mock()
-            mock_twilio.return_value = mock_client
+        with patch('integrations.twilio_service.TwilioService') as mock_twilio_service:
+            mock_service = Mock()
+            mock_service.send_whatsapp_message.return_value = {
+                'success': True,
+                'message_sid': 'test-sid'
+            }
+            mock_twilio_service.return_value = mock_service
             
             response = client.post(f"/webhook/{sample_empresa.slug}", data=webhook_data)
             
@@ -192,9 +203,13 @@ class TestWebhookWhatsApp:
             "WaId": "5511999999999"
         }
         
-        with patch('integrations.twilio_service.Client') as mock_twilio:
-            mock_client = Mock()
-            mock_twilio.return_value = mock_client
+        with patch('integrations.twilio_service.TwilioService') as mock_twilio_service:
+            mock_service = Mock()
+            mock_service.send_whatsapp_message.return_value = {
+                'success': True,
+                'message_sid': 'test-sid'
+            }
+            mock_twilio_service.return_value = mock_service
             
             # Envia primeira mensagem
             response1 = client.post(f"/webhook/{sample_empresa.slug}", data=webhook_data_1)
@@ -213,9 +228,13 @@ class TestWebhookWhatsApp:
             "WaId": "5511999999999"
         }
         
-        with patch('integrations.twilio_service.Client') as mock_twilio:
-            mock_client = Mock()
-            mock_twilio.return_value = mock_client
+        with patch('integrations.twilio_service.TwilioService') as mock_twilio_service:
+            mock_service = Mock()
+            mock_service.send_whatsapp_message.return_value = {
+                'success': True,
+                'message_sid': 'test-sid'
+            }
+            mock_twilio_service.return_value = mock_service
             
             # Envia múltiplas mensagens rapidamente
             responses = []
@@ -258,9 +277,13 @@ class TestWebhookWhatsApp:
             "WaId": "5511999999999"
         }
         
-        with patch('integrations.twilio_service.Client') as mock_twilio:
-            mock_client = Mock()
-            mock_twilio.return_value = mock_client
+        with patch('integrations.twilio_service.TwilioService') as mock_twilio_service:
+            mock_service = Mock()
+            mock_service.send_whatsapp_message.return_value = {
+                'success': True,
+                'message_sid': 'test-sid'
+            }
+            mock_twilio_service.return_value = mock_service
             
             response = client.post(f"/webhook/{sample_empresa.slug}", data=webhook_data)
             assert response.status_code == 200

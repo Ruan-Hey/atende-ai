@@ -84,6 +84,11 @@ function AppRoutes() {
               <EmpresaDashboard />
             </ProtectedRoute>
           } />
+          <Route path="/conversation/:empresa" element={
+            <ProtectedRoute>
+              <ConversationView />
+            </ProtectedRoute>
+          } />
           <Route path="/conversation/:empresa/:clienteId" element={
             <ProtectedRoute>
               <ConversationView />

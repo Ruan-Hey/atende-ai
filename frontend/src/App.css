@@ -855,6 +855,484 @@ body {
   background: #a8a8a8;
 }
 
+/* Novo layout de conversas */
+.conversation-view-container {
+  height: calc(100vh - 4rem);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+  overflow: hidden;
+  font-family: 'Inter', sans-serif;
+}
+
+.conversation-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.conversations-sidebar {
+  width: 350px;
+  border-right: 1px solid #e9ecef;
+  background: #fafafa;
+  display: flex;
+  flex-direction: column;
+}
+
+.messages-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+}
+
+/* Mobile tabs */
+.mobile-tabs {
+  display: flex;
+  background: #fff;
+  border-bottom: 1px solid #e9ecef;
+  padding: 0;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 1rem;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #666;
+  transition: all 0.2s ease;
+}
+
+.tab-btn.active {
+  color: #000;
+  border-bottom-color: #000;
+  background: #f5f5f5;
+}
+
+.tab-btn:hover {
+  background: #f5f5f5;
+}
+
+.tab-icon {
+  font-size: 1rem;
+}
+
+.tab-text {
+  display: none;
+}
+
+@media (min-width: 480px) {
+  .tab-text {
+    display: inline;
+  }
+}
+
+/* Lista de conversas */
+.conversations-list {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.conversations-header {
+  padding: 1rem;
+  border-bottom: 1px solid #e9ecef;
+  background: #fff;
+}
+
+.conversations-header h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.search-container {
+  position: relative;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  background: #fff;
+  transition: border-color 0.2s ease;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #000;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1);
+}
+
+.conversations-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.conversation-item {
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid #f1f3f4;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  position: relative;
+}
+
+.conversation-item:hover {
+  background: #f0f0f0;
+}
+
+.conversation-item.active {
+  background: #e8e8e8;
+  border-left: 3px solid #000;
+}
+
+.conversation-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #333 0%, #666 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 1rem;
+  margin-right: 0.75rem;
+  position: relative;
+}
+
+.unread-indicator {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 12px;
+  height: 12px;
+  background: #ff4757;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.conversation-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.conversation-name {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #333;
+  margin-bottom: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.unread-badge {
+  width: 8px;
+  height: 8px;
+  background: #ff4757;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.conversation-last-message {
+  font-size: 0.75rem;
+  color: #666;
+  margin-bottom: 0.25rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.conversation-time {
+  font-size: 0.75rem;
+  color: #999;
+}
+
+.no-conversations {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+  color: #666;
+}
+
+.no-conversations-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.no-conversations p {
+  margin: 0 0 0.5rem 0;
+  font-weight: 500;
+}
+
+.no-conversations small {
+  font-size: 0.875rem;
+  opacity: 0.7;
+}
+
+.loading-conversations {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+/* Área de mensagens */
+.messages-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.no-conversation-selected {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  color: #666;
+  padding: 2rem;
+}
+
+.no-conversation-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.no-conversation-selected h3 {
+  margin: 0 0 0.5rem 0;
+  font-weight: 600;
+  color: #333;
+}
+
+.no-conversation-selected p {
+  margin: 0;
+  font-size: 0.875rem;
+  opacity: 0.7;
+}
+
+/* Layout responsivo */
+@media (max-width: 768px) {
+  .conversation-view-container {
+    height: 100vh;
+    width: 100vw;
+    margin: 0;
+    padding: 0;
+    border-radius: 0;
+    box-shadow: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  
+  .conversation-layout {
+    flex-direction: column;
+    height: 100%;
+    flex: 1;
+    position: relative;
+    margin: 0;
+    padding: 0;
+  }
+  
+  .conversations-sidebar {
+    width: 100%;
+    height: 100%;
+    border-right: none;
+    border-bottom: none;
+    flex: 1;
+    min-height: 0;
+  }
+  
+  .messages-area {
+    width: 100%;
+    height: 100%;
+    flex: 1;
+    min-height: 0;
+  }
+  
+  .mobile-tabs {
+    flex-shrink: 0;
+  }
+  
+  .conversation-item {
+    padding: 0.75rem;
+  }
+  
+  .conversation-avatar {
+    width: 40px;
+    height: 40px;
+    font-size: 0.875rem;
+    margin-right: 0.5rem;
+  }
+  
+  .conversations-header {
+    padding: 0.75rem;
+  }
+  
+  .conversations-header h3 {
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
+  }
+  
+  /* Garantir que as áreas ocupem o espaço correto */
+  .conversations-list {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .conversations-content {
+    flex: 1;
+    min-height: 0;
+  }
+  
+  .messages-view {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .messages-container {
+    flex: 1;
+    min-height: 0;
+  }
+  
+  /* Garantir que cada tab ocupe a tela completa */
+  .conversations-sidebar,
+  .messages-area {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+  }
+  
+  /* Mostrar apenas a área ativa no mobile */
+  .conversations-sidebar {
+    display: none;
+  }
+  
+  .messages-area {
+    display: none;
+  }
+  
+  /* Mostrar a área correta baseada na tab ativa */
+  .conversations-sidebar.active {
+    display: flex !important;
+  }
+  
+  .messages-area.active {
+    display: flex !important;
+  }
+}
+
+/* Desktop: sempre mostrar ambas as áreas */
+@media (min-width: 769px) {
+  .conversations-sidebar,
+  .messages-area {
+    position: static;
+    display: flex !important;
+  }
+}
+
+/* Ajustes específicos para a página de conversas no mobile */
+@media (max-width: 768px) {
+  /* Quando estiver na página de conversas, remover margens e paddings do main-content */
+  .main-content:has(.conversation-view-container) {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+  }
+  
+  /* Garantir que o app não tenha scroll indesejado */
+  .app {
+    overflow: hidden;
+  }
+}
+
+/* Melhorias visuais */
+.conversations-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.conversations-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.conversations-content::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.conversations-content::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Animações */
+.conversation-item {
+  animation: fadeInUp 0.3s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Estados de loading */
+.loading-conversations {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Manter estilos existentes para compatibilidade */
 .conversation-container {
   max-width: 1200px;
   margin: 0 auto;
@@ -919,7 +1397,7 @@ body {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #333 0%, #666 100%);
   color: #fff;
   display: flex;
   align-items: center;

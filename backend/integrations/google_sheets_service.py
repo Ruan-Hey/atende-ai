@@ -146,4 +146,65 @@ class GoogleSheetsService:
             
         except Exception as e:
             logger.error(f"Erro ao buscar reservas: {e}")
-            return [] 
+            return []
+    
+    def read_data(self, spreadsheet_id: str) -> List[Dict[str, Any]]:
+        """Lê dados de uma planilha"""
+        try:
+            spreadsheet = self.get_spreadsheet(spreadsheet_id)
+            worksheet = spreadsheet.sheet1
+            
+            # Pegar todos os dados
+            all_values = worksheet.get_all_values()
+            
+            if len(all_values) < 2:  # Só cabeçalho ou vazio
+                return []
+            
+            # Pular cabeçalho e converter para lista de dicionários
+            headers = all_values[0]
+            data = []
+            
+            for row in all_values[1:]:
+                row_dict = {}
+                for i, value in enumerate(row):
+                    if i < len(headers):
+                        row_dict[headers[i]] = value
+                data.append(row_dict)
+            
+            return data
+            
+        except Exception as e:
+            logger.error(f"Erro ao ler dados da planilha: {e}")
+            return []
+    
+    def write_data(self, spreadsheet_id: str, data: List[Dict[str, Any]]) -> bool:
+        """Escreve dados em uma planilha"""
+        try:
+            spreadsheet = self.get_spreadsheet(spreadsheet_id)
+            worksheet = spreadsheet.sheet1
+            
+            if not data:
+                return False
+            
+            # Limpar planilha existente (exceto cabeçalho)
+            all_values = worksheet.get_all_values()
+            if len(all_values) > 1:
+                worksheet.delete_rows(2, len(all_values))
+            
+            # Preparar dados para escrita
+            headers = list(data[0].keys())
+            rows = [headers]  # Cabeçalho
+            
+            for item in data:
+                row = [str(item.get(header, '')) for header in headers]
+                rows.append(row)
+            
+            # Escrever dados
+            worksheet.update('A1', rows)
+            
+            logger.info(f"Dados escritos na planilha: {len(data)} registros")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Erro ao escrever dados na planilha: {e}")
+            return False 

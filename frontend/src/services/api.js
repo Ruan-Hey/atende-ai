@@ -98,6 +98,11 @@ class ApiService {
     return this.authenticatedRequest(`/api/admin/empresa/${empresaSlug}/clientes`)
   }
 
+  // Buscar lista de conversas de uma empresa
+  async getConversations(empresaSlug) {
+    return this.authenticatedRequest(`/api/admin/empresa/${empresaSlug}/clientes`)
+  }
+
   // Buscar configurações de uma empresa
   async getEmpresaConfiguracoes(empresaSlug) {
     return this.authenticatedRequest(`/api/empresas/${empresaSlug}/configuracoes`)

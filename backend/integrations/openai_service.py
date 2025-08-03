@@ -33,6 +33,45 @@ class OpenAIService:
             logger.error(f"Erro ao processar mensagem com OpenAI: {e}")
             return "Desculpe, tive um problema técnico. Pode tentar novamente?"
     
+    def generate_response(self, message: str) -> str:
+        """Gera resposta simples para testes"""
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "Você é um assistente útil."},
+                    {"role": "user", "content": message}
+                ],
+                max_tokens=100,
+                temperature=0.7
+            )
+            
+            return response.choices[0].message.content.strip()
+            
+        except Exception as e:
+            logger.error(f"Erro ao gerar resposta: {e}")
+            return "Desculpe, tive um problema técnico."
+    
+    def generate_response_with_context(self, context: list, message: str) -> str:
+        """Gera resposta com contexto de conversa"""
+        try:
+            messages = [{"role": "system", "content": "Você é um assistente útil."}]
+            messages.extend(context)
+            messages.append({"role": "user", "content": message})
+            
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages,
+                max_tokens=200,
+                temperature=0.7
+            )
+            
+            return response.choices[0].message.content.strip()
+            
+        except Exception as e:
+            logger.error(f"Erro ao gerar resposta com contexto: {e}")
+            return "Desculpe, tive um problema técnico."
+    
     def transcribe_audio(self, audio_url: str, twilio_sid: str, twilio_token: str) -> str:
         """Transcreve áudio usando OpenAI"""
         try:
