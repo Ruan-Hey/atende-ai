@@ -823,3 +823,20 @@ def update_empresa_configuracoes(
         return {"message": "Configurações atualizadas com sucesso"}
     finally:
         session.close() 
+
+@app.get("/test-services")
+async def test_services():
+    """Endpoint de teste para verificar se os serviços estão funcionando"""
+    try:
+        # Testar se o message_processor está funcionando
+        buffer_status = message_processor.get_buffer_status()
+        return JSONResponse(content={
+            'success': True,
+            'message': 'Serviços funcionando',
+            'buffer_status': buffer_status
+        })
+    except Exception as e:
+        return JSONResponse(content={
+            'success': False,
+            'message': f'Erro nos serviços: {str(e)}'
+        }) 
