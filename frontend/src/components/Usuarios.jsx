@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
+import LoadingSpinner from './LoadingSpinner';
 import './Usuarios.css';
 
 const Usuarios = () => {
@@ -97,7 +98,7 @@ const Usuarios = () => {
   };
 
   if (loading) {
-    return <div className="usuarios-loading">Carregando usuários...</div>;
+    return <LoadingSpinner type="content" />;
   }
 
   return (

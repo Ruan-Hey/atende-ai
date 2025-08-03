@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import apiService from '../services/api'
+import LoadingSpinner from './LoadingSpinner'
 
 const LogsViewer = () => {
   const [logs, setLogs] = useState([])
@@ -78,13 +79,7 @@ const LogsViewer = () => {
   })
 
   if (loading && logs.length === 0) {
-    return (
-      <div className="dashboard">
-        <div className="dashboard-header">
-          <h1 className="dashboard-title">Carregando logs...</h1>
-        </div>
-      </div>
-    )
+    return <LoadingSpinner type="content" />
   }
 
   if (error) {
@@ -93,13 +88,6 @@ const LogsViewer = () => {
         <div className="dashboard-header">
           <h1 className="dashboard-title">Erro</h1>
           <p className="dashboard-subtitle" style={{ color: 'red' }}>{error}</p>
-          <button 
-            className="btn btn-primary" 
-            onClick={loadLogs}
-            style={{ marginTop: '1rem' }}
-          >
-            Tentar novamente
-          </button>
         </div>
       </div>
     )

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import apiService from '../services/api'
+import LoadingSpinner from './LoadingSpinner'
 
 const EmpresaDashboard = () => {
   const { empresa } = useParams()
@@ -69,13 +70,7 @@ const EmpresaDashboard = () => {
   }
 
   if (loading) {
-    return (
-      <div className="dashboard">
-        <div className="dashboard-header">
-          <h1 className="dashboard-title">Carregando...</h1>
-        </div>
-      </div>
-    )
+    return <LoadingSpinner type="content" />
   }
 
   if (error) {
@@ -84,13 +79,6 @@ const EmpresaDashboard = () => {
         <div className="dashboard-header">
           <h1 className="dashboard-title">Erro</h1>
           <p className="dashboard-subtitle" style={{ color: 'red' }}>{error}</p>
-          <button 
-            className="btn btn-primary" 
-            onClick={loadEmpresaData}
-            style={{ marginTop: '1rem' }}
-          >
-            Tentar novamente
-          </button>
         </div>
       </div>
     )

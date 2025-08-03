@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import apiService from '../services/api'
+import LoadingSpinner from './LoadingSpinner'
 
 const ConversationView = () => {
   const { empresa, clienteId } = useParams()
@@ -168,16 +169,7 @@ const ConversationView = () => {
   }
 
   if (loading) {
-    return (
-      <div className="conversation-container">
-        <div className="conversation-header">
-          <button onClick={() => navigate(-1)} className="back-btn">
-            ←
-          </button>
-          <h2>Carregando...</h2>
-        </div>
-      </div>
-    )
+    return <LoadingSpinner type="content" />
   }
 
   if (error) {

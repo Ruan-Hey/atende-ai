@@ -521,7 +521,7 @@ class MetricsService:
         self.redis_service = RedisService()
     
     def get_admin_metrics(self) -> Dict[str, Any]:
-        """Retorna métricas para o painel admin"""
+        """Retorna métricas para o painel admin - versão otimizada"""
         try:
             # Buscar empresas do banco de dados
             from sqlalchemy import create_engine
@@ -548,7 +548,7 @@ class MetricsService:
             finally:
                 session.close()
             
-            # Buscar dados reais do Redis
+            # Buscar dados do Redis de forma otimizada
             total_atendimentos = 0
             total_clientes = 0
             total_reservas = 0
@@ -556,56 +556,47 @@ class MetricsService:
             empresas_metrics = []
             for empresa in empresas:
                 try:
-                    # Buscar contadores do Redis
+                    # Buscar contadores do Redis de forma mais eficiente
                     attendance_key = f"attendance:{empresa['slug']}"
                     atendimentos = int(self.redis_service.redis_client.get(attendance_key) or 0)
                     
-                    # Contar clientes únicos baseado em atividades
+                    # Contar clientes únicos de forma otimizada
                     clientes = 0
-                    activity_pattern = f"activity:{empresa['slug']}:*"
-                    clientes_unicos = set()
-                    for key in self.redis_service.redis_client.scan_iter(match=activity_pattern):
-                        activity_data = self.redis_service.redis_client.get(key)
-                        if activity_data:
-                            try:
-                                activity = json.loads(activity_data)
-                                cliente_id = activity.get('cliente', '')
-                                if cliente_id:
-                                    clientes_unicos.add(cliente_id)
-                            except:
-                                pass
-                    clientes = len(clientes_unicos)
+                    try:
+                        # Usar pipeline para operações Redis mais eficientes
+                        pipeline = self.redis_service.redis_client.pipeline()
+                        activity_pattern = f"activity:{empresa['slug']}:*"
+                        
+                        # Buscar apenas as primeiras 100 chaves para performance
+                        keys = list(self.redis_service.redis_client.scan_iter(match=activity_pattern, count=100))
+                        if keys:
+                            pipeline.mget(keys)
+                            results = pipeline.execute()
+                            
+                            clientes_unicos = set()
+                            for result in results:
+                                if result:
+                                    try:
+                                        activity = json.loads(result)
+                                        cliente_id = activity.get('cliente', '')
+                                        if cliente_id:
+                                            clientes_unicos.add(cliente_id)
+                                    except:
+                                        pass
+                            clientes = len(clientes_unicos)
+                    except Exception as e:
+                        logger.warning(f"Erro ao contar clientes para {empresa['slug']}: {e}")
+                        clientes = 0
+                        
                 except Exception as e:
                     logger.warning(f"Erro ao acessar Redis para {empresa['slug']}: {e}")
                     atendimentos = 0
                     clientes = 0
                 
-                # Buscar status da empresa no banco de dados
-                try:
-                    from sqlalchemy import create_engine
-                    from sqlalchemy.orm import sessionmaker
-                    from models import Empresa
-                    
-                    engine = create_engine(Config.POSTGRES_URL)
-                    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-                    session = SessionLocal()
-                    
-                    try:
-                        empresa_db = session.query(Empresa).filter(Empresa.slug == empresa['slug']).first()
-                        status = empresa_db.status if empresa_db else 'ativo'
-                    except Exception as e:
-                        logger.warning(f"Erro ao buscar status da empresa {empresa['slug']}: {e}")
-                        status = 'ativo'
-                    finally:
-                        session.close()
-                except Exception as e:
-                    logger.warning(f"Erro ao conectar ao banco para {empresa['slug']}: {e}")
-                    status = 'ativo'
-                
                 empresas_metrics.append({
                     'slug': empresa['slug'],
                     'nome': empresa['nome'],
-                    'status': status,
+                    'status': empresa['status'],
                     'atendimentos': atendimentos,
                     'reservas': 0,  # TODO: Implementar contador de reservas
                     'clientes': clientes

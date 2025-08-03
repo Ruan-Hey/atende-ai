@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import apiService from '../services/api'
+import LoadingSpinner from './LoadingSpinner'
 
 const AdminDashboard = () => {
   const [metrics, setMetrics] = useState({
@@ -39,16 +40,16 @@ const AdminDashboard = () => {
 
   const loadData = async () => {
     try {
-      // Carregar métricas gerais
-      const metricsData = await apiService.getAdminMetrics();
+      // Carregar todos os dados em paralelo para melhor performance
+      const [metricsData, empresasData, errosData] = await Promise.all([
+        apiService.getAdminMetrics(),
+        apiService.listEmpresas(),
+        apiService.getErros24h()
+      ]);
+      
+      // Atualizar todos os estados de uma vez
       setMetrics(metricsData);
-      
-      // Carregar empresas (já filtradas pelo backend conforme o usuário)
-      const empresasData = await apiService.listEmpresas();
       setEmpresas(empresasData);
-      
-      // Carregar erros das últimas 24h
-      const errosData = await apiService.getErros24h();
       setErros24h(errosData);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
@@ -83,13 +84,7 @@ const AdminDashboard = () => {
   }
 
   if (loading) {
-    return (
-      <div className="dashboard">
-        <div className="dashboard-header">
-          <h1 className="dashboard-title">Carregando...</h1>
-        </div>
-      </div>
-    )
+    return <LoadingSpinner type="content" />
   }
 
   if (error) {
@@ -98,13 +93,6 @@ const AdminDashboard = () => {
         <div className="dashboard-header">
           <h1 className="dashboard-title">Erro</h1>
           <p className="dashboard-subtitle" style={{ color: 'red' }}>{error}</p>
-          <button 
-            className="btn btn-primary" 
-            onClick={loadData}
-            style={{ marginTop: '1rem' }}
-          >
-            Tentar novamente
-          </button>
         </div>
       </div>
     )

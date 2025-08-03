@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:8001'
+const API_BASE_URL = 'http://localhost:8000'
 
 class ApiService {
   constructor() {
@@ -6,7 +6,7 @@ class ApiService {
     const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     
     this.baseURL = isLocalDev 
-      ? 'http://localhost:8001'  // Desenvolvimento local
+      ? 'http://localhost:8000'  // Desenvolvimento local
       : (import.meta.env.VITE_API_URL || 'https://api.tinyteams.app'); // Produção
   }
 

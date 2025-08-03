@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import apiService from '../services/api'
+import LoadingSpinner from './LoadingSpinner'
 
 const BufferStatus = () => {
   const [bufferStatus, setBufferStatus] = useState(null)
@@ -37,13 +38,7 @@ const BufferStatus = () => {
   }
 
   if (loading && !bufferStatus) {
-    return (
-      <div className="dashboard">
-        <div className="dashboard-header">
-          <h1 className="dashboard-title">Carregando status do buffer...</h1>
-        </div>
-      </div>
-    )
+    return <LoadingSpinner type="content" />
   }
 
   if (error) {

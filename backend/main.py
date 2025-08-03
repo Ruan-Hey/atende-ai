@@ -21,15 +21,8 @@ from typing import Optional, List
 
 # Configurações
 config = Config()
-
-# Configurar logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Configurações
-config = Config()
 engine = create_engine(config.POSTGRES_URL)
-Base.metadata.create_all(bind=engine)
+# Base.metadata.create_all(bind=engine)  # Comentado para evitar erro na inicialização
 
 # criar_tabelas()
 

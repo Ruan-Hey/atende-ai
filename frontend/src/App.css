@@ -308,6 +308,7 @@ body {
   margin: 0 auto;
   min-height: 100%;
   height: 100%;
+  position: relative;
 }
 
 /* Desktop - sidebar sempre visível */
@@ -1249,4 +1250,100 @@ body {
   color: #dc3545;
   font-size: 0.9rem;
   margin-top: 0.5rem;
+}
+
+/* Novo Loader Personalizado */
+.loader {
+  --s: 15px;
+  width: calc(var(--s)*2.33);
+  aspect-ratio: 1;
+  display: flex;
+  justify-content: space-between;
+  animation: l29-0 1s infinite;
+}
+
+.loader::before,
+.loader::after {
+  content: "";
+  width: var(--s);
+  --_g: no-repeat radial-gradient(farthest-side,#000 94%,#0000);
+  background:
+    var(--_g) top,
+    var(--_g) bottom;
+  background-size: 100% var(--s);
+  transform-origin: 50% calc(100% - var(--s)/2);
+  animation: inherit;
+  animation-name: l29-1;
+}
+
+.loader::after {
+  --_s:-1;
+}
+
+@keyframes l29-0 {
+    100% {transform:translateY(calc(var(--s) - 100%))}
+}
+
+@keyframes l29-1 {
+    100% {transform:rotate(calc(var(--_s,1)*-180deg))}
+}
+
+/* Container do loader para páginas com sidebar */
+.page-loader-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  width: 100%;
+  background: white;
+}
+
+/* Container do loader para área de conteúdo */
+.content-loader-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  width: calc(100vw - 280px); /* Desktop: largura total menos a sidebar (280px) */
+  min-height: 400px;
+  background: #f8f9fa; /* Cor de fundo cinza para combinar com o tema */
+  position: fixed;
+  top: 0;
+  left: 280px; /* Desktop: posiciona após a sidebar */
+  right: 0;
+  bottom: 0;
+}
+
+/* Mobile: ajusta para tela cheia sem sidebar */
+@media (max-width: 768px) {
+  .content-loader-container {
+    width: 100vw;
+    left: 0;
+    top: 60px; /* Considera a navbar mobile */
+    height: calc(100vh - 60px);
+  }
+}
+
+/* Container do loader para páginas com sidebar */
+.page-loader-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  width: 100%;
+  background: white;
+}
+
+/* Estado de carregamento da aplicação */
+.app-loading {
+  overflow: hidden;
+}
+
+.app-content {
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+}
+
+.app-content.loaded {
+  opacity: 1;
 }

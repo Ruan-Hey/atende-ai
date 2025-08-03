@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import apiService from '../services/api'
+import LoadingSpinner from './LoadingSpinner'
 import './ConfiguracoesEmpresa.css'
 
 const ConfiguracoesEmpresa = () => {
@@ -121,14 +122,7 @@ const ConfiguracoesEmpresa = () => {
   }
 
   if (loading) {
-    return (
-      <div className="configuracoes-container">
-        <div className="loading-spinner">
-          <div className="spinner"></div>
-          <p>Carregando configurações...</p>
-        </div>
-      </div>
-    )
+    return <LoadingSpinner type="content" />
   }
 
   return (

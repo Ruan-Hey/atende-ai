@@ -7,16 +7,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
-    # Database
-    POSTGRES_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/atendeai")
+    # Database - Usar banco de produção por padrão
+    POSTGRES_URL = os.getenv("DATABASE_URL", "postgresql://atendeai:2pjZBzhDlZY275Z4FubsnBFPsjvLHNRw@dpg-d24vpfngi27c73bh06n0-a.oregon-postgres.render.com/atendeai")
     # Fallback para compatibilidade
     if not POSTGRES_URL or POSTGRES_URL == "postgresql://postgres:postgres@localhost:5432/atendeai":
-        POSTGRES_URL = os.getenv("POSTGRES_URL", "postgresql://postgres:postgres@localhost:5432/atendeai")
+        POSTGRES_URL = os.getenv("POSTGRES_URL", "postgresql://atendeai:2pjZBzhDlZY275Z4FubsnBFPsjvLHNRw@dpg-d24vpfngi27c73bh06n0-a.oregon-postgres.render.com/atendeai")
     
     # Se a URL não parece uma URL válida, usar fallback
     if not POSTGRES_URL.startswith("postgresql://"):
         print(f"⚠️ URL inválida detectada: {POSTGRES_URL}")
-        POSTGRES_URL = "postgresql://atendeai:atendeai@localhost:5432/atendeai"
+        POSTGRES_URL = "postgresql://atendeai:2pjZBzhDlZY275Z4FubsnBFPsjvLHNRw@dpg-d24vpfngi27c73bh06n0-a.oregon-postgres.render.com/atendeai"
     
     # Redis
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
