@@ -7,6 +7,10 @@ import json
 from datetime import datetime, timedelta
 import random
 
+# Configurar logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 from config import Config
 from models import WebhookData, MessageResponse, AdminMetrics, EmpresaMetrics, HealthCheck, Base, Empresa, Mensagem, Log, Usuario, gerar_hash_senha
 from services import MessageProcessor, MetricsService
@@ -100,8 +104,8 @@ app.add_middleware(
 )
 
 # Instanciar serviços
-message_processor = MessageProcessor(buffer_timeout=10)  # 10 segundos de buffer
-metrics_service = MetricsService()
+# message_processor = MessageProcessor(buffer_timeout=10)  # 10 segundos de buffer
+# metrics_service = MetricsService()
 
 # Inicializar engine do banco
 # engine = create_engine(Config.POSTGRES_URL)
@@ -339,68 +343,22 @@ def force_process_buffer(cliente_id: str, empresa: str):
             session.close()
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
+@app.get("/test-webhook")
+async def test_webhook():
+    """Endpoint de teste simples"""
+    return JSONResponse(content={
+        'success': True,
+        'message': 'Teste funcionando'
+    })
+
 @app.post("/webhook/{empresa_slug}")
 async def webhook_handler(empresa_slug: str, request: Request):
     """Endpoint para receber webhooks do Twilio com buffer ou resposta direta"""
-    try:
-        # Verificar se a empresa existe no banco de dados
-        session = SessionLocal()
-        try:
-            empresa_db = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
-            if not empresa_db:
-                logger.error(f"Empresa não encontrada: {empresa_slug}")
-                raise HTTPException(status_code=404, detail="Empresa não encontrada")
-            
-            empresa_config = {
-                'nome': empresa_db.nome,
-                'openai_key': empresa_db.openai_key,
-                'twilio_sid': empresa_db.twilio_sid,
-                'twilio_token': empresa_db.twilio_token,
-                'twilio_number': empresa_db.twilio_number,
-                # Chatwoot removido - não mais necessário
-                'mensagem_quebrada': empresa_db.mensagem_quebrada or False,
-                'prompt': empresa_db.prompt,
-                'usar_buffer': empresa_db.usar_buffer or True
-            }
-        except Exception as e:
-            logger.error(f"Erro ao buscar empresa {empresa_slug}: {e}")
-            raise HTTPException(status_code=404, detail="Empresa não encontrada")
-        finally:
-            session.close()
-        
-        # Processar dados do webhook
-        form_data = await request.form()
-        webhook_data = dict(form_data)
-        
-        logger.info(f"Webhook recebido para {empresa_slug}: {webhook_data}")
-        
-        usar_buffer = empresa_config.get('usar_buffer', True)
-        if usar_buffer:
-            # Adicionar mensagem ao buffer (não processa imediatamente)
-            message_processor.add_message_to_buffer(webhook_data, empresa_slug)
-            return JSONResponse(content={
-                'success': True,
-                'message': 'Mensagem recebida e adicionada ao buffer',
-                'empresa': empresa_slug,
-                'cliente_id': webhook_data.get('WaId', ''),
-                'buffered': True
-            })
-        else:
-            # Processar mensagem imediatamente
-            result = await message_processor._process_buffered_message(webhook_data, empresa_slug)
-            return JSONResponse(content={
-                'success': result.get('success', True),
-                'message': 'Mensagem processada imediatamente',
-                'empresa': empresa_slug,
-                'cliente_id': webhook_data.get('WaId', ''),
-                'buffered': False,
-                'result': result
-            })
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Erro no webhook handler: {e}")
-        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+    return JSONResponse(content={
+        'success': True,
+        'message': 'Webhook recebido com sucesso',
+        'empresa': empresa_slug
+    })
 
 @app.get("/api/logs")
 def get_logs(empresa: str = None, limit: int = 100):
