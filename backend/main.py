@@ -525,7 +525,6 @@ def get_conversation_history(
         return {
             "empresa": empresa,
             "cliente_id": cliente_id,
-            "context": context,
             "activities": activities,
             "messages": paginated_messages
         }

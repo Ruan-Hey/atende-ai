@@ -1,19 +1,3 @@
-import redis
-import json
-import logging
-from datetime import datetime, timedelta
-from typing import Dict, Any, Optional
-from config import Config
-import asyncio
-
-# Importar serviços de integração
-from integrations.openai_service import OpenAIService
-from integrations.twilio_service import TwilioService
-from integrations.google_sheets_service import GoogleSheetsService
-# Chatwoot removido - não mais necessário
-from integrations.google_calendar_service import GoogleCalendarService
-from services.message_buffer import MessageBuffer
-
 import asyncio
 import json
 import logging
@@ -24,6 +8,13 @@ from config import Config
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
 from models import Mensagem, Empresa, Atendimento, Cliente, Atividade
+
+# Importar serviços de integração
+from integrations.openai_service import OpenAIService
+from integrations.twilio_service import TwilioService
+from integrations.google_sheets_service import GoogleSheetsService
+from integrations.google_calendar_service import GoogleCalendarService
+from services.message_buffer import MessageBuffer
 
 logger = logging.getLogger(__name__)
 
