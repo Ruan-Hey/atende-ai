@@ -7,7 +7,7 @@ import os
 import sys
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from models import Base, Empresa, Usuario, gerar_hash_senha
+from models import Base, Empresa
 from config import Config
 
 def init_database():
@@ -60,36 +60,6 @@ def init_database():
             
             db.commit()
             print("✅ Empresas criadas com sucesso!")
-        
-        # Verificar se já existem usuários
-        usuarios_count = db.query(Usuario).count()
-        if usuarios_count == 0:
-            print("Criando usuários padrão...")
-            
-            # Buscar empresa TinyTeams
-            tinyteams = db.query(Empresa).filter(Empresa.slug == "tinyteams").first()
-            
-            # Criar usuários
-            usuarios = [
-                Usuario(
-                    email="ruan.g.hey@gmail.com",
-                    senha_hash=gerar_hash_senha("Ru@n2721484"),
-                    is_superuser=True,
-                    empresa_id=None
-                ),
-                Usuario(
-                    email="ruanhey@hotmail.com", 
-                    senha_hash=gerar_hash_senha("Ru@n2721484"),
-                    is_superuser=False,
-                    empresa_id=tinyteams.id if tinyteams else None
-                )
-            ]
-            
-            for usuario in usuarios:
-                db.add(usuario)
-            
-            db.commit()
-            print("✅ Usuários criados com sucesso!")
         
         print("🎉 Banco de dados inicializado com sucesso!")
         
