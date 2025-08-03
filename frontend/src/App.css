@@ -351,19 +351,19 @@ body {
 }
 
 .dashboard-header {
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 }
 
 .dashboard-title {
-  font-size: 2.5rem;
+  font-size: 1.5rem;
   font-weight: 600;
   color: #000;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
   font-family: 'Inter', sans-serif;
 }
 
 .dashboard-subtitle {
-  font-size: 1.1rem;
+  font-size: 0.875rem;
   color: #666;
   font-weight: 400;
   font-family: 'Inter', sans-serif;
@@ -372,28 +372,28 @@ body {
 /* Grid de métricas */
 .metrics-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
   width: 100%;
 }
 
 .metric-card {
   background: #fff;
-  padding: 1.5rem;
-  border-radius: 12px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  padding: 1.25rem;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   border: 1px solid #e9ecef;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .metric-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
 }
 
 .metric-title {
-  font-size: 0.9rem;
+  font-size: 0.75rem;
   color: #666;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -403,7 +403,7 @@ body {
 }
 
 .metric-value {
-  font-size: 2rem;
+  font-size: 1.5rem;
   font-weight: 600;
   color: #000;
   font-family: 'Inter', sans-serif;
@@ -412,17 +412,17 @@ body {
 /* Tabelas */
 .table-container {
   background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   overflow: hidden;
-  margin-bottom: 2rem;
-  margin-top: 2rem;
+  margin-bottom: 1.5rem;
+  margin-top: 1.5rem;
   width: 100%;
   max-width: 100%;
 }
 
 .table-header {
-  padding: 1rem;
+  padding: 0.75rem 1rem;
   border-bottom: 1px solid #e9ecef;
   background: #f8f9fa;
   width: 100%;
@@ -430,7 +430,7 @@ body {
 }
 
 .table-header h3 {
-  font-size: 1.2rem;
+  font-size: 1rem;
   font-weight: 600;
   color: #000;
   margin: 0;
@@ -580,13 +580,13 @@ body {
 /* Logs */
 .logs-container {
   background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   overflow: hidden;
 }
 
 .logs-header {
-  padding: 1.5rem;
+  padding: 1rem;
   border-bottom: 1px solid #e9ecef;
   background: #f8f9fa;
   display: flex;
@@ -595,7 +595,7 @@ body {
 }
 
 .logs-header h3 {
-  font-size: 1.2rem;
+  font-size: 1rem;
   font-weight: 600;
   color: #000;
   margin: 0;
@@ -603,9 +603,9 @@ body {
 
 .logs-stats {
   display: flex;
-  gap: 1rem;
-  font-size: 0.9rem;
-  font-weight: 600;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
 }
 
 .logs-list {
@@ -614,7 +614,7 @@ body {
 }
 
 .log-entry {
-  padding: 1rem 1.5rem;
+  padding: 0.75rem 1rem;
   border-bottom: 1px solid #e9ecef;
   transition: background-color 0.2s ease;
 }
@@ -625,10 +625,10 @@ body {
 
 .log-header {
   display: flex;
-  gap: 1rem;
+  gap: 0.75rem;
   align-items: center;
-  margin-bottom: 0.5rem;
-  font-size: 0.9rem;
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
 }
 
 .log-level {
@@ -646,17 +646,17 @@ body {
 }
 
 .log-message {
-  font-size: 0.95rem;
+  font-size: 0.875rem;
   line-height: 1.4;
   color: #333;
 }
 
 .log-details {
-  margin-top: 0.5rem;
+  margin-top: 0.25rem;
   padding: 0.5rem;
   background: #f8f9fa;
   border-radius: 4px;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
 }
 
@@ -869,7 +869,7 @@ body {
 }
 
 .conversation-header {
-  padding: 0.75rem 1.5rem;
+  padding: 0.5rem 1rem;
   border-bottom: 1px solid #e9ecef;
   background: #fff;
   display: flex;
@@ -877,13 +877,13 @@ body {
   justify-content: space-between;
   position: relative;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  min-height: 60px;
+  min-height: 50px;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   flex: 1;
 }
 
@@ -891,16 +891,16 @@ body {
   background: transparent;
   color: #666;
   border: none;
-  padding: 0.5rem;
+  padding: 0.25rem;
   border-radius: 50%;
   cursor: pointer;
-  font-size: 1.2rem;
+  font-size: 1rem;
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
 }
 
 .back-btn:hover {
@@ -911,13 +911,13 @@ body {
 .contact-info {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
   flex: 1;
 }
 
 .contact-avatar {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: #fff;
@@ -925,7 +925,7 @@ body {
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
 }
 
 .contact-details {
@@ -933,7 +933,7 @@ body {
 }
 
 .contact-details h2 {
-  font-size: 1rem;
+  font-size: 0.875rem;
   font-weight: 600;
   color: #000;
   margin: 0;
@@ -941,7 +941,7 @@ body {
 }
 
 .contact-status {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: #666;
   margin: 0;
   font-weight: 400;
@@ -951,21 +951,21 @@ body {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.25rem;
 }
 
 .header-action-btn {
   background: transparent;
   border: none;
-  padding: 0.5rem;
+  padding: 0.25rem;
   border-radius: 50%;
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
 }
 
 .header-action-btn:hover {
@@ -1005,7 +1005,7 @@ body {
 }
 
 .message {
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
   animation: fadeInUp 0.3s ease;
   display: flex;
   flex-direction: column;
@@ -1033,13 +1033,14 @@ body {
 .message-content {
   display: inline-block;
   max-width: 70%;
-  padding: 0.75rem 1rem;
-  border-radius: 18px;
+  padding: 0.5rem 0.75rem;
+  border-radius: 12px;
   background: #fff;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   position: relative;
   word-wrap: break-word;
   font-family: 'Inter', sans-serif;
+  font-size: 0.875rem;
 }
 
 .message-content:hover {
@@ -1067,7 +1068,7 @@ body {
 .message-time {
   font-size: 0.75rem;
   color: #999;
-  margin-top: 0.25rem;
+  margin-top: 0.125rem;
   display: block;
 }
 
@@ -1081,21 +1082,21 @@ body {
 
 .date-separator {
   text-align: center;
-  margin: 1rem 0;
+  margin: 0.75rem 0;
   color: #888;
   font-weight: 500;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-family: 'Inter', sans-serif;
 }
 
 .no-messages {
   text-align: center;
-  padding: 3rem;
+  padding: 2rem;
   color: #666;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   font-family: 'Inter', sans-serif;
 }
 
@@ -1144,18 +1145,18 @@ body {
 
 
 .activities-section {
-  padding: 1.5rem;
+  padding: 1rem;
   border-top: 1px solid #e9ecef;
   background: #fff;
 }
 
 .activities-section h3 {
-  font-size: 1.2rem;
+  font-size: 1rem;
   font-weight: 600;
   color: #000;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
   position: relative;
-  padding-left: 1rem;
+  padding-left: 0.75rem;
 }
 
 .activities-section h3::before {
@@ -1167,24 +1168,24 @@ body {
 .activities-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 
 .activity-item {
-  padding: 1rem;
+  padding: 0.75rem;
   background: #f8f9fa;
-  border-radius: 8px;
-  border-left: 4px solid #007bff;
+  border-radius: 6px;
+  border-left: 3px solid #007bff;
   transition: all 0.2s ease;
 }
 
 .activity-item:hover {
   background: #e9ecef;
-  transform: translateX(4px);
+  transform: translateX(2px);
 }
 
 .activity-icon {
-  font-size: 1.2rem;
+  font-size: 1rem;
   margin-right: 0.5rem;
 }
 
@@ -1197,21 +1198,22 @@ body {
   margin: 0;
   font-weight: 500;
   color: #333;
+  font-size: 0.875rem;
 }
 
 .activity-time {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: #666;
-  margin-top: 0.25rem;
+  margin-top: 0.125rem;
 }
 
 @media (max-width: 768px) {
   .conversation-header {
-    padding: 1rem;
+    padding: 0.5rem;
   }
   
   .conversation-info h2 {
-    font-size: 1.2rem;
+    font-size: 1rem;
   }
   
   .message-content {
@@ -1219,7 +1221,7 @@ body {
   }
   
   .activities-section {
-    padding: 1rem;
+    padding: 0.75rem;
   }
   
   .conversation-container {
