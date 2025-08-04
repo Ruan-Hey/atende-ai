@@ -49,6 +49,14 @@ class ApiService {
     return this.authenticatedRequest('/api/admin/empresas')
   }
 
+  // Criar nova empresa
+  async createEmpresa(empresaData) {
+    return this.authenticatedRequest('/api/admin/empresas', {
+      method: 'POST',
+      body: JSON.stringify(empresaData)
+    })
+  }
+
   // Status do buffer de mensagens
   async getBufferStatus() {
     return this.authenticatedRequest('/api/admin/buffer/status')

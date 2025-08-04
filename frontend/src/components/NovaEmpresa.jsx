@@ -1,36 +1,71 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import api from '../services/api'
 import './NovaEmpresa.css'
 
 const SENSITIVE_FIELDS = [
   { name: 'openai_key', label: 'OpenAI Key' },
-  { name: 'twilio_token', label: 'Twilio Token' },
-  { name: 'chatwoot_token', label: 'Chatwoot Token' }
+  { name: 'twilio_token', label: 'Twilio Token' }
 ]
 
 const NovaEmpresa = () => {
   const [form, setForm] = useState({
-    slug: '', nome: '', whatsapp_number: '', google_sheets_id: '', chatwoot_token: '', openai_key: '', twilio_sid: '', twilio_token: '', twilio_number: '', chatwoot_inbox_id: '', chatwoot_origem: '', horario_funcionamento: '', filtros_chatwoot: '', usar_buffer: true, mensagem_quebrada: false, prompt: ''
+    nome: '',
+    whatsapp_number: '',
+    google_sheets_id: '',
+    openai_key: '',
+    twilio_sid: '',
+    twilio_token: '',
+    twilio_number: '',
+    usar_buffer: true,
+    mensagem_quebrada: false,
+    prompt: ''
   })
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
   const [tokenHints, setTokenHints] = useState({})
   const [focusField, setFocusField] = useState('')
+  const [activeSection, setActiveSection] = useState('dados-empresa')
   const navigate = useNavigate()
-  const webhookUrl = form.slug ? `https://SEU_NGROK/webhook/${form.slug}` : ''
+
+  const handleNextSection = () => {
+    const currentIndex = sections.findIndex(section => section.id === activeSection)
+    if (currentIndex < sections.length - 1) {
+      setActiveSection(sections[currentIndex + 1].id)
+    }
+  }
+
+  const handlePreviousSection = () => {
+    const currentIndex = sections.findIndex(section => section.id === activeSection)
+    if (currentIndex > 0) {
+      setActiveSection(sections[currentIndex - 1].id)
+    }
+  }
+
+  // Gerar slug automaticamente baseado no nome da empresa
+  const generateSlug = (nome) => {
+    return nome
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-+|-+$/g, '')
+  }
+
+  const webhookUrl = form.nome ? `https://SEU_NGROK/webhook/${generateSlug(form.nome)}` : ''
 
   useEffect(() => {
     // Buscar empresas e tokens já cadastrados para sugestões camufladas
-    fetch('/api/admin/empresas')
-      .then(r => r.json())
+    api.listEmpresas()
       .then(data => {
-        // Agrupar tokens por valor e empresas
         const hints = {}
-        if (Array.isArray(data.empresas)) {
+        if (Array.isArray(data)) {
           SENSITIVE_FIELDS.forEach(field => {
             const map = {}
-            data.empresas.forEach(e => {
+            data.forEach(e => {
               const val = e[field.name]
               if (val) {
                 if (!map[val]) map[val] = []
@@ -38,12 +73,15 @@ const NovaEmpresa = () => {
               }
             })
             hints[field.name] = Object.entries(map).map(([token, empresas]) => ({
-              token: '•'.repeat(8), // camuflado
+              token: '•'.repeat(8),
               empresas: empresas.join(', ')
             }))
           })
         }
         setTokenHints(hints)
+      })
+      .catch(err => {
+        console.error('Erro ao buscar empresas:', err)
       })
   }, [])
 
@@ -51,18 +89,20 @@ const NovaEmpresa = () => {
     const { name, value, type, checked } = e.target
     setForm(f => ({ ...f, [name]: type === 'checkbox' ? checked : value }))
   }
+
   const handleSubmit = async e => {
     e.preventDefault()
     setLoading(true)
     setError('')
     setSuccess(false)
+    
     try {
-      const resp = await fetch('/api/admin/empresas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
-      })
-      const data = await resp.json()
+      const formData = {
+        ...form,
+        slug: generateSlug(form.nome)
+      }
+      
+      const data = await api.createEmpresa(formData)
       if (data.success) {
         setSuccess(true)
         setTimeout(() => navigate('/admin'), 1200)
@@ -70,62 +110,198 @@ const NovaEmpresa = () => {
         setError(data.error || 'Erro ao cadastrar empresa')
       }
     } catch (err) {
+      console.error('Erro ao criar empresa:', err)
       setError('Erro de conexão')
     }
     setLoading(false)
   }
 
-  return (
-    <div className="admin-page">
-      <h1 className="nova-empresa-title">Nova Empresa</h1>
-      <form onSubmit={handleSubmit} className="empresa-form nova-empresa-form">
-        <div className="form-grid">
-          <div>
-            <label>Slug*<input name="slug" placeholder="tinyteams" value={form.slug} onChange={handleChange} required /></label>
-            <label>Nome*<input name="nome" placeholder="Nome da Empresa" value={form.nome} onChange={handleChange} required /></label>
-            <label>WhatsApp Number<input name="whatsapp_number" value={form.whatsapp_number} onChange={handleChange} /></label>
-            <label>Google Sheets ID<input name="google_sheets_id" value={form.google_sheets_id} onChange={handleChange} /></label>
-            <label>Chatwoot Token
-              <input name="chatwoot_token" value={form.chatwoot_token} onChange={handleChange} onFocus={() => setFocusField('chatwoot_token')} onBlur={() => setFocusField('')} />
-              {focusField === 'chatwoot_token' && tokenHints.chatwoot_token && tokenHints.chatwoot_token.length > 0 && (
-                <div className="token-hints">{tokenHints.chatwoot_token.map((h, i) => <div key={i}>{h.token} <span className="token-hint-empresas">({h.empresas})</span></div>)}</div>
-              )}
-            </label>
-            <label>OpenAI Key
-              <input name="openai_key" value={form.openai_key} onChange={handleChange} onFocus={() => setFocusField('openai_key')} onBlur={() => setFocusField('')} />
-              {focusField === 'openai_key' && tokenHints.openai_key && tokenHints.openai_key.length > 0 && (
-                <div className="token-hints">{tokenHints.openai_key.map((h, i) => <div key={i}>{h.token} <span className="token-hint-empresas">({h.empresas})</span></div>)}</div>
-              )}
-            </label>
-            <label>Twilio SID<input name="twilio_sid" value={form.twilio_sid} onChange={handleChange} /></label>
-            <label>Twilio Token
-              <input name="twilio_token" value={form.twilio_token} onChange={handleChange} onFocus={() => setFocusField('twilio_token')} onBlur={() => setFocusField('')} />
-              {focusField === 'twilio_token' && tokenHints.twilio_token && tokenHints.twilio_token.length > 0 && (
-                <div className="token-hints">{tokenHints.twilio_token.map((h, i) => <div key={i}>{h.token} <span className="token-hint-empresas">({h.empresas})</span></div>)}</div>
-              )}
-            </label>
-          </div>
-          <div>
-            <label>Twilio Number<input name="twilio_number" value={form.twilio_number} onChange={handleChange} /></label>
-            <label>Chatwoot Inbox ID<input name="chatwoot_inbox_id" value={form.chatwoot_inbox_id} onChange={handleChange} /></label>
-            <label>Chatwoot Origem<input name="chatwoot_origem" value={form.chatwoot_origem} onChange={handleChange} /></label>
-            <label>Horário de Funcionamento<input name="horario_funcionamento" value={form.horario_funcionamento} onChange={handleChange} /></label>
-            <label>Filtros Chatwoot (JSON)<input name="filtros_chatwoot" value={form.filtros_chatwoot} onChange={handleChange} /></label>
-            <div className="checkbox-group">
-              <label><input type="checkbox" name="usar_buffer" checked={form.usar_buffer} onChange={handleChange} /> Usar Buffer</label>
-              <label><input type="checkbox" name="mensagem_quebrada" checked={form.mensagem_quebrada} onChange={handleChange} /> Mensagem Quebrada</label>
+  const sections = [
+    {
+      id: 'dados-empresa',
+      title: 'Dados da Empresa',
+      icon: '🏢',
+      fields: [
+        { name: 'nome', label: 'Nome da Empresa', type: 'text', required: true, placeholder: 'Ex: TinyTeams' },
+        { name: 'whatsapp_number', label: 'Número do WhatsApp', type: 'text', placeholder: '+5511999999999' }
+      ]
+    },
+    {
+      id: 'dados-entrada',
+      title: 'Entrada de Mensagem',
+      icon: '📱',
+      fields: [
+        { name: 'twilio_sid', label: 'Twilio SID', type: 'text', placeholder: 'AC...' },
+        { name: 'twilio_token', label: 'Twilio Token', type: 'password', placeholder: 'Token do Twilio' },
+        { name: 'twilio_number', label: 'Número Twilio', type: 'text', placeholder: '+5511999999999' }
+      ]
+    },
+    {
+      id: 'conexoes-apis',
+      title: 'Conexões e APIs',
+      icon: '🔗',
+      fields: [
+        { name: 'google_sheets_id', label: 'Google Sheets ID', type: 'text', placeholder: 'ID da planilha do Google' },
+        { name: 'openai_key', label: 'OpenAI Key', type: 'password', placeholder: 'sk-...' }
+      ]
+    },
+    {
+      id: 'configuracoes',
+      title: 'Configurações',
+      icon: '⚙️',
+      fields: [
+        { name: 'usar_buffer', label: 'Aguardar Mensagens antes de responder', type: 'checkbox' },
+        { name: 'mensagem_quebrada', label: 'Mensagem Quebrada', type: 'checkbox' }
+      ]
+    },
+    {
+      id: 'prompt',
+      title: 'Prompt',
+      icon: '🤖',
+      fields: [
+        { name: 'prompt', label: 'Prompt do Assistente', type: 'textarea', placeholder: 'Digite o prompt que define o comportamento do assistente...' }
+      ]
+    }
+  ]
+
+  const renderField = (field) => {
+    const commonProps = {
+      name: field.name,
+      value: form[field.name] || '',
+      onChange: handleChange,
+      placeholder: field.placeholder,
+      required: field.required
+    }
+
+    if (field.type === 'checkbox') {
+      return (
+        <div key={field.name} className="field-group">
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              {...commonProps}
+              checked={form[field.name] || false}
+            />
+            <span className="checkmark"></span>
+            {field.label}
+          </label>
+        </div>
+      )
+    }
+
+    if (field.type === 'textarea') {
+      return (
+        <div key={field.name} className="field-group">
+          <label>{field.label}</label>
+          <textarea
+            {...commonProps}
+            rows={6}
+            className="form-textarea"
+          />
+        </div>
+      )
+    }
+
+    if (field.type === 'password') {
+      return (
+        <div key={field.name} className="field-group">
+          <label>{field.label}</label>
+          <input
+            type="password"
+            {...commonProps}
+            onFocus={() => setFocusField(field.name)}
+            onBlur={() => setFocusField('')}
+            className="form-input"
+          />
+          {focusField === field.name && tokenHints[field.name] && tokenHints[field.name].length > 0 && (
+            <div className="token-hints">
+              {tokenHints[field.name].map((h, i) => (
+                <div key={i} className="token-hint">
+                  {h.token} <span className="token-hint-empresas">({h.empresas})</span>
+                </div>
+              ))}
             </div>
-            <label>Prompt<textarea name="prompt" value={form.prompt} onChange={handleChange} /></label>
-          </div>
+          )}
         </div>
-        <div className="webhook-info">Webhook para Twilio: <b>{webhookUrl}</b></div>
-        {success && <div className="success-msg">Empresa cadastrada com sucesso!</div>}
-        {error && <div className="error-msg">{error}</div>}
-        <div className="form-actions">
-          <button type="submit" disabled={loading}>{loading ? 'Salvando...' : 'Salvar'}</button>
-          <button type="button" onClick={() => navigate('/admin')}>Cancelar</button>
+      )
+    }
+
+    return (
+      <div key={field.name} className="field-group">
+        <label>{field.label}</label>
+        <input
+          type="text"
+          {...commonProps}
+          className="form-input"
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div className="nova-empresa-container">
+      <div className="nova-empresa-header">
+        <h1>Nova Empresa</h1>
+      </div>
+
+      <div className="nova-empresa-content">
+        <div className="sections-nav">
+          {sections.map(section => (
+            <button
+              key={section.id}
+              className={`section-nav-btn ${activeSection === section.id ? 'active' : ''}`}
+              onClick={() => setActiveSection(section.id)}
+            >
+              <span className="section-icon">{section.icon}</span>
+              <span className="section-title">{section.title}</span>
+            </button>
+          ))}
         </div>
-      </form>
+
+        <form onSubmit={handleSubmit} className="nova-empresa-form">
+          {sections.map(section => (
+            <div
+              key={section.id}
+              className={`form-section ${activeSection === section.id ? 'active' : ''}`}
+            >
+              <div className="section-header">
+                <h2>{section.icon} {section.title}</h2>
+              </div>
+              
+              <div className="section-fields">
+                {section.fields.map(renderField)}
+              </div>
+
+              {/* Webhook apenas na aba Entrada de Mensagem */}
+              {section.id === 'dados-entrada' && (
+                <div className="webhook-info">
+                  <strong>Webhook para Twilio:</strong> {webhookUrl}
+                </div>
+              )}
+
+                              {/* Botões de navegação */}
+                <div className="form-actions">
+                  {activeSection === 'prompt' ? (
+                    // Última aba - botão salvar
+                    <button type="submit" className="save-btn" disabled={loading}>
+                      {loading ? 'Salvando...' : 'Salvar Empresa'}
+                    </button>
+                  ) : (
+                    // Abas intermediárias - botão próximo
+                    <button type="button" className="next-btn" onClick={handleNextSection}>
+                      Próximo
+                    </button>
+                  )}
+                </div>
+            </div>
+          ))}
+
+        </form>
+
+        {/* Mensagens de sucesso e erro fora do formulário */}
+        {success && <div className="success-msg">✅ Empresa cadastrada com sucesso!</div>}
+        {error && <div className="error-msg">❌ {error}</div>}
+      </div>
     </div>
   )
 }

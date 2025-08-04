@@ -130,12 +130,13 @@ metrics_service = MetricsService()
 #     session.commit()
 
 @app.post("/api/admin/empresas")
-async def criar_empresa(data: dict):
+async def criar_empresa(data: dict, current_user: Usuario = Depends(get_current_superuser)):
     session = SessionLocal()
     try:
         empresa = Empresa(
             slug=data["slug"],
             nome=data["nome"],
+            prompt=data.get("prompt"),
             whatsapp_number=data.get("whatsapp_number"),
             google_sheets_id=data.get("google_sheets_id"),
             chatwoot_token=data.get("chatwoot_token"),
@@ -752,27 +753,18 @@ def get_empresa_configuracoes(
             if not empresa:
                 raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
-        # Retornar configurações sem expor tokens sensíveis
+        # Retornar configurações no formato que o frontend espera
         return {
-            "prompt": empresa.prompt or "",
-            "configuracoes": {
-                "mensagemQuebrada": empresa.mensagem_quebrada or False,
-                "buffer": empresa.usar_buffer or False
-            },
-            "apis": {
-                "openai": {
-                    "ativo": bool(empresa.openai_key),
-                    "token": "***" if empresa.openai_key else ""
-                },
-                "google": {
-                    "ativo": bool(empresa.google_sheets_id),
-                    "token": "***" if empresa.google_sheets_id else ""
-                },
-                "chatwoot": {
-                    "ativo": bool(empresa.chatwoot_token),
-                    "token": "***" if empresa.chatwoot_token else ""
-                }
-            }
+            "nome": empresa.nome,
+            "whatsapp_number": empresa.whatsapp_number,
+            "google_sheets_id": empresa.google_sheets_id,
+            "openai_key": empresa.openai_key,
+            "twilio_sid": empresa.twilio_sid,
+            "twilio_token": empresa.twilio_token,
+            "twilio_number": empresa.twilio_number,
+            "usar_buffer": empresa.usar_buffer,
+            "mensagem_quebrada": empresa.mensagem_quebrada,
+            "prompt": empresa.prompt
         }
     finally:
         session.close()
@@ -799,30 +791,27 @@ def update_empresa_configuracoes(
             if not empresa:
                 raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
-        # Atualizar prompt
+        # Atualizar campos diretamente do formulário
+        if "nome" in configuracoes:
+            empresa.nome = configuracoes["nome"]
+        if "whatsapp_number" in configuracoes:
+            empresa.whatsapp_number = configuracoes["whatsapp_number"]
+        if "google_sheets_id" in configuracoes:
+            empresa.google_sheets_id = configuracoes["google_sheets_id"]
+        if "openai_key" in configuracoes:
+            empresa.openai_key = configuracoes["openai_key"]
+        if "twilio_sid" in configuracoes:
+            empresa.twilio_sid = configuracoes["twilio_sid"]
+        if "twilio_token" in configuracoes:
+            empresa.twilio_token = configuracoes["twilio_token"]
+        if "twilio_number" in configuracoes:
+            empresa.twilio_number = configuracoes["twilio_number"]
         if "prompt" in configuracoes:
             empresa.prompt = configuracoes["prompt"]
-        
-        # Atualizar configurações
-        if "configuracoes" in configuracoes:
-            config = configuracoes["configuracoes"]
-            if "mensagemQuebrada" in config:
-                empresa.mensagem_quebrada = config["mensagemQuebrada"]
-            if "buffer" in config:
-                empresa.usar_buffer = config["buffer"]
-        
-        # Atualizar APIs (apenas se o token não for "***")
-        if "apis" in configuracoes:
-            apis = configuracoes["apis"]
-            
-            if "openai" in apis and apis["openai"].get("token") != "***":
-                empresa.openai_key = apis["openai"]["token"] if apis["openai"]["token"] else None
-            
-            if "google" in apis and apis["google"].get("token") != "***":
-                empresa.google_sheets_id = apis["google"]["token"] if apis["google"]["token"] else None
-            
-            if "chatwoot" in apis and apis["chatwoot"].get("token") != "***":
-                empresa.chatwoot_token = apis["chatwoot"]["token"] if apis["chatwoot"]["token"] else None
+        if "usar_buffer" in configuracoes:
+            empresa.usar_buffer = configuracoes["usar_buffer"]
+        if "mensagem_quebrada" in configuracoes:
+            empresa.mensagem_quebrada = configuracoes["mensagem_quebrada"]
         
         session.commit()
         
@@ -845,4 +834,8 @@ async def test_services():
         return JSONResponse(content={
             'success': False,
             'message': f'Erro nos serviços: {str(e)}'
-        }) 
+        })
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000) 

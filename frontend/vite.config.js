@@ -8,5 +8,14 @@ export default defineConfig({
       'components': '/src/components',
       'assets': '/src/assets'
     }
+  },
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        secure: false
+      }
+    }
   }
 });
