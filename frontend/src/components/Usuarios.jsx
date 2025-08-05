@@ -35,9 +35,12 @@ const Usuarios = () => {
   const loadEmpresas = async () => {
     try {
       const data = await api.authenticatedRequest('/api/admin/empresas');
-      setEmpresas(data);
+      // Garantir que sempre temos um array
+      const empresasArray = Array.isArray(data?.empresas) ? data.empresas : []
+      setEmpresas(empresasArray);
     } catch (error) {
       console.error('Erro ao carregar empresas:', error);
+      setEmpresas([]); // Garantir array vazio em caso de erro
     }
   };
 
@@ -162,7 +165,7 @@ const Usuarios = () => {
                     onChange={(e) => setFormData({...formData, empresa_id: e.target.value})}
                   >
                     <option value="">Selecione uma empresa</option>
-                    {empresas.map(empresa => (
+                    {Array.isArray(empresas) && empresas.map(empresa => (
                       <option key={empresa.id} value={empresa.id}>
                         {empresa.nome}
                       </option>
@@ -203,7 +206,7 @@ const Usuarios = () => {
             </tr>
           </thead>
           <tbody>
-            {usuarios.map(user => (
+                            {Array.isArray(usuarios) && usuarios.map(user => (
               <tr key={user.id}>
                 <td>{user.email}</td>
                 <td>{getTipoAcesso(user)}</td>

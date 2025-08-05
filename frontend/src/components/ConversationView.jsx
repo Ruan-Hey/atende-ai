@@ -61,7 +61,7 @@ const ConversationView = () => {
 
   // Selecionar conversa baseada no clienteId da URL
   useEffect(() => {
-    if (clienteId && conversations.length > 0) {
+    if (clienteId && Array.isArray(conversations) && conversations.length > 0) {
       const conversation = conversations.find(c => c.cliente_id === clienteId)
       if (conversation) {
         setSelectedConversation(conversation)
@@ -69,7 +69,7 @@ const ConversationView = () => {
           setActiveTab('messages')
         }
       }
-    } else if (conversations.length > 0 && !selectedConversation) {
+    } else if (Array.isArray(conversations) && conversations.length > 0 && !selectedConversation) {
       // Se não há clienteId na URL e não há conversa selecionada, selecionar a primeira
       setSelectedConversation(conversations[0])
       if (isMobile) {
@@ -264,7 +264,7 @@ const ConversationView = () => {
             <LoadingSpinner type="content" />
           </div>
         ) : conversations.length > 0 ? (
-          conversations.map((conversation) => {
+          Array.isArray(conversations) && conversations.map((conversation) => {
             // Determinar se há mensagens não lidas baseado na última atividade
             const hasUnread = conversation.total_mensagens > 0 && 
                              conversation.ultima_atividade && 

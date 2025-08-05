@@ -28,7 +28,7 @@ const Login = () => {
         
         // Se não for superuser, buscar o slug da empresa do usuário
         if (!res.user.is_superuser && res.user.empresa_id) {
-          const userEmpresa = empresas.find(e => e.id === res.user.empresa_id);
+          const userEmpresa = Array.isArray(empresas) ? empresas.find(e => e.id === res.user.empresa_id) : null;
           if (userEmpresa) {
             res.user.empresa_slug = userEmpresa.slug;
             localStorage.setItem('user', JSON.stringify(res.user));
