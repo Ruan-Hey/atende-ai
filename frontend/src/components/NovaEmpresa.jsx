@@ -62,10 +62,11 @@ const NovaEmpresa = () => {
     api.listEmpresas()
       .then(data => {
         const hints = {}
-        if (Array.isArray(data)) {
+        const empresas = data.empresas || [];
+        if (Array.isArray(empresas)) {
           SENSITIVE_FIELDS.forEach(field => {
             const map = {}
-            data.forEach(e => {
+            empresas.forEach(e => {
               const val = e[field.name]
               if (val) {
                 if (!map[val]) map[val] = []

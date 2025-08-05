@@ -121,11 +121,44 @@ def create_sample_empresas():
     except Exception as e:
         print(f"❌ Erro ao criar empresas de exemplo: {e}")
 
+def migrate_logs_to_tinyteams():
+    """Migra logs existentes sem empresa_id para a TinyTeams"""
+    try:
+        engine = create_engine(Config.POSTGRES_URL)
+        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+        session = SessionLocal()
+        
+        # Buscar a empresa TinyTeams
+        tinyteams = session.query(Empresa).filter(Empresa.slug == 'tinyteams').first()
+        
+        if not tinyteams:
+            print("❌ Empresa TinyTeams não encontrada. Execute create_sample_empresas() primeiro.")
+            return
+        
+        # Contar logs sem empresa_id
+        logs_sem_empresa = session.query(Log).filter(Log.empresa_id == None).count()
+        
+        if logs_sem_empresa > 0:
+            # Atualizar logs sem empresa_id para TinyTeams
+            session.query(Log).filter(Log.empresa_id == None).update({
+                Log.empresa_id: tinyteams.id
+            })
+            session.commit()
+            print(f"✅ {logs_sem_empresa} logs migrados para TinyTeams")
+        else:
+            print("ℹ️  Nenhum log sem empresa_id encontrado")
+            
+        session.close()
+        
+    except Exception as e:
+        print(f"❌ Erro ao migrar logs: {e}")
+
 if __name__ == "__main__":
     print("🚀 Iniciando migração do banco de dados...")
     
     create_tables()
     create_admin_user()
     create_sample_empresas()
+    migrate_logs_to_tinyteams()
     
     print("✅ Migração concluída com sucesso!") 

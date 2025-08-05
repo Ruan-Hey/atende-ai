@@ -30,7 +30,9 @@ const LogsViewer = () => {
   const loadLogs = async () => {
     try {
       setLoading(true)
-      const response = await apiService.getLogs(selectedEmpresa || null, 100)
+      // Por padrão, excluir logs de INFO para não poluir
+      const excludeInfo = filterLevel === 'all' || filterLevel === 'error' || filterLevel === 'warning'
+      const response = await apiService.getLogs(selectedEmpresa || null, 100, filterLevel, excludeInfo)
       setLogs(response.logs || [])
       setError(null)
     } catch (error) {
@@ -126,11 +128,10 @@ const LogsViewer = () => {
             onChange={(e) => setFilterLevel(e.target.value)}
             className="form-select"
           >
-            <option value="all">Todos os níveis</option>
-            <option value="error">Erro</option>
-            <option value="warning">Aviso</option>
-            <option value="info">Informação</option>
-            <option value="debug">Debug</option>
+            <option value="all">Erros e Avisos</option>
+            <option value="error">Apenas Erros</option>
+            <option value="warning">Apenas Avisos</option>
+            <option value="info">Todas as Informações</option>
           </select>
         </div>
 
@@ -199,8 +200,7 @@ const LogsViewer = () => {
         <ul style={{ marginTop: '0.5rem', paddingLeft: '1.5rem' }}>
           <li><strong>ERROR:</strong> Erros críticos que precisam de atenção imediata</li>
           <li><strong>WARNING:</strong> Avisos sobre situações que podem se tornar problemas</li>
-          <li><strong>INFO:</strong> Informações gerais sobre o funcionamento do sistema</li>
-          <li><strong>DEBUG:</strong> Informações detalhadas para desenvolvimento</li>
+          <li><strong>INFO:</strong> Informações gerais sobre o funcionamento do sistema (ocultas por padrão)</li>
         </ul>
       </div>
     </div>

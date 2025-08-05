@@ -5,7 +5,6 @@ import './App.css'
 // Componentes do painel admin
 import AdminDashboard from './components/AdminDashboard'
 import EmpresaDashboard from './components/EmpresaDashboard'
-import BufferStatus from './components/BufferStatus'
 import LogsViewer from './components/LogsViewer'
 import ConversationView from './components/ConversationView'
 import Sidebar from './components/Sidebar'
@@ -97,11 +96,6 @@ function AppRoutes() {
           <Route path="/admin/:empresa/conversation/:conversationId" element={
             <ProtectedRoute>
               <ConversationView />
-            </ProtectedRoute>
-          } />
-          <Route path="/admin/buffer/status" element={
-            <ProtectedRoute>
-              <BufferStatus />
             </ProtectedRoute>
           } />
           <Route path="/admin/logs" element={

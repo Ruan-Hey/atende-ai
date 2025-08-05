@@ -49,7 +49,7 @@ const AdminDashboard = () => {
       
       // Atualizar todos os estados de uma vez
       setMetrics(metricsData);
-      setEmpresas(empresasData);
+      setEmpresas(empresasData.empresas || []); // Corrigido para usar a chave 'empresas'
       setErros24h(errosData);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);

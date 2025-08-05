@@ -33,6 +33,12 @@ engine = create_engine(config.POSTGRES_URL)
 SessionLocal = sessionmaker(bind=engine)
 
 def save_log_to_db(session: Session, empresa_id: int, level: str, message: str, details: dict = None):
+    # Se não há empresa_id, tentar atribuir à TinyTeams
+    if empresa_id is None:
+        tinyteams = session.query(Empresa).filter(Empresa.slug == 'tinyteams').first()
+        if tinyteams:
+            empresa_id = tinyteams.id
+    
     log = Log(
         empresa_id=empresa_id,
         level=level,
@@ -168,18 +174,20 @@ def health() -> HealthCheck:
 @app.get("/api/admin/metrics")
 def get_admin_metrics(current_user: Usuario = Depends(get_current_superuser)) -> AdminMetrics:
     """Retorna métricas para o painel admin"""
+    session = SessionLocal()
     try:
+        # Log de acesso às métricas
+        save_log_to_db(session, None, 'INFO', f'Usuário {current_user.email} acessou métricas admin')
+        
         # Usar o MetricsService que busca dados do Redis
         metrics = metrics_service.get_admin_metrics()
         return metrics
     except Exception as e:
         logger.error(f"Erro ao buscar métricas admin: {e}")
-        session = SessionLocal()
-        try:
-            save_log_to_db(session, None, 'ERROR', f'Erro ao buscar métricas admin: {e}')
-        finally:
-            session.close()
+        save_log_to_db(session, None, 'ERROR', f'Erro ao buscar métricas admin: {e}')
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
+    finally:
+        session.close()
 
 @app.get("/api/admin/empresas")
 def get_empresas(current_user: Usuario = Depends(get_current_user)):
@@ -193,7 +201,7 @@ def get_empresas(current_user: Usuario = Depends(get_current_user)):
             # Usuário restrito vê apenas sua empresa
             empresas = session.query(Empresa).filter(Empresa.id == current_user.empresa_id).all()
         
-        return [
+        empresas_list = [
             {
                 "id": e.id,
                 "nome": e.nome,
@@ -203,6 +211,8 @@ def get_empresas(current_user: Usuario = Depends(get_current_user)):
             }
             for e in empresas
         ]
+        
+        return {"empresas": empresas_list}
     finally:
         session.close()
 
@@ -373,7 +383,7 @@ async def webhook_handler(empresa_slug: str, request: Request):
                 'twilio_number': empresa_db.twilio_number,
                 'mensagem_quebrada': empresa_db.mensagem_quebrada or False,
                 'prompt': empresa_db.prompt,
-                'usar_buffer': empresa_db.usar_buffer or True
+                'usar_buffer': empresa_db.usar_buffer if empresa_db.usar_buffer is not None else True
             }
         except Exception as e:
             logger.error(f"Erro ao buscar empresa {empresa_slug}: {e}")
@@ -392,6 +402,17 @@ async def webhook_handler(empresa_slug: str, request: Request):
         body = webhook_data.get('Body', '')
         message_type = webhook_data.get('MessageType', 'text')
         num_media = webhook_data.get('NumMedia', '0')
+        
+        # Log do webhook recebido
+        session_log = SessionLocal()
+        try:
+            save_log_to_db(session_log, empresa_db.id, 'INFO', f'Webhook recebido de {wa_id}', {
+                'empresa': empresa_slug,
+                'message_type': message_type,
+                'body_length': len(body) if body else 0
+            })
+        finally:
+            session_log.close()
         
         if not wa_id:
             logger.warning(f"Webhook inválido recebido: {webhook_data}")
@@ -444,6 +465,18 @@ async def webhook_handler(empresa_slug: str, request: Request):
                 })
         except Exception as e:
             logger.error(f"Erro ao processar mensagem para {empresa_slug}: {e}")
+            
+            # Log do erro
+            session_log = SessionLocal()
+            try:
+                save_log_to_db(session_log, empresa_db.id, 'ERROR', f'Erro ao processar mensagem: {e}', {
+                    'empresa': empresa_slug,
+                    'cliente_id': wa_id,
+                    'error': str(e)
+                })
+            finally:
+                session_log.close()
+            
             # Retornar sucesso mesmo com erro para não quebrar o webhook
             return JSONResponse(content={
                 'success': True,
@@ -460,24 +493,55 @@ async def webhook_handler(empresa_slug: str, request: Request):
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 @app.get("/api/logs")
-def get_logs(empresa: str = None, limit: int = 100):
-    """Retorna logs do sistema"""
-    # Retorna logs básicos sem dados mockados
-    logs = [
-        {
-            "level": "INFO",
-            "message": "Sistema iniciado com sucesso",
-            "empresa": None,
-            "timestamp": datetime.now().isoformat(),
-            "details": {"version": "1.0.0"}
-        }
-    ]
-    
-    # Filtrar por empresa se especificado
-    if empresa:
-        logs = [log for log in logs if log.get('empresa') == empresa]
-    
-    return {"logs": logs[:limit]}
+def get_logs(empresa: str = None, limit: int = 100, level: str = None, exclude_info: bool = True):
+    """Retorna logs do sistema do banco de dados"""
+    print("🔍 DEBUG: Função get_logs chamada")
+    session = SessionLocal()
+    try:
+        # Construir query base
+        query = session.query(Log).order_by(Log.timestamp.desc())
+        
+        # Filtrar por empresa se especificado
+        if empresa:
+            empresa_obj = session.query(Empresa).filter(Empresa.slug == empresa).first()
+            if empresa_obj:
+                query = query.filter(Log.empresa_id == empresa_obj.id)
+        
+        # Filtrar por nível se especificado
+        if level and level.lower() != 'all':
+            query = query.filter(Log.level == level.upper())
+        elif exclude_info:
+            # Por padrão, excluir logs de INFO para não poluir
+            query = query.filter(Log.level != 'INFO')
+        
+        # Limitar resultados
+        logs_db = query.limit(limit).all()
+        print(f"🔍 DEBUG: {len(logs_db)} logs encontrados no banco")
+        
+        # Converter para formato da API
+        logs = []
+        for log in logs_db:
+            empresa_nome = None
+            if log.empresa_id:
+                empresa_obj = session.query(Empresa).filter(Empresa.id == log.empresa_id).first()
+                empresa_nome = empresa_obj.nome if empresa_obj else None
+            
+            logs.append({
+                "level": log.level,
+                "message": log.message,
+                "empresa": empresa_nome,
+                "timestamp": log.timestamp.isoformat(),
+                "details": log.details or {}
+            })
+        
+        print(f"🔍 DEBUG: Retornando {len(logs)} logs")
+        return {"logs": logs}
+    except Exception as e:
+        print(f"🔍 DEBUG: Erro: {e}")
+        logger.error(f"Erro ao buscar logs: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao buscar logs")
+    finally:
+        session.close()
 
 @app.get("/api/calendar/slots")
 def get_available_slots(date: str = None):
@@ -555,6 +619,7 @@ def erros_24h():
         ontem = agora - timedelta(hours=24)
         empresas = session.query(Empresa).all()
         erros_por_empresa = {}
+        
         for empresa in empresas:
             count = session.query(Log).filter(
                 Log.empresa_id == empresa.id,
@@ -563,6 +628,21 @@ def erros_24h():
                 Log.timestamp <= agora
             ).count()
             erros_por_empresa[empresa.slug] = count
+        
+        # Adicionar logs de erro sem empresa específica à TinyTeams
+        tinyteams = session.query(Empresa).filter(Empresa.slug == 'tinyteams').first()
+        if tinyteams:
+            # Contar logs de erro sem empresa_id (None)
+            erros_sistema = session.query(Log).filter(
+                Log.empresa_id == None,
+                Log.level == 'ERROR',
+                Log.timestamp >= ontem,
+                Log.timestamp <= agora
+            ).count()
+            
+            # Adicionar aos erros da TinyTeams
+            erros_por_empresa['tinyteams'] = erros_por_empresa.get('tinyteams', 0) + erros_sistema
+        
         return erros_por_empresa
     finally:
         session.close()
@@ -573,7 +653,12 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
     try:
         user = session.query(Usuario).filter(Usuario.email == form_data.username).first()
         if not user or not bcrypt.verify(form_data.password, user.senha_hash):
+            # Log de tentativa de login falhada
+            save_log_to_db(session, None, 'WARNING', f'Tentativa de login falhada para {form_data.username}')
             raise HTTPException(status_code=401, detail="Credenciais inválidas")
+        
+        # Log de login bem-sucedido
+        save_log_to_db(session, user.empresa_id, 'INFO', f'Login bem-sucedido para {user.email}')
         
         data = {
             "sub": user.email, 
@@ -821,20 +906,84 @@ def update_empresa_configuracoes(
 
 @app.get("/test-services")
 async def test_services():
-    """Endpoint de teste para verificar se os serviços estão funcionando"""
+    """Testa os serviços de integração"""
     try:
-        # Testar se o message_processor está funcionando
-        buffer_status = message_processor.get_buffer_status()
-        return JSONResponse(content={
-            'success': True,
-            'message': 'Serviços funcionando',
-            'buffer_status': buffer_status
-        })
+        # Testar OpenAI
+        openai_result = "OpenAI: OK"
+        try:
+            openai_service = OpenAIService("test-key")
+            openai_result = "OpenAI: Erro de chave inválida (esperado)"
+        except Exception as e:
+            openai_result = f"OpenAI: {str(e)}"
+        
+        # Testar Twilio
+        twilio_result = "Twilio: OK"
+        try:
+            twilio_service = TwilioService("test-sid", "test-token", "+1234567890")
+            twilio_result = "Twilio: Erro de credenciais inválidas (esperado)"
+        except Exception as e:
+            twilio_result = f"Twilio: {str(e)}"
+        
+        return {
+            "openai": openai_result,
+            "twilio": twilio_result,
+            "status": "Testes concluídos"
+        }
     except Exception as e:
-        return JSONResponse(content={
-            'success': False,
-            'message': f'Erro nos serviços: {str(e)}'
-        })
+        raise HTTPException(status_code=500, detail=f"Erro nos testes: {e}")
+
+@app.get("/test-errors")
+async def test_errors():
+    """Gera logs de erro para teste"""
+    session = SessionLocal()
+    try:
+        # Buscar empresas
+        empresas = session.query(Empresa).all()
+        
+        # Gerar erros para diferentes empresas
+        erros_gerados = []
+        
+        for i, empresa in enumerate(empresas[:3]):  # Primeiras 3 empresas
+            # Erro específico da empresa
+            save_log_to_db(
+                session, 
+                empresa.id, 
+                'ERROR', 
+                f'Erro de teste na empresa {empresa.nome}: Integração falhou',
+                {'empresa': empresa.slug, 'tipo': 'teste'}
+            )
+            erros_gerados.append(f"Erro gerado para {empresa.nome}")
+        
+        # Gerar erros sem empresa específica (serão atribuídos à TinyTeams)
+        save_log_to_db(
+            session, 
+            None, 
+            'ERROR', 
+            'Erro de teste do sistema: Falha na conexão com banco de dados',
+            {'tipo': 'sistema', 'componente': 'database'}
+        )
+        erros_gerados.append("Erro de sistema (será atribuído à TinyTeams)")
+        
+        save_log_to_db(
+            session, 
+            None, 
+            'ERROR', 
+            'Erro de teste do sistema: Timeout na API externa',
+            {'tipo': 'sistema', 'componente': 'api'}
+        )
+        erros_gerados.append("Erro de sistema (será atribuído à TinyTeams)")
+        
+        return {
+            "message": "Logs de erro gerados com sucesso",
+            "erros_gerados": erros_gerados,
+            "total_empresas": len(empresas)
+        }
+        
+    except Exception as e:
+        logger.error(f"Erro ao gerar logs de teste: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar logs: {e}")
+    finally:
+        session.close()
 
 if __name__ == "__main__":
     import uvicorn

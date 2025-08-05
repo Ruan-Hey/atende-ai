@@ -49,8 +49,8 @@ const ConfiguracoesEmpresa = () => {
     try {
       const response = await apiService.listEmpresas()
       
-      // A API retorna um array direto, não um objeto com propriedade 'empresas'
-      const empresasList = Array.isArray(response) ? response : (response.empresas || [])
+      // Usar a nova estrutura com chave 'empresas'
+      const empresasList = response.empresas || []
       setEmpresas(empresasList)
       
       // Se não há empresa selecionada e há empresas disponíveis, selecionar a primeira
@@ -103,8 +103,8 @@ const ConfiguracoesEmpresa = () => {
     try {
       const response = await apiService.listEmpresas()
       const hints = {}
-      // A API retorna um array direto, não um objeto com propriedade 'empresas'
-      const empresasList = Array.isArray(response) ? response : (response.empresas || [])
+      // Usar a nova estrutura com chave 'empresas'
+      const empresasList = response.empresas || []
       
       if (empresasList.length > 0) {
         SENSITIVE_FIELDS.forEach(field => {

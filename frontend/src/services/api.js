@@ -57,27 +57,13 @@ class ApiService {
     })
   }
 
-  // Status do buffer de mensagens
-  async getBufferStatus() {
-    return this.authenticatedRequest('/api/admin/buffer/status')
-  }
-
-  // Forçar processamento do buffer
-  async forceProcessBuffer(cliente_id, empresa) {
-    const params = new URLSearchParams({
-      cliente_id,
-      empresa
-    })
-    return this.authenticatedRequest(`/api/admin/buffer/force-process?${params.toString()}`, {
-      method: 'POST'
-    })
-  }
-
   // Logs do sistema
-  async getLogs(empresa = null, limit = 100) {
+  async getLogs(empresa = null, limit = 100, level = null, excludeInfo = true) {
     const params = new URLSearchParams()
     if (empresa) params.append('empresa', empresa)
     if (limit) params.append('limit', limit)
+    if (level) params.append('level', level)
+    if (excludeInfo !== undefined) params.append('exclude_info', excludeInfo)
     
     return this.authenticatedRequest(`/api/logs?${params.toString()}`)
   }

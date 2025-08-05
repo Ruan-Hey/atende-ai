@@ -22,7 +22,8 @@ const Login = () => {
       
       // Carregar empresas para redirecionamento correto
       try {
-        const empresas = await api.listEmpresas();
+        const empresasResponse = await api.listEmpresas();
+        const empresas = empresasResponse.empresas || [];
         localStorage.setItem('empresas', JSON.stringify(empresas));
         
         // Se não for superuser, buscar o slug da empresa do usuário
