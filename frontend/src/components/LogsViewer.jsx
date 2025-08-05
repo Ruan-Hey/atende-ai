@@ -21,9 +21,12 @@ const LogsViewer = () => {
   const loadEmpresas = async () => {
     try {
       const response = await apiService.listEmpresas()
-      setEmpresas(response.empresas || [])
+      // Garantir que sempre temos um array
+      const empresasArray = Array.isArray(response?.empresas) ? response.empresas : []
+      setEmpresas(empresasArray)
     } catch (error) {
       console.error('Erro ao carregar empresas:', error)
+      setEmpresas([]) // Garantir array vazio em caso de erro
     }
   }
 
@@ -33,11 +36,14 @@ const LogsViewer = () => {
       // Por padrão, excluir logs de INFO para não poluir
       const excludeInfo = filterLevel === 'all' || filterLevel === 'error' || filterLevel === 'warning'
       const response = await apiService.getLogs(selectedEmpresa || null, 100, filterLevel, excludeInfo)
-      setLogs(response.logs || [])
+      // Garantir que sempre temos um array
+      const logsArray = Array.isArray(response?.logs) ? response.logs : []
+      setLogs(logsArray)
       setError(null)
     } catch (error) {
       console.error('Erro ao carregar logs:', error)
       setError('Erro ao carregar logs')
+      setLogs([]) // Garantir array vazio em caso de erro
     } finally {
       setLoading(false)
     }
@@ -112,7 +118,7 @@ const LogsViewer = () => {
             className="form-select"
           >
             <option value="">Todas as empresas</option>
-            {empresas.map(empresa => (
+            {Array.isArray(empresas) && empresas.map(empresa => (
               <option key={empresa.slug} value={empresa.slug}>
                 {empresa.nome}
               </option>
