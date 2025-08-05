@@ -262,55 +262,59 @@ def get_empresa_clientes(
         if not current_user.is_superuser and current_user.empresa_id != empresa.id:
             raise HTTPException(status_code=403, detail="Acesso negado a esta empresa")
         
-        # Buscar clientes únicos do Redis baseado em atividades
+        # Buscar clientes únicos diretamente do banco de dados
+        from sqlalchemy import func
+        
+        # Buscar clientes únicos com suas últimas atividades e nomes
+        clientes_query = session.query(
+            Mensagem.cliente_id,
+            func.max(Mensagem.timestamp).label('ultima_atividade'),
+            func.count(Mensagem.id).label('total_mensagens')
+        ).filter(
+            Mensagem.empresa_id == empresa.id
+        ).group_by(
+            Mensagem.cliente_id
+        ).order_by(
+            func.count(Mensagem.id).desc()
+        )
+        
+        clientes_result = clientes_query.all()
+        
+        # Formatar resultado
         clientes = []
-        
-        try:
-            # Buscar todas as atividades da empresa
-            activity_pattern = f"activity:{empresa_slug}:*"
-            clientes_unicos = {}
+        for cliente in clientes_result:
+            # Buscar informações do cliente na tabela Cliente
+            cliente_info = session.query(Cliente).filter(
+                Cliente.empresa_id == empresa.id,
+                Cliente.cliente_id == cliente.cliente_id
+            ).first()
             
-            for activity_key in message_processor.redis_service.redis_client.scan_iter(match=activity_pattern):
-                activity_data = message_processor.redis_service.redis_client.get(activity_key)
-                if activity_data:
-                    try:
-                        activity = json.loads(activity_data)
-                        cliente_id = activity.get('cliente', '')
-                        
-                        if cliente_id and cliente_id not in clientes_unicos:
-                            # Buscar contexto se existir
-                            context = message_processor.redis_service.get_context(cliente_id, empresa_slug)
-                            
-                            clientes_unicos[cliente_id] = {
-                                "cliente_id": cliente_id,
-                                "nome": context.get('cliente_name', cliente_id) if context else cliente_id,
-                                "ultima_atividade": activity.get('timestamp'),
-                                "total_mensagens": len(context.get('messages', [])) if context else 0,
-                                "tipo_atividade": activity.get('type', 'mensagem')
-                            }
-                        elif cliente_id in clientes_unicos:
-                            # Atualizar última atividade se for mais recente
-                            current_timestamp = activity.get('timestamp', '')
-                            existing_timestamp = clientes_unicos[cliente_id]['ultima_atividade']
-                            
-                            if current_timestamp > existing_timestamp:
-                                clientes_unicos[cliente_id]['ultima_atividade'] = current_timestamp
-                                clientes_unicos[cliente_id]['tipo_atividade'] = activity.get('type', 'mensagem')
-                                
-                    except Exception as e:
-                        logger.error(f"Erro ao processar atividade: {e}")
-                        continue
+            # Determinar tipo de atividade baseado na última mensagem
+            ultima_mensagem = session.query(Mensagem).filter(
+                Mensagem.empresa_id == empresa.id,
+                Mensagem.cliente_id == cliente.cliente_id,
+                Mensagem.timestamp == cliente.ultima_atividade
+            ).first()
             
-            # Converter para lista
-            clientes = list(clientes_unicos.values())
-                    
-        except Exception as redis_error:
-            logger.error(f"Erro ao buscar clientes no Redis: {redis_error}")
-            # Retornar lista vazia se houver erro no Redis
-            clientes = []
-        
-        # Ordenar por total de mensagens (mais mensagens primeiro)
-        clientes.sort(key=lambda x: x['total_mensagens'], reverse=True)
+            tipo_atividade = 'mensagem'  # Padrão
+            if ultima_mensagem:
+                # Aqui você pode adicionar lógica para determinar o tipo baseado no conteúdo
+                # Por exemplo, se contém palavras como "reserva", "agendar", etc.
+                if any(palavra in ultima_mensagem.text.lower() for palavra in ['reserva', 'agendar', 'marcar']):
+                    tipo_atividade = 'reserva'
+                elif any(palavra in ultima_mensagem.text.lower() for palavra in ['atendimento', 'suporte', 'ajuda']):
+                    tipo_atividade = 'atendimento'
+            
+            # Usar nome do cliente se disponível, senão usar ID
+            nome_cliente = cliente_info.nome if cliente_info and cliente_info.nome else cliente.cliente_id
+            
+            clientes.append({
+                "cliente_id": cliente.cliente_id,
+                "nome": nome_cliente,
+                "ultima_atividade": cliente.ultima_atividade.isoformat() if cliente.ultima_atividade else None,
+                "total_mensagens": cliente.total_mensagens,
+                "tipo_atividade": tipo_atividade
+            })
         
         return {
             "empresa": empresa_slug,

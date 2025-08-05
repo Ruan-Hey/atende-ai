@@ -25,10 +25,11 @@ class DatabaseService:
         self.engine = create_engine(Config.POSTGRES_URL)
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
     
-    def save_message(self, empresa_id: int, cliente_id: str, text: str, is_bot: bool = False):
-        """Salva mensagem no banco de dados"""
+    def save_message(self, empresa_id: int, cliente_id: str, text: str, is_bot: bool = False, cliente_nome: str = None):
+        """Salva mensagem no banco de dados e atualiza informações do cliente"""
         session = self.SessionLocal()
         try:
+            # Salvar mensagem
             mensagem = Mensagem(
                 empresa_id=empresa_id,
                 cliente_id=cliente_id,
@@ -36,6 +37,28 @@ class DatabaseService:
                 is_bot=is_bot
             )
             session.add(mensagem)
+            
+            # Atualizar ou criar registro do cliente
+            from models import Cliente
+            cliente = session.query(Cliente).filter(
+                Cliente.empresa_id == empresa_id,
+                Cliente.cliente_id == cliente_id
+            ).first()
+            
+            if cliente:
+                # Atualizar último atendimento
+                cliente.ultimo_atendimento = datetime.now()
+                if cliente_nome and not cliente.nome:
+                    cliente.nome = cliente_nome
+            else:
+                # Criar novo cliente
+                cliente = Cliente(
+                    empresa_id=empresa_id,
+                    cliente_id=cliente_id,
+                    nome=cliente_nome
+                )
+                session.add(cliente)
+            
             session.commit()
             session.refresh(mensagem)  # Atualiza o objeto com o ID gerado
             logger.info(f"Mensagem salva no banco: {empresa_id}:{cliente_id}")
@@ -241,7 +264,7 @@ class MessageProcessor:
             
             # Salvar mensagem no banco de dados
             try:
-                self.database_service.save_message(empresa_db.id, cliente_id, message_text, is_bot=False)
+                self.database_service.save_message(empresa_db.id, cliente_id, message_text, is_bot=False, cliente_nome=profile_name)
             except Exception as e:
                 logger.error(f"Erro ao salvar mensagem no banco: {e}")
             

@@ -56,6 +56,7 @@ class Cliente(Base):
     id = Column(Integer, primary_key=True)
     empresa_id = Column(Integer, ForeignKey('empresas.id'))
     cliente_id = Column(String(100), nullable=False)
+    nome = Column(String(255), nullable=True)  # Nome do cliente do WhatsApp
     primeiro_atendimento = Column(TIMESTAMP, server_default=func.now())
     ultimo_atendimento = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
     empresa = relationship('Empresa')
