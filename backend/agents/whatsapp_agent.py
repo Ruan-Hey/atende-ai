@@ -38,14 +38,14 @@ class WhatsAppAgent(BaseAgent):
                     raise Exception("Empresa não encontrada")
                 
                 # Buscar informações do cliente
-                cliente_info = cliente_tools.buscar_cliente_info(cliente_id, empresa_db.id)
+                cliente_info_str = cliente_tools.buscar_cliente_info(cliente_id, empresa_db.id)
                 
                 # Construir contexto
                 context = {
                     'cliente_id': cliente_id,
                     'cliente_name': profile_name,
                     'empresa': empresa_config.get('slug'),
-                    'cliente_info': cliente_info,
+                    'cliente_info': {'info': cliente_info_str},
                     'channel': self.channel
                 }
                 
