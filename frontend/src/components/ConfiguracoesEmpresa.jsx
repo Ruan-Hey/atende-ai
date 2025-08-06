@@ -449,18 +449,7 @@ const ConfiguracoesEmpresa = () => {
                             
                             {expandedAccordions[`api_${api.id}`] && (
                               <div className="integration-fields">
-                                <div className="field-group">
-                                  <label>{api.nome} API Key</label>
-                                  <input
-                                    type="password"
-                                    name={`api_${api.id}_key`}
-                                    placeholder={`Chave da API ${api.nome}`}
-                                    className="form-input"
-                                    value={configuracoes[`api_${api.id}_key`] || ''}
-                                    onChange={handleChange}
-                                  />
-                                </div>
-                                {api.tipo_auth === 'oauth2' && (
+                                {api.tipo_auth === 'oauth2' ? (
                                   <>
                                     <div className="field-group">
                                       <label>Client ID</label>
@@ -485,6 +474,18 @@ const ConfiguracoesEmpresa = () => {
                                       />
                                     </div>
                                   </>
+                                ) : (
+                                  <div className="field-group">
+                                    <label>{api.nome} API Key</label>
+                                    <input
+                                      type="password"
+                                      name={`api_${api.id}_key`}
+                                      placeholder={`Chave da API ${api.nome}`}
+                                      className="form-input"
+                                      value={configuracoes[`api_${api.id}_key`] || ''}
+                                      onChange={handleChange}
+                                    />
+                                  </div>
                                 )}
                               </div>
                             )}
