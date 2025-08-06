@@ -366,6 +366,7 @@ async def webhook_handler(empresa_slug: str, request: Request):
             
             empresa_config = {
                 'nome': empresa_db.nome,
+                'slug': empresa_db.slug,
                 'openai_key': empresa_db.openai_key,
                 'twilio_sid': empresa_db.twilio_sid,
                 'twilio_token': empresa_db.twilio_token,
