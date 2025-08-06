@@ -51,21 +51,21 @@ class BaseAgent:
         tools = []
         
         # Tool para buscar cliente (sem parâmetros)
-        def buscar_cliente_simple():
+        def buscar_cliente_simple(*args, **kwargs):
             try:
                 return cliente_tools.buscar_cliente_info("cliente_atual", 1)  # empresa_id 1 = TinyTeams
             except Exception as e:
                 return f"Erro ao buscar cliente: {str(e)}"
         
         # Tool para verificar calendário (sem parâmetros)
-        def verificar_calendario_simple():
+        def verificar_calendario_simple(*args, **kwargs):
             try:
                 return calendar_tools.verificar_disponibilidade("amanhã", self.empresa_config)
             except Exception as e:
                 return f"Erro ao verificar calendário: {str(e)}"
         
         # Tool para fazer reserva (com parâmetros simples)
-        def fazer_reserva_simple(data="amanhã", hora="14:00", cliente="Cliente"):
+        def fazer_reserva_simple(data="amanhã", hora="14:00", cliente="Cliente", *args, **kwargs):
             try:
                 return calendar_tools.fazer_reserva(data, hora, cliente, self.empresa_config)
             except Exception as e:
