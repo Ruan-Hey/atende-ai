@@ -13,8 +13,17 @@ class BaseAgent:
     
     def __init__(self, empresa_config: Dict[str, Any]):
         self.empresa_config = empresa_config
+        
+        # Verificar se tem OpenAI key
+        openai_key = empresa_config.get('openai_key')
+        if not openai_key:
+            logger.error("OpenAI key não encontrada na configuração da empresa")
+            raise Exception("OpenAI key não configurada")
+        
+        logger.info(f"Inicializando LLM com OpenAI key: {openai_key[:10]}...")
+        
         self.llm = OpenAI(
-            api_key=empresa_config.get('openai_key'),
+            api_key=openai_key,
             temperature=0.7,
             max_tokens=500
         )
@@ -23,7 +32,10 @@ class BaseAgent:
             return_messages=True
         )
         self.tools = self._setup_tools()
+        logger.info(f"Tools configuradas: {len(self.tools)} tools")
+        
         self.agent = self._create_agent()
+        logger.info("Agent inicializado com sucesso")
     
     def _setup_tools(self) -> List[Tool]:
         """Configura as ferramentas disponíveis para o agent"""
@@ -181,6 +193,8 @@ class BaseAgent:
     async def process_message(self, message: str, context: Dict[str, Any]) -> str:
         """Processa mensagem usando o agent"""
         try:
+            logger.info(f"Processando mensagem: {message}")
+            
             # Construir prompt com contexto da empresa
             system_prompt = self._build_system_prompt(context)
             
@@ -188,14 +202,17 @@ class BaseAgent:
             logger.info(f"System prompt: {system_prompt}")
             
             # Usar o Agent para permitir chamada de tools
+            logger.info("Chamando agent.arun...")
             response = await self.agent.arun(
                 f"{system_prompt}\n\nMensagem do cliente: {message}"
             )
             
+            logger.info(f"Resposta do agent: {response}")
             return response
             
         except Exception as e:
             logger.error(f"Erro ao processar mensagem com agent: {e}")
+            logger.error(f"Traceback completo: ", exc_info=True)
             return "Desculpe, tive um problema técnico. Como posso ajudar?"
     
     def _build_system_prompt(self, context: Dict[str, Any]) -> str:
