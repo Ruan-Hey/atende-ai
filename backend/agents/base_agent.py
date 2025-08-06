@@ -48,26 +48,40 @@ class BaseAgent:
         message_tools = MessageTools()
         
         # Tools básicas
+        tools = []
+        
+        # Tool para buscar cliente (sem parâmetros)
+        def buscar_cliente_simple():
+            return cliente_tools.buscar_cliente_info("cliente_atual", 1)  # empresa_id 1 = TinyTeams
+        
+        # Tool para verificar calendário (sem parâmetros)
+        def verificar_calendario_simple():
+            return calendar_tools.verificar_disponibilidade("amanhã", self.empresa_config)
+        
+        # Tool para fazer reserva (com parâmetros simples)
+        def fazer_reserva_simple(data="amanhã", hora="14:00", cliente="Cliente"):
+            return calendar_tools.fazer_reserva(data, hora, cliente, self.empresa_config)
+        
         tools = [
             Tool(
                 name="buscar_cliente",
-                func=cliente_tools.buscar_cliente_info,
-                description="Busca informações do cliente no banco de dados"
+                func=buscar_cliente_simple,
+                description="Busca informações do cliente atual no banco de dados. Use quando precisar de informações sobre o cliente."
             ),
             Tool(
                 name="verificar_calendario",
-                func=calendar_tools.verificar_disponibilidade,
-                description="Verifica disponibilidade no Google Calendar"
+                func=verificar_calendario_simple,
+                description="Verifica disponibilidade no Google Calendar para amanhã. Use quando cliente quiser agendar reunião."
             ),
             Tool(
                 name="fazer_reserva",
-                func=calendar_tools.fazer_reserva,
-                description="Faz reserva no Google Calendar e registra no Google Sheets"
+                func=fazer_reserva_simple,
+                description="Faz reserva no Google Calendar. Use para agendar reunião quando cliente aceitar. Parâmetros: data (opcional), hora (opcional), cliente (opcional)."
             ),
             Tool(
                 name="enviar_mensagem",
                 func=message_tools.enviar_resposta,
-                description="Envia mensagem pelo canal apropriado"
+                description="Envia mensagem pelo canal apropriado. Use para enviar mensagens programáticas."
             )
         ]
         
