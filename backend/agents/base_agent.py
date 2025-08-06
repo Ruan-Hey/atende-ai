@@ -187,12 +187,12 @@ class BaseAgent:
             # Log do prompt para debug
             logger.info(f"System prompt: {system_prompt}")
             
-            # Usar diretamente o LLM em vez do agent para garantir que o prompt seja respeitado
-            full_prompt = f"{system_prompt}\n\nMensagem do cliente: {message}\n\nResposta:"
+            # Usar o Agent para permitir chamada de tools
+            response = await self.agent.arun(
+                f"{system_prompt}\n\nMensagem do cliente: {message}"
+            )
             
-            response = await self.llm.agenerate([full_prompt])
-            
-            return response.generations[0][0].text.strip()
+            return response
             
         except Exception as e:
             logger.error(f"Erro ao processar mensagem com agent: {e}")
