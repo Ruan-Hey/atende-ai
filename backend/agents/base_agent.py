@@ -28,7 +28,7 @@ class BaseAgent:
             max_tokens=500
         )
         self.memory = ConversationBufferWindowMemory(
-            k=20,
+            k=5,
             return_messages=True
         )
         self.tools = self._setup_tools()
@@ -52,36 +52,40 @@ class BaseAgent:
         
         # Tool para buscar cliente (sem parâmetros)
         def buscar_cliente_simple():
-            return cliente_tools.buscar_cliente_info("cliente_atual", 1)  # empresa_id 1 = TinyTeams
+            try:
+                return cliente_tools.buscar_cliente_info("cliente_atual", 1)  # empresa_id 1 = TinyTeams
+            except Exception as e:
+                return f"Erro ao buscar cliente: {str(e)}"
         
         # Tool para verificar calendário (sem parâmetros)
         def verificar_calendario_simple():
-            return calendar_tools.verificar_disponibilidade("amanhã", self.empresa_config)
+            try:
+                return calendar_tools.verificar_disponibilidade("amanhã", self.empresa_config)
+            except Exception as e:
+                return f"Erro ao verificar calendário: {str(e)}"
         
         # Tool para fazer reserva (com parâmetros simples)
         def fazer_reserva_simple(data="amanhã", hora="14:00", cliente="Cliente"):
-            return calendar_tools.fazer_reserva(data, hora, cliente, self.empresa_config)
+            try:
+                return calendar_tools.fazer_reserva(data, hora, cliente, self.empresa_config)
+            except Exception as e:
+                return f"Erro ao fazer reserva: {str(e)}"
         
         tools = [
             Tool(
                 name="buscar_cliente",
                 func=buscar_cliente_simple,
-                description="Busca informações do cliente atual no banco de dados. Use quando precisar de informações sobre o cliente."
+                description="Busca informações do cliente atual no banco de dados."
             ),
             Tool(
                 name="verificar_calendario",
                 func=verificar_calendario_simple,
-                description="Verifica disponibilidade no Google Calendar para amanhã. Use quando cliente quiser agendar reunião."
+                description="Verifica disponibilidade no Google Calendar para amanhã."
             ),
             Tool(
                 name="fazer_reserva",
                 func=fazer_reserva_simple,
-                description="Faz reserva no Google Calendar. Use para agendar reunião quando cliente aceitar. Parâmetros: data (opcional), hora (opcional), cliente (opcional)."
-            ),
-            Tool(
-                name="enviar_mensagem",
-                func=message_tools.enviar_resposta,
-                description="Envia mensagem pelo canal apropriado. Use para enviar mensagens programáticas."
+                description="Faz reserva no Google Calendar. Parâmetros: data (opcional), hora (opcional), cliente (opcional)."
             )
         ]
         
@@ -216,13 +220,18 @@ class BaseAgent:
             logger.info(f"System prompt: {system_prompt}")
             
             # Usar o Agent para permitir chamada de tools
-            logger.info("Chamando agent.arun...")
-            response = await self.agent.arun(
-                f"{system_prompt}\n\nMensagem do cliente: {message}"
+            logger.info("Chamando agent.ainvoke...")
+            input_text = f"{system_prompt}\n\nMensagem do cliente: {message}"
+            response = await self.agent.ainvoke(
+                {"input": input_text}
             )
             
             logger.info(f"Resposta do agent: {response}")
-            return response
+            # Extrair a resposta do objeto retornado pelo ainvoke
+            if isinstance(response, dict):
+                return response.get('output', str(response))
+            else:
+                return str(response)
             
         except Exception as e:
             logger.error(f"Erro ao processar mensagem com agent: {e}")
@@ -236,11 +245,22 @@ class BaseAgent:
         # Adicionar informações do cliente se disponível
         cliente_info = context.get('cliente_info', {})
         if cliente_info:
-            base_prompt += f"\n\nCliente: {cliente_info.get('nome', 'Cliente')}"
-            base_prompt += f"\nÚltima interação: {cliente_info.get('ultima_atividade', 'N/A')}"
+            if isinstance(cliente_info, dict):
+                base_prompt += f"\n\nCliente: {cliente_info.get('nome', 'Cliente')}"
+                base_prompt += f"\nÚltima interação: {cliente_info.get('ultima_atividade', 'N/A')}"
+            else:
+                base_prompt += f"\n\nInformações do cliente: {cliente_info}"
         
         # Adicionar instruções específicas
         if self.empresa_config.get('mensagem_quebrada'):
             base_prompt += "\n\nIMPORTANTE: Quebre respostas longas em até 3 mensagens curtas."
+        
+        # Adicionar instruções sobre o uso das ferramentas
+        base_prompt += "\n\nVocê tem acesso às seguintes ferramentas:"
+        base_prompt += "\n- buscar_cliente: Para buscar informações do cliente"
+        base_prompt += "\n- verificar_calendario: Para verificar disponibilidade"
+        base_prompt += "\n- fazer_reserva: Para agendar reuniões"
+        
+        base_prompt += "\n\nUse as ferramentas quando necessário para responder adequadamente."
         
         return base_prompt 
