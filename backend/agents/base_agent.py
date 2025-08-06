@@ -90,7 +90,7 @@ class BaseAgent:
         ]
         
         # Adicionar Tools das APIs conectadas
-        tools.extend(self._get_api_tools())
+        # tools.extend(self._get_api_tools())  # Temporariamente desabilitado
         
         return tools
     
