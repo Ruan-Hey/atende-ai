@@ -39,60 +39,8 @@ class BaseAgent:
     
     def _setup_tools(self) -> List[Tool]:
         """Configura as ferramentas disponíveis para o agent"""
-        from tools.cliente_tools import ClienteTools
-        from tools.calendar_tools import CalendarTools
-        from tools.message_tools import MessageTools
-        
-        cliente_tools = ClienteTools()
-        calendar_tools = CalendarTools()
-        message_tools = MessageTools()
-        
-        # Tools básicas
-        tools = []
-        
-        # Tool para buscar cliente (sem parâmetros)
-        def buscar_cliente_simple(*args, **kwargs):
-            try:
-                return cliente_tools.buscar_cliente_info("cliente_atual", 1)  # empresa_id 1 = TinyTeams
-            except Exception as e:
-                return f"Erro ao buscar cliente: {str(e)}"
-        
-        # Tool para verificar calendário (sem parâmetros)
-        def verificar_calendario_simple(*args, **kwargs):
-            try:
-                return calendar_tools.verificar_disponibilidade("amanhã", self.empresa_config)
-            except Exception as e:
-                return f"Erro ao verificar calendário: {str(e)}"
-        
-        # Tool para fazer reserva (com parâmetros simples)
-        def fazer_reserva_simple(data="amanhã", hora="14:00", cliente="Cliente", *args, **kwargs):
-            try:
-                return calendar_tools.fazer_reserva(data, hora, cliente, self.empresa_config)
-            except Exception as e:
-                return f"Erro ao fazer reserva: {str(e)}"
-        
-        tools = [
-            Tool(
-                name="buscar_cliente",
-                func=buscar_cliente_simple,
-                description="Busca informações do cliente atual no banco de dados."
-            ),
-            Tool(
-                name="verificar_calendario",
-                func=verificar_calendario_simple,
-                description="Verifica disponibilidade no Google Calendar para amanhã."
-            ),
-            Tool(
-                name="fazer_reserva",
-                func=fazer_reserva_simple,
-                description="Faz reserva no Google Calendar. Parâmetros: data (opcional), hora (opcional), cliente (opcional)."
-            )
-        ]
-        
-        # Adicionar Tools das APIs conectadas
-        # tools.extend(self._get_api_tools())  # Temporariamente desabilitado
-        
-        return tools
+        # Por enquanto, vamos usar um agente sem tools para testar
+        return []
     
     def _get_api_tools(self) -> List[Tool]:
         """Gera Tools automaticamente das APIs conectadas"""
@@ -240,7 +188,7 @@ class BaseAgent:
     
     def _build_system_prompt(self, context: Dict[str, Any]) -> str:
         """Constrói prompt do sistema baseado na configuração da empresa"""
-        base_prompt = self.empresa_config.get('prompt', 'Você é um assistente virtual.')
+        base_prompt = self.empresa_config.get('prompt', 'Você é um assistente virtual da TinyTeams.')
         
         # Adicionar informações do cliente se disponível
         cliente_info = context.get('cliente_info', {})
@@ -255,12 +203,6 @@ class BaseAgent:
         if self.empresa_config.get('mensagem_quebrada'):
             base_prompt += "\n\nIMPORTANTE: Quebre respostas longas em até 3 mensagens curtas."
         
-        # Adicionar instruções sobre o uso das ferramentas
-        base_prompt += "\n\nVocê tem acesso às seguintes ferramentas:"
-        base_prompt += "\n- buscar_cliente: Para buscar informações do cliente"
-        base_prompt += "\n- verificar_calendario: Para verificar disponibilidade"
-        base_prompt += "\n- fazer_reserva: Para agendar reuniões"
-        
-        base_prompt += "\n\nUse as ferramentas quando necessário para responder adequadamente."
+        base_prompt += "\n\nResponda sempre em português brasileiro de forma amigável e profissional."
         
         return base_prompt 
