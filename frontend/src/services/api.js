@@ -110,6 +110,40 @@ class ApiService {
     })
   }
 
+  // APIs - Listar todas as APIs
+  async getAPIs() {
+    return this.authenticatedRequest('/api/admin/apis')
+  }
+
+  // APIs - Criar nova API
+  async createAPI(apiData) {
+    return this.authenticatedRequest('/api/admin/apis', {
+      method: 'POST',
+      body: JSON.stringify(apiData)
+    })
+  }
+
+  // APIs - Atualizar API
+  async updateAPI(apiId, apiData) {
+    return this.authenticatedRequest(`/api/admin/apis/${apiId}`, {
+      method: 'PUT',
+      body: JSON.stringify(apiData)
+    })
+  }
+
+  // APIs - Conectar API a uma empresa
+  async connectAPI(empresaId, apiId, config) {
+    return this.authenticatedRequest(`/api/admin/empresas/${empresaId}/apis/${apiId}`, {
+      method: 'POST',
+      body: JSON.stringify(config)
+    })
+  }
+
+  // APIs - Listar APIs conectadas a uma empresa
+  async getEmpresaAPIs(empresaId) {
+    return this.authenticatedRequest(`/api/admin/empresas/${empresaId}/apis`)
+  }
+
   // Login do usuário
   async login(email, password) {
     const formData = new URLSearchParams();

@@ -19,8 +19,22 @@ const NovaEmpresa = () => {
     twilio_number: '',
     usar_buffer: true,
     mensagem_quebrada: false,
-    prompt: ''
+    prompt: '',
+    calendar_expanded: false,
+    sheets_expanded: false,
+    openai_expanded: false,
+    trinks_expanded: false
   })
+  
+  // Estado separado para controlar accordions
+  const [expandedAccordions, setExpandedAccordions] = useState({
+    sheets: false,
+    openai: false,
+    calendar: false,
+    trinks: false
+  })
+  const [apis, setApis] = useState([])
+  const [selectedAPIs, setSelectedAPIs] = useState([])
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
@@ -55,14 +69,17 @@ const NovaEmpresa = () => {
       .replace(/^-+|-+$/g, '')
   }
 
-  const webhookUrl = form.nome ? `https://SEU_NGROK/webhook/${generateSlug(form.nome)}` : ''
+  const webhookUrl = form.nome ? `https://api.tinyteams.app/webhook/${generateSlug(form.nome)}` : ''
 
   useEffect(() => {
     // Buscar empresas e tokens já cadastrados para sugestões camufladas
-    api.listEmpresas()
-      .then(data => {
+    Promise.all([
+      api.listEmpresas(),
+      api.getAPIs()
+    ])
+      .then(([empresasData, apisData]) => {
         const hints = {}
-        const empresas = data.empresas || [];
+        const empresas = empresasData.empresas || [];
         if (Array.isArray(empresas)) {
           SENSITIVE_FIELDS.forEach(field => {
             const map = {}
@@ -80,15 +97,24 @@ const NovaEmpresa = () => {
           })
         }
         setTokenHints(hints)
+        setApis(apisData.apis || [])
       })
       .catch(err => {
-        console.error('Erro ao buscar empresas:', err)
+        console.error('Erro ao buscar dados:', err)
       })
   }, [])
 
   const handleChange = e => {
     const { name, value, type, checked } = e.target
     setForm(f => ({ ...f, [name]: type === 'checkbox' ? checked : value }))
+  }
+
+  const handleAPISelection = (apiId) => {
+    setSelectedAPIs(prev => 
+      prev.includes(apiId) 
+        ? prev.filter(id => id !== apiId)
+        : [...prev, apiId]
+    )
   }
 
   const handleSubmit = async e => {
@@ -105,6 +131,17 @@ const NovaEmpresa = () => {
       
       const data = await api.createEmpresa(formData)
       if (data.success) {
+        // Conectar APIs selecionadas
+        if (selectedAPIs.length > 0) {
+          for (const apiId of selectedAPIs) {
+            try {
+              await api.connectAPI(data.empresa_id, apiId, {})
+            } catch (err) {
+              console.error(`Erro ao conectar API ${apiId}:`, err)
+            }
+          }
+        }
+        
         setSuccess(true)
         setTimeout(() => navigate('/admin'), 1200)
       } else {
@@ -270,7 +307,90 @@ const NovaEmpresa = () => {
               </div>
               
               <div className="section-fields">
-                {section.fields.map(renderField)}
+                {section.id === 'conexoes-apis' ? (
+                  /* Integrações com accordion */
+                  <div className="google-integrations">
+                    {/* APIs do Banco de Dados */}
+                    {apis.filter(api => api.ativo).map(api => (
+                      <div key={api.id} className="integration-group" data-api={api.nome.toLowerCase().replace(/\s+/g, '-')}>
+                        <div className="integration-header">
+                          <div className="integration-icon">
+                            {api.logo_url ? (
+                              <img 
+                                src={api.logo_url} 
+                                alt={api.nome}
+                                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                              />
+                            ) : (
+                              '🔗'
+                            )}
+                          </div>
+                          <div className="integration-info">
+                            <h3>{api.nome}</h3>
+                            <p>{api.descricao}</p>
+                          </div>
+                          <label className="checkbox-label" style={{ margin: 0, padding: 0, border: 'none', background: 'transparent' }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedAPIs.includes(api.id)}
+                              onChange={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                handleAPISelection(api.id)
+                              }}
+                            />
+                            <span className="checkmark"></span>
+                          </label>
+                        </div>
+                        
+                        {selectedAPIs.includes(api.id) && (
+                          <div className="integration-fields">
+                            <div className="field-group">
+                              <label>{api.nome} API Key</label>
+                              <input
+                                type="password"
+                                name={`api_${api.id}_key`}
+                                placeholder={`Chave da API ${api.nome}`}
+                                className="form-input"
+                                value={form[`api_${api.id}_key`] || ''}
+                                onChange={handleChange}
+                              />
+                            </div>
+                            {api.tipo_auth === 'oauth2' && (
+                              <>
+                                <div className="field-group">
+                                  <label>Client ID</label>
+                                  <input
+                                    type="text"
+                                    name={`api_${api.id}_client_id`}
+                                    placeholder="Client ID"
+                                    className="form-input"
+                                    value={form[`api_${api.id}_client_id`] || ''}
+                                    onChange={handleChange}
+                                  />
+                                </div>
+                                <div className="field-group">
+                                  <label>Client Secret</label>
+                                  <input
+                                    type="password"
+                                    name={`api_${api.id}_client_secret`}
+                                    placeholder="Client Secret"
+                                    className="form-input"
+                                    value={form[`api_${api.id}_client_secret`] || ''}
+                                    onChange={handleChange}
+                                  />
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  /* Campos normais para outras abas */
+                  section.fields.map(renderField)
+                )}
               </div>
 
               {/* Webhook apenas na aba Entrada de Mensagem */}

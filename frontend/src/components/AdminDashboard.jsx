@@ -19,7 +19,7 @@ const AdminDashboard = () => {
   const [form, setForm] = useState({
     slug: '', nome: '', whatsapp_number: '', google_sheets_id: '', chatwoot_token: '', openai_key: '', twilio_sid: '', twilio_token: '', twilio_number: '', chatwoot_inbox_id: '', chatwoot_origem: '', horario_funcionamento: '', filtros_chatwoot: '', usar_buffer: true, mensagem_quebrada: false, prompt: ''
   })
-  const webhookUrl = form.slug ? `https://SEU_NGROK/webhook/${form.slug}` : ''
+  const webhookUrl = form.slug ? `https://api.tinyteams.app/webhook/${form.slug}` : ''
 
   const [empresas, setEmpresas] = useState([]);
   const [erros24h, setErros24h] = useState({});

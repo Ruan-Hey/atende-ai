@@ -22,8 +22,22 @@ const ConfiguracoesEmpresa = () => {
     twilio_number: '',
     usar_buffer: true,
     mensagem_quebrada: false,
-    prompt: ''
+    prompt: '',
+    calendar_expanded: false,
+    sheets_expanded: false,
+    openai_expanded: false,
+    trinks_expanded: false
   })
+  
+  // Estado separado para controlar accordions
+  const [expandedAccordions, setExpandedAccordions] = useState({
+    sheets: false,
+    openai: false,
+    calendar: false,
+    trinks: false
+  })
+  const [apis, setApis] = useState([])
+  const [empresaAPIs, setEmpresaAPIs] = useState([])
   const [showTokens, setShowTokens] = useState({})
   const [tokenHints, setTokenHints] = useState({})
   const [focusField, setFocusField] = useState('')
@@ -42,6 +56,7 @@ const ConfiguracoesEmpresa = () => {
   useEffect(() => {
     if (selectedEmpresa && selectedEmpresa !== 'nova-empresa') {
     carregarConfiguracoes()
+      carregarAPIs()
     }
   }, [selectedEmpresa])
 
@@ -84,7 +99,10 @@ const ConfiguracoesEmpresa = () => {
         twilio_number: response.twilio_number || '',
         usar_buffer: response.usar_buffer !== undefined ? response.usar_buffer : true,
         mensagem_quebrada: response.mensagem_quebrada || false,
-        prompt: response.prompt || ''
+        prompt: response.prompt || '',
+        calendar_expanded: response.calendar_expanded || false,
+        sheets_expanded: response.sheets_expanded || false,
+        openai_expanded: response.openai_expanded || false
       }
       
       setConfiguracoes(configData)
@@ -125,6 +143,47 @@ const ConfiguracoesEmpresa = () => {
       setTokenHints(hints)
     } catch (error) {
       console.error('Erro ao carregar dicas de tokens:', error)
+    }
+  }
+
+  const carregarAPIs = async () => {
+    try {
+      const apisResponse = await apiService.getAPIs()
+      setApis(apisResponse.apis || [])
+      
+      // Buscar empresa para obter o ID
+      const empresasResponse = await apiService.listEmpresas()
+      const empresa = empresasResponse.empresas?.find(e => e.slug === selectedEmpresa)
+      
+      if (empresa) {
+        try {
+          const empresaAPIsResponse = await apiService.getEmpresaAPIs(empresa.id)
+          setEmpresaAPIs(empresaAPIsResponse.apis || [])
+        } catch (error) {
+          console.error('Erro ao carregar APIs da empresa:', error)
+          setEmpresaAPIs([])
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao carregar APIs:', error)
+    }
+  }
+
+  const conectarAPI = async (apiId) => {
+    try {
+      // Buscar empresa para obter o ID
+      const empresasResponse = await apiService.listEmpresas()
+      const empresa = empresasResponse.empresas?.find(e => e.slug === selectedEmpresa)
+      
+      if (empresa) {
+        await apiService.connectAPI(empresa.id, apiId, {})
+        setSuccess('API conectada com sucesso!')
+        setTimeout(() => setSuccess(false), 3000)
+        carregarAPIs() // Recarregar lista
+      }
+    } catch (error) {
+      console.error('Erro ao conectar API:', error)
+      setError('Erro ao conectar API: ' + error.message)
     }
   }
 
@@ -353,13 +412,135 @@ const ConfiguracoesEmpresa = () => {
         </div>
 
                   <div className="section-fields">
-                    {section.fields.map(renderField)}
+                    {section.id === 'conexoes-apis' ? (
+                      /* Integrações com accordion */
+                      <div className="google-integrations">
+                        {/* APIs do Banco de Dados */}
+                        {apis.filter(api => api.ativo).map(api => (
+                          <div key={api.id} className="integration-group" data-api={api.nome.toLowerCase().replace(/\s+/g, '-')}>
+                            <div className="integration-header">
+                              <div className="integration-icon">
+                                {api.logo_url ? (
+                                  <img 
+                                    src={api.logo_url} 
+                                    alt={api.nome}
+                                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                  />
+                                ) : (
+                                  '🔗'
+                                )}
+                              </div>
+                              <div className="integration-info">
+                                <h3>{api.nome}</h3>
+                                <p>{api.descricao}</p>
+                              </div>
+                              <button 
+                                type="button"
+                                className="accordion-toggle"
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  setExpandedAccordions(prev => ({ ...prev, [`api_${api.id}`]: !prev[`api_${api.id}`] }))
+                                }}
+                              >
+                                {expandedAccordions[`api_${api.id}`] ? '−' : '+'}
+                              </button>
+                            </div>
+                            
+                            {expandedAccordions[`api_${api.id}`] && (
+                              <div className="integration-fields">
+                                <div className="field-group">
+                                  <label>{api.nome} API Key</label>
+                                  <input
+                                    type="password"
+                                    name={`api_${api.id}_key`}
+                                    placeholder={`Chave da API ${api.nome}`}
+                                    className="form-input"
+                                    value={configuracoes[`api_${api.id}_key`] || ''}
+                                    onChange={handleChange}
+                                  />
+                                </div>
+                                {api.tipo_auth === 'oauth2' && (
+                                  <>
+                                    <div className="field-group">
+                                      <label>Client ID</label>
+                                      <input
+                                        type="text"
+                                        name={`api_${api.id}_client_id`}
+                                        placeholder="Client ID"
+                                        className="form-input"
+                                        value={configuracoes[`api_${api.id}_client_id`] || ''}
+                                        onChange={handleChange}
+                                      />
+                                    </div>
+                                    <div className="field-group">
+                                      <label>Client Secret</label>
+                                      <input
+                                        type="password"
+                                        name={`api_${api.id}_client_secret`}
+                                        placeholder="Client Secret"
+                                        className="form-input"
+                                        value={configuracoes[`api_${api.id}_client_secret`] || ''}
+                                        onChange={handleChange}
+                                      />
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+
+                        {/* APIs Conectadas */}
+                        {empresaAPIs.filter(api => api.nome !== 'Trinks API V2').map(api => (
+                          <div key={api.id} className="integration-group" data-api={api.nome.toLowerCase().replace(/\s+/g, '-')}>
+                            <div className="integration-header">
+                              <div className="integration-icon">🔗</div>
+                              <div className="integration-info">
+                                <h3>{api.nome}</h3>
+                                <p>{api.descricao}</p>
+                              </div>
+                              <button 
+                                type="button"
+                                className="accordion-toggle"
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  setConfiguracoes(prev => ({ ...prev, [`api_${api.id}_expanded`]: !prev[`api_${api.id}_expanded`] }))
+                                }}
+                              >
+                                {configuracoes[`api_${api.id}_expanded`] ? '−' : '+'}
+                              </button>
+                            </div>
+                            
+                            {configuracoes[`api_${api.id}_expanded`] && (
+                              <div className="integration-fields">
+                                <div className="field-group">
+                                  <label>{api.nome} API Key</label>
+                                  <input
+                                    type="password"
+                                    name={`api_${api.id}_key`}
+                                    placeholder={`Chave da API ${api.nome}`}
+                                    className="form-input"
+                                    value={configuracoes[`api_${api.id}_key`] || ''}
+                                    onChange={handleChange}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      /* Campos normais para outras abas */
+                      section.fields.map(renderField)
+                    )}
                   </div>
 
                   {/* Webhook apenas na aba Entrada de Mensagem */}
                   {section.id === 'dados-entrada' && (
-                    <div className="webhook-info">
-                      <strong>Webhook para Twilio:</strong> https://SEU_NGROK/webhook/{selectedEmpresa}
+                                    <div className="webhook-info">
+                  <strong>Webhook para Twilio:</strong> https://api.tinyteams.app/webhook/{selectedEmpresa}
                 </div>
                   )}
 

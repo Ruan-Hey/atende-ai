@@ -18,8 +18,7 @@ class Config:
         print(f"⚠️ URL inválida detectada: {POSTGRES_URL}")
         POSTGRES_URL = "postgresql://atendeai:2pjZBzhDlZY275Z4FubsnBFPsjvLHNRw@dpg-d24vpfngi27c73bh06n0-a.oregon-postgres.render.com/atendeai"
     
-    # Redis
-    REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+    
     
     # JWT
     SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here-change-in-production")

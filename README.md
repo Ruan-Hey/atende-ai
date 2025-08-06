@@ -1,417 +1,174 @@
-# Atende Ai
+# Atende AI - Sistema de Atendimento Inteligente
 
-Sistema de atendimento virtual multi-empresa com painel admin moderno, autenticação JWT e métricas em tempo real.
+Sistema completo de atendimento automatizado com integração de APIs e interface moderna.
 
-## 🚀 Funcionalidades Principais
+## 🚀 Funcionalidades
 
-### **🤖 Atendimento Virtual Inteligente**
-- **Processamento de texto e áudio** via OpenAI (GPT-4o + Whisper)
-- **Agrupamento de mensagens** com buffer de 10 segundos
-- **Contexto de conversa** mantido no Redis
-- **Respostas personalizadas** por empresa
+### ✅ **Core Features**
+- **Atendimento Automatizado** via WhatsApp
+- **LangChain Agents** para processamento inteligente
+- **Integração Multi-API** (OpenAI, Google Sheets, Google Calendar, APIs customizadas)
+- **Interface Admin** completa
+- **Sistema de Empresas** com configurações individuais
+- **Discovery Automático de APIs** via documentação
 
-### **🏢 Multi-empresa**
-- **Configurações isoladas** por empresa
-- **Prompts personalizados** para cada negócio
-- **Integrações independentes** (Twilio, OpenAI, Google Sheets, Chatwoot)
-- **Status ativo/inativo** por empresa
+### 🔧 **Integrações Disponíveis**
+- **OpenAI** - Inteligência Artificial
+- **Google Sheets** - Planilhas e dados
+- **Google Calendar** - Agendamentos e eventos
+- **APIs Customizadas** - Descoberta automática via documentação
 
-### **🔐 Sistema de Autenticação**
-- **JWT (JSON Web Tokens)** para segurança
-- **Login com email/senha** criptografado
-- **Controle de acesso** por empresa
-- **Superusuários** com acesso total
-- **Usuários por empresa** com acesso restrito
+### 🎨 **Interface Moderna**
+- **Dashboard Admin** com métricas em tempo real
+- **Gestão de Empresas** com configurações avançadas
+- **Sistema de APIs** com descoberta automática
+- **UI Accordion** para integrações Google
+- **Design Responsivo** e moderno
 
-### **📊 Painel Admin Moderno**
-- **Dashboard geral** com métricas macro
-- **Dashboards específicos** por empresa
-- **Monitoramento de buffer** em tempo real
-- **Visualização de logs** e erros
-- **Lista de clientes** por empresa
-- **Design preto e branco** com logo TinyTeams
+## 🛠️ Tecnologias
 
-### **⚡ Performance Otimizada**
-- **Processamento assíncrono** com asyncio
-- **Buffer de mensagens** para reduzir respostas
-- **Cache Redis** para contexto
-- **Escalabilidade** para múltiplas empresas
-- **Métricas em tempo real** baseadas em atividades
+### Backend
+- **FastAPI** - Framework web
+- **PostgreSQL** - Banco de dados principal
+- **LangChain** - Framework de IA
+- **SQLAlchemy** - ORM
+- **Twilio** - Integração WhatsApp
+- **Docker** - Containerização
 
-## 📁 Estrutura do Projeto
+### Frontend
+- **React** - Framework UI
+- **Vite** - Build tool
+- **Material-UI** - Componentes
+- **Axios** - HTTP client
 
-```
-AtendeAi/
-│
-├── backend/                    # Backend FastAPI
-│   ├── main.py                # Aplicação principal + JWT
-│   ├── config.py              # Configurações
-│   ├── models.py              # Modelos SQLAlchemy + Pydantic
-│   ├── requirements.txt       # Dependências Python
-│   │
-│   ├── integrations/          # Integrações externas
-│   │   ├── openai_service.py
-│   │   ├── twilio_service.py
-│   │   ├── google_sheets_service.py
-│   │   └── chatwoot_service.py
-│   │
-│   └── services/              # Serviços internos
-│       ├── services.py        # Métricas e processamento
-│       └── message_buffer.py  # Buffer de mensagens
-│
-├── frontend/                   # Frontend React
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── Login.jsx      # Tela de login
-│   │   │   ├── AdminDashboard.jsx
-│   │   │   ├── EmpresaDashboard.jsx
-│   │   │   ├── BufferStatus.jsx
-│   │   │   ├── LogsViewer.jsx
-│   │   │   └── Sidebar.jsx
-│   │   ├── services/
-│   │   │   └── api.js         # API com autenticação
-│   │   ├── App.jsx
-│   │   └── App.css
-│   └── package.json
-│
-├── static/                     # Arquivos estáticos
-│   └── tinyteams-logo-login.png # Logo TinyTeams
-│
-└── README.md                   # Este arquivo
-```
+## 🚀 Deploy Rápido
 
-## 🛠️ Como rodar localmente
-
-### **1. Pré-requisitos**
+### 1. Clone o repositório
 ```bash
-# Instalar Redis
-brew install redis  # macOS
-# ou
-sudo apt-get install redis-server  # Ubuntu
-
-# Instalar PostgreSQL
-brew install postgresql  # macOS
-# ou
-sudo apt-get install postgresql  # Ubuntu
+git clone <repository-url>
+cd Atende\ Ai
 ```
 
-### **2. Backend (FastAPI)**
-
+### 2. Configure as variáveis de ambiente
 ```bash
-# Ativar ambiente virtual
-source backend/venv/bin/activate
-
-# Instalar dependências
-pip install -r backend/requirements.txt
-
-# Configurar banco de dados
-cd backend
-alembic upgrade head
-
-# Rodar o servidor
-uvicorn main:app --reload --port 8001
+cp env.example .env
+# Edite o arquivo .env com suas configurações
 ```
 
-O backend estará disponível em: **http://localhost:8001**
-
-### **3. Frontend (React)**
-
+### 3. Execute o deploy
 ```bash
-# Em outro terminal
-cd frontend
-npm install
-npm run dev
+./deploy_production.sh
 ```
 
-O frontend estará disponível em: **http://localhost:5175**
+### 4. Acesse o sistema
+- **Frontend**: http://localhost:3000
+- **Backend**: http://localhost:8000
+- **Health Check**: http://localhost:8000/health
 
-### **4. Acessar o painel admin**
+## 📋 Pré-requisitos
 
-- **Login:** http://localhost:5175/#/login
-- **Dashboard Geral:** http://localhost:5175/#/admin
-- **Dashboard TinyTeams:** http://localhost:5175/#/admin/tinyteams
-- **Status do Buffer:** http://localhost:5175/#/admin/buffer
-- **Logs e Erros:** http://localhost:5175/#/admin/logs
+- Docker e Docker Compose
+- PostgreSQL (configurado via Docker)
+- Variáveis de ambiente configuradas
 
-**Credenciais padrão:**
-- **Email:** ruangimeneshey@gmail.com
-- **Senha:** admin123
+## 🔧 Configuração
 
----
-
-## 🏢 Empresas Configuradas
-
-### **TinyTeams** - Empresa Principal
-- **Slug:** `tinyteams`
-- **Status:** Ativo
-- **Configurações:** Sistema principal de atendimento
-
-### **Pancia Piena** - Pizzaria
-- **Slug:** `pancia-piena`
-- **Status:** Ativo
-- **Configurações:** Atendimento para pedidos de pizza
-
-### **Umas e Ostras** - Restaurante
-- **Slug:** `umas-e-ostras`
-- **Status:** Ativo
-- **Configurações:** Atendimento gastronômico
-
----
-
-## ⚙️ Configurações
-
-### **Backend (.env)**
+### Variáveis de Ambiente (.env)
 ```env
 # Database
-DATABASE_URL=postgresql://user:password@localhost:5432/atendeai
+DATABASE_URL=postgresql://user:password@localhost/dbname
 
-# Redis
-REDIS_URL=redis://localhost:6379
+# OpenAI
+OPENAI_API_KEY=sk-...
 
-# JWT
-SECRET_KEY=your-secret-key-here-change-in-production
-ALGORITHM=HS256
+# Twilio
+TWILIO_ACCOUNT_SID=...
+TWILIO_AUTH_TOKEN=...
+TWILIO_PHONE_NUMBER=...
 
-# APIs
-TWILIO_ACCOUNT_SID=your-twilio-sid
-TWILIO_AUTH_TOKEN=your-twilio-token
-OPENAI_API_KEY=your-openai-key
-GOOGLE_CREDENTIALS=your-google-credentials
-CHATWOOT_API_KEY=your-chatwoot-key
-CHATWOOT_BASE_URL=your-chatwoot-url
+# Google (opcional)
+GOOGLE_SHEETS_ID=...
+GOOGLE_CALENDAR_CLIENT_ID=...
+GOOGLE_CALENDAR_CLIENT_SECRET=...
+GOOGLE_CALENDAR_REFRESH_TOKEN=...
 ```
 
-### **Empresa (Database)**
-```sql
--- Tabela empresas
-CREATE TABLE empresas (
-    id SERIAL PRIMARY KEY,
-    nome VARCHAR(255) NOT NULL,
-    slug VARCHAR(100) UNIQUE NOT NULL,
-    status VARCHAR(20) DEFAULT 'ativo',
-    openai_key TEXT,
-    twilio_sid VARCHAR(255),
-    twilio_token VARCHAR(255),
-    twilio_number VARCHAR(50),
-    chatwoot_origem VARCHAR(500),
-    chatwoot_token VARCHAR(255),
-    prompt TEXT,
-    webhook_url VARCHAR(500),
-    usar_buffer BOOLEAN DEFAULT true,
-    mensagem_quebrada BOOLEAN DEFAULT false,
-    created_at TIMESTAMP DEFAULT NOW()
-);
+## 🎯 Uso
 
--- Tabela usuários
-CREATE TABLE usuarios (
-    id SERIAL PRIMARY KEY,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    senha_hash VARCHAR(255) NOT NULL,
-    is_superuser BOOLEAN DEFAULT false,
-    empresa_id INTEGER REFERENCES empresas(id),
-    created_at TIMESTAMP DEFAULT NOW()
-);
-```
+### 1. Login Admin
+- Acesse http://localhost:3000
+- Login: `admin` / Senha: `admin123`
 
----
+### 2. Criar Empresa
+- Vá em "Nova Empresa"
+- Configure as integrações desejadas
+- Salve as configurações
 
-## 🔄 Sistema de Buffer
+### 3. Configurar APIs
+- Acesse "APIs" no menu admin
+- Adicione URLs de documentação para descoberta automática
+- Conecte APIs às empresas
 
-### **Como funciona:**
-1. **Mensagem recebida** → Adicionada ao buffer
-2. **Timer de 10 segundos** → Aguarda mais mensagens
-3. **Mensagens de texto** → Combinadas em uma resposta
-4. **Mensagens de áudio** → Processadas individualmente
-5. **Processamento** → OpenAI + Twilio + Chatwoot
-6. **Resposta única** → Melhor experiência do usuário
+### 4. Configurar Webhook
+- Configure o webhook do Twilio para: `http://seu-dominio:8000/api/webhook/whatsapp`
 
-### **Benefícios:**
-- ✅ **Reduz spam** de respostas
-- ✅ **Melhora experiência** do usuário
-- ✅ **Otimiza custos** de API
-- ✅ **Processamento inteligente** por tipo de mensagem
+## 🔍 Monitoramento
 
----
-
-## 📊 Painel Admin
-
-### **Dashboard Geral**
-- Total de empresas ativas
-- Total de clientes únicos
-- Total de atendimentos
-- Lista de empresas com status
-
-### **Dashboard por Empresa**
-- Métricas específicas da empresa
-- Atendimentos e reservas
-- Clientes únicos
-- Atividade recente
-- Lista de clientes da empresa
-
-### **Status do Buffer**
-- Buffers ativos em tempo real
-- Timers e mensagens agrupadas
-- Ações para forçar processamento
-
-### **Logs e Erros**
-- Visualização de logs do sistema
-- Filtros por empresa e nível
-- Monitoramento de erros
-
-### **Gestão de Usuários**
-- Lista de usuários
-- Criação de novos usuários
-- Edição de permissões
-- Controle de acesso por empresa
-
----
-
-## 🔗 Integrações
-
-### **OpenAI**
-- **GPT-4o** para processamento de texto
-- **Whisper** para transcrição de áudio
-- **Prompts personalizados** por empresa
-
-### **Twilio**
-- **WhatsApp Business API**
-- **Envio de mensagens** e templates
-- **Webhooks** para receber mensagens
-
-### **Google Sheets**
-- **Gestão de reservas**
-- **Adicionar/atualizar/cancelar** reservas
-- **Listagem** de reservas existentes
-
-### **Chatwoot**
-- **Gestão de contatos** e conversas
-- **Registro automático** de atendimentos
-- **Histórico** de conversas
-
-### **Redis**
-- **Cache** de contexto de conversa
-- **Buffer** de mensagens
-- **Sessões** temporárias
-- **Métricas** em tempo real
-
-### **PostgreSQL**
-- **Dados persistentes** de empresas
-- **Usuários** e autenticação
-- **Logs** e histórico
-- **Configurações** por empresa
-
----
-
-## 🚀 Deploy em Produção
-
-### **Render (PaaS)**
-- **Backend:** https://api.tinyteams.app
-- **Frontend:** https://tinyteams.app
-- **Database:** PostgreSQL gerenciado
-- **Redis:** Redis gerenciado
-
-### **Configurações de Produção**
-- ✅ **SSL/HTTPS** automático
-- ✅ **Deploy automático** via GitHub
-- ✅ **Variáveis de ambiente** seguras
-- ✅ **DNS** configurado (Cloudflare)
-- ✅ **Monitoramento** de logs
-
-### **Domínios**
-- **API:** api.tinyteams.app
-- **Web:** tinyteams.app
-- **Documentação:** docs.tinyteams.app
-
----
-
-## 🛠️ Tecnologias utilizadas
-
-### **Backend:**
-- **FastAPI** (Python) - Framework web
-- **SQLAlchemy** - ORM para PostgreSQL
-- **Alembic** - Migrações de banco
-- **Redis** - Cache e contexto
-- **JWT** - Autenticação segura
-- **OpenAI API** - Processamento de linguagem natural
-- **Google Sheets API** - Gestão de reservas
-- **Twilio API** - WhatsApp Business
-- **Chatwoot API** - CRM e atendimento
-
-### **Frontend:**
-- **React 19** - Framework frontend
-- **Vite** - Build tool
-- **React Router** - Navegação
-- **Axios** - Requisições HTTP
-- **HashRouter** - Compatibilidade com static hosting
-
-### **Design:**
-- **Layout preto e branco** - Design moderno
-- **Logo TinyTeams** - Identidade visual
-- **Responsivo** - Mobile-first
-- **Animações suaves** - UX otimizada
-
-### **Infraestrutura:**
-- **Render** - PaaS para deploy
-- **PostgreSQL** - Banco de dados
-- **Redis** - Cache e sessões
-- **Cloudflare** - DNS e CDN
-
----
-
-## 📈 Métricas e Monitoramento
-
-### **Métricas em Tempo Real**
-- **Clientes únicos** por empresa
-- **Total de atendimentos** por empresa
-- **Atividade recente** dos clientes
-- **Status** das empresas (ativo/inativo)
-
-### **Monitoramento**
-- **Logs** em tempo real
-- **Erros** de 24h
-- **Status** do buffer
-- **Performance** das APIs
-
----
-
-## 🔧 Comandos Úteis
-
-### **Desenvolvimento Local**
+### Health Check
 ```bash
-# Backend
-cd backend
-source venv/bin/activate
-uvicorn main:app --reload --port 8001
-
-# Frontend
-cd frontend
-npm run dev
-
-# Redis
-redis-cli
-
-# PostgreSQL
-psql -U postgres -d atendeai
+curl http://localhost:8000/health
 ```
 
-### **Deploy**
+### Logs
 ```bash
-# Commit e push
-git add .
-git commit -m "🚀 Deploy: Nova funcionalidade"
-git push origin main
-
-# Build frontend
-cd frontend
-npm run build
+docker-compose logs -f
 ```
 
+## 📊 Estrutura do Projeto
+
+```
+Atende AI/
+├── backend/                 # API FastAPI
+│   ├── main.py             # Entry point
+│   ├── models.py           # Modelos SQLAlchemy
+│   ├── services/           # Serviços de negócio
+│   ├── agents/             # Agentes LangChain
+│   ├── tools/              # Ferramentas customizadas
+│   └── integrations/       # Integrações externas
+├── frontend/               # Interface React
+│   ├── src/
+│   │   ├── components/     # Componentes React
+│   │   └── services/       # Serviços de API
+│   └── public/             # Assets estáticos
+├── docker-compose.yml      # Configuração local
+├── docker-compose.prod.yml # Configuração produção
+└── deploy_production.sh    # Script de deploy
+```
+
+## 🆕 Novidades
+
+### ✅ **Sistema de APIs Dinâmicas**
+- Descoberta automática via documentação
+- Geração automática de ferramentas LangChain
+- Interface visual para gestão de APIs
+
+### ✅ **UI Modernizada**
+- Accordion para integrações Google
+- Cards elegantes para todas as APIs
+- Design consistente e responsivo
+
+### ✅ **Limpeza Completa**
+- Remoção de código desnecessário
+- Otimização de performance
+- Documentação atualizada
+
+## 🚀 Status: **PRONTO PARA PRODUÇÃO**
+
+✅ **Testado e Validado**
+✅ **Limpeza Completa**
+✅ **Documentação Atualizada**
+✅ **Script de Deploy Criado**
+
 ---
 
-## 📞 Suporte
-
-Para dúvidas ou suporte técnico, entre em contato com a equipe TinyTeams.
-
----
-
-**Desenvolvido com ❤️ pela TinyTeams** 
+**Atende AI** - Sistema de Atendimento Inteligente v2.0 

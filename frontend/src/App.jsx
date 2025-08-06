@@ -13,9 +13,11 @@ import Login from './components/Login'
 import ProtectedRoute from './components/ProtectedRoute'
 import Usuarios from './components/Usuarios'
 import ConfiguracoesEmpresa from './components/ConfiguracoesEmpresa'
+import APIManager from './components/APIManager'
 
 // Força a inclusão do componente no build
 console.log('ConfiguracoesEmpresa component loaded:', ConfiguracoesEmpresa)
+console.log('APIManager component loaded:', APIManager)
 
 function AppRoutes() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -111,6 +113,11 @@ function AppRoutes() {
           <Route path="/admin/usuarios" element={
             <ProtectedRoute>
               <Usuarios />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/apis" element={
+            <ProtectedRoute>
+              <APIManager />
             </ProtectedRoute>
           } />
           <Route path="/admin/:empresa/configuracoes" element={

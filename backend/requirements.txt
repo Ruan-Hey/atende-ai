@@ -1,7 +1,7 @@
 fastapi
 uvicorn
 python-dotenv
-redis
+
 pydantic
 requests
 aiofiles
@@ -15,4 +15,7 @@ google-api-python-client
 psycopg2-binary>=2.9.0
 SQLAlchemy>=1.4.0
 passlib[bcrypt]
-python-jose[cryptography] 
+python-jose[cryptography]
+langchain
+langchain-openai
+langchain-community 

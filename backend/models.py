@@ -142,5 +142,40 @@ class Usuario(Base):
     empresa = relationship('Empresa')
     __table_args__ = (UniqueConstraint('email', name='_usuario_email_uc'),)
 
+class API(Base):
+    """Modelo para APIs externas"""
+    __tablename__ = "apis"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String, unique=True, index=True)
+    descricao = Column(Text)
+    url_documentacao = Column(String)
+    url_base = Column(String)
+    tipo_auth = Column(String)  # api_key, oauth, basic, etc
+    schema_cache = Column(JSON)  # Cache do schema descoberto
+    logo_url = Column(String)  # URL da logo da API
+    ativo = Column(Boolean, default=True)
+    created_at = Column(TIMESTAMP, default=func.now())
+    updated_at = Column(TIMESTAMP, default=func.now(), onupdate=func.now())
+
+class EmpresaAPI(Base):
+    """Modelo para APIs conectadas às empresas"""
+    __tablename__ = "empresa_apis"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    empresa_id = Column(Integer, ForeignKey("empresas.id"))
+    api_id = Column(Integer, ForeignKey("apis.id"))
+    config = Column(JSON)  # Configurações específicas (api_key, etc)
+    ativo = Column(Boolean, default=True)
+    created_at = Column(TIMESTAMP, default=func.now())
+    
+    # Relacionamentos
+    empresa = relationship("Empresa", back_populates="apis")
+    api = relationship("API", back_populates="empresas")
+
+# Adicionar relacionamento na classe Empresa
+Empresa.apis = relationship("EmpresaAPI", back_populates="empresa")
+API.empresas = relationship("EmpresaAPI", back_populates="api")
+
 def gerar_hash_senha(senha: str) -> str:
     return bcrypt.hash(senha) 
