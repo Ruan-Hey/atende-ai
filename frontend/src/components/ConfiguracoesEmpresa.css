@@ -49,6 +49,7 @@
   border: 1px solid #e9ecef;
   border-radius: 0.5rem;
   font-size: 0.875rem;
+  color: #212529;
   background: #fafbfc;
   transition: all 0.2s ease;
   font-family: 'Inter', sans-serif;
@@ -86,6 +87,7 @@
   .empresa-select option {
     padding: 0.5rem;
     font-size: 0.875rem;
+    color: #212529;
   }
 }
 
@@ -209,6 +211,7 @@
   border: 1px solid #e9ecef;
   border-radius: 0.5rem;
   font-size: 0.875rem;
+  color: #212529;
   transition: all 0.2s ease;
   background: #fafbfc;
 }
@@ -229,6 +232,10 @@
 }
 
 .form-textarea::placeholder {
+  color: #adb5bd;
+}
+
+.form-input::placeholder {
   color: #adb5bd;
 }
 
@@ -789,6 +796,17 @@
   color: #6c757d;
   line-height: 1.4;
   font-weight: 400;
+}
+
+.connected-badge {
+  display: inline-block;
+  background: #28a745;
+  color: white;
+  font-size: 0.625rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  margin-top: 0.25rem;
+  font-weight: 500;
 }
 
 .accordion-toggle {

@@ -364,6 +364,13 @@ async def webhook_handler(empresa_slug: str, request: Request):
                 logger.error(f"Empresa não encontrada: {empresa_slug}")
                 raise HTTPException(status_code=404, detail="Empresa não encontrada")
             
+            # Buscar APIs conectadas da empresa
+            empresa_apis = session.query(EmpresaAPI).filter(
+                EmpresaAPI.empresa_id == empresa_db.id,
+                EmpresaAPI.ativo == True
+            ).all()
+            
+            # Criar configuração base da empresa
             empresa_config = {
                 'nome': empresa_db.nome,
                 'slug': empresa_db.slug,
@@ -375,6 +382,46 @@ async def webhook_handler(empresa_slug: str, request: Request):
                 'prompt': empresa_db.prompt,
                 'usar_buffer': empresa_db.usar_buffer if empresa_db.usar_buffer is not None else True
             }
+            
+            # Adicionar configurações das APIs conectadas
+            for empresa_api in empresa_apis:
+                api_name = empresa_api.api.nome
+                config = empresa_api.config or {}
+                
+                # Adicionar TODAS as configurações da API ao empresa_config
+                # Usar prefixo com nome da API para evitar conflitos
+                api_prefix = api_name.lower().replace(' ', '_')
+                
+                # Adicionar configuração completa da API
+                empresa_config[f'{api_prefix}_config'] = config
+                
+                # Adicionar campos específicos para compatibilidade
+                if api_name == "Google Calendar":
+                    empresa_config['google_calendar_client_id'] = config.get('google_calendar_client_id')
+                    empresa_config['google_calendar_client_secret'] = config.get('google_calendar_client_secret')
+                    empresa_config['google_sheets_id'] = config.get('google_sheets_id')
+                elif api_name == "Google Sheets":
+                    empresa_config['google_sheets_id'] = config.get('google_sheets_id')
+                elif api_name == "OpenAI":
+                    # OpenAI já vem da tabela empresas, mas pode ser sobrescrito
+                    if config.get('openai_key'):
+                        empresa_config['openai_key'] = config.get('openai_key')
+                elif api_name == "Trinks":
+                    empresa_config['trinks_api_key'] = config.get('api_key')
+                    empresa_config['trinks_base_url'] = config.get('base_url')
+                
+                # Adicionar campos genéricos para qualquer API
+                empresa_config[f'{api_prefix}_api_key'] = config.get('api_key')
+                empresa_config[f'{api_prefix}_base_url'] = config.get('base_url')
+                empresa_config[f'{api_prefix}_client_id'] = config.get('client_id')
+                empresa_config[f'{api_prefix}_client_secret'] = config.get('client_secret')
+                empresa_config[f'{api_prefix}_bearer_token'] = config.get('bearer_token')
+                empresa_config[f'{api_prefix}_username'] = config.get('username')
+                empresa_config[f'{api_prefix}_password'] = config.get('password')
+                
+                # Marcar API como ativa
+                empresa_config[f'{api_prefix}_enabled'] = True
+        
         except Exception as e:
             logger.error(f"Erro ao buscar empresa {empresa_slug}: {e}")
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
@@ -837,15 +884,28 @@ def get_empresa_configuracoes(
             if not empresa:
                 raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
+        # Importar o novo serviço
+        from services.empresa_api_service import EmpresaAPIService
+        
+        # Obter configurações da nova arquitetura
+        api_configs = EmpresaAPIService.get_all_empresa_configs(session, empresa.id)
+        
         # Retornar configurações no formato que o frontend espera
         return {
             "nome": empresa.nome,
             "whatsapp_number": empresa.whatsapp_number,
-            "google_sheets_id": empresa.google_sheets_id,
-            "openai_key": empresa.openai_key,
-            "twilio_sid": empresa.twilio_sid,
-            "twilio_token": empresa.twilio_token,
-            "twilio_number": empresa.twilio_number,
+            "google_sheets_id": api_configs.get("google_sheets_id"),
+            "openai_key": api_configs.get("openai_key"),
+            "twilio_sid": empresa.twilio_sid,  # Buscar diretamente da tabela empresas
+            "twilio_token": empresa.twilio_token,  # Buscar diretamente da tabela empresas
+            "twilio_number": empresa.twilio_number,  # Buscar diretamente da tabela empresas
+            "google_calendar_enabled": api_configs.get("google_calendar_enabled"),
+            "google_calendar_client_id": api_configs.get("google_calendar_client_id"),
+            "google_calendar_client_secret": api_configs.get("google_calendar_client_secret"),
+            "google_calendar_refresh_token": api_configs.get("google_calendar_refresh_token"),
+            "chatwoot_token": api_configs.get("chatwoot_token"),
+            "chatwoot_inbox_id": api_configs.get("chatwoot_inbox_id"),
+            "chatwoot_origem": api_configs.get("chatwoot_origem"),
             "usar_buffer": empresa.usar_buffer,
             "mensagem_quebrada": empresa.mensagem_quebrada,
             "prompt": empresa.prompt
@@ -875,27 +935,67 @@ def update_empresa_configuracoes(
             if not empresa:
                 raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
-        # Atualizar campos diretamente do formulário
+        # Importar o novo serviço
+        from services.empresa_api_service import EmpresaAPIService
+        
+        # Atualizar campos básicos da empresa
         if "nome" in configuracoes:
             empresa.nome = configuracoes["nome"]
         if "whatsapp_number" in configuracoes:
             empresa.whatsapp_number = configuracoes["whatsapp_number"]
-        if "google_sheets_id" in configuracoes:
-            empresa.google_sheets_id = configuracoes["google_sheets_id"]
-        if "openai_key" in configuracoes:
-            empresa.openai_key = configuracoes["openai_key"]
-        if "twilio_sid" in configuracoes:
-            empresa.twilio_sid = configuracoes["twilio_sid"]
-        if "twilio_token" in configuracoes:
-            empresa.twilio_token = configuracoes["twilio_token"]
-        if "twilio_number" in configuracoes:
-            empresa.twilio_number = configuracoes["twilio_number"]
         if "prompt" in configuracoes:
             empresa.prompt = configuracoes["prompt"]
         if "usar_buffer" in configuracoes:
             empresa.usar_buffer = configuracoes["usar_buffer"]
         if "mensagem_quebrada" in configuracoes:
             empresa.mensagem_quebrada = configuracoes["mensagem_quebrada"]
+        
+        # Atualizar dados do Twilio diretamente na tabela empresas
+        if "twilio_sid" in configuracoes:
+            empresa.twilio_sid = configuracoes["twilio_sid"]
+        if "twilio_token" in configuracoes:
+            empresa.twilio_token = configuracoes["twilio_token"]
+        if "twilio_number" in configuracoes:
+            empresa.twilio_number = configuracoes["twilio_number"]
+        
+        # Atualizar configurações de APIs usando a nova arquitetura
+        api_updates = {}
+        
+        # OpenAI
+        if "openai_key" in configuracoes:
+            api_updates["OpenAI"] = {"openai_key": configuracoes["openai_key"]}
+        
+        # Google Sheets
+        if "google_sheets_id" in configuracoes:
+            api_updates["Google Sheets"] = {"google_sheets_id": configuracoes["google_sheets_id"]}
+        
+        # Google Calendar
+        google_calendar_config = {}
+        if "google_calendar_enabled" in configuracoes:
+            google_calendar_config["google_calendar_enabled"] = configuracoes["google_calendar_enabled"]
+        if "google_calendar_client_id" in configuracoes:
+            google_calendar_config["google_calendar_client_id"] = configuracoes["google_calendar_client_id"]
+        if "google_calendar_client_secret" in configuracoes:
+            google_calendar_config["google_calendar_client_secret"] = configuracoes["google_calendar_client_secret"]
+        if "google_calendar_refresh_token" in configuracoes:
+            google_calendar_config["google_calendar_refresh_token"] = configuracoes["google_calendar_refresh_token"]
+        if google_calendar_config:
+            api_updates["Google Calendar"] = google_calendar_config
+        
+        # Chatwoot
+        chatwoot_config = {}
+        if "chatwoot_token" in configuracoes:
+            chatwoot_config["chatwoot_token"] = configuracoes["chatwoot_token"]
+        if "chatwoot_inbox_id" in configuracoes:
+            chatwoot_config["chatwoot_inbox_id"] = configuracoes["chatwoot_inbox_id"]
+        if "chatwoot_origem" in configuracoes:
+            chatwoot_config["chatwoot_origem"] = configuracoes["chatwoot_origem"]
+        if chatwoot_config:
+            api_updates["Chatwoot"] = chatwoot_config
+        
+        # Atualizar cada API
+        for api_name, config in api_updates.items():
+            EmpresaAPIService.update_empresa_api_config(session, empresa.id, api_name, config)
         
         session.commit()
         
@@ -1150,25 +1250,116 @@ def get_empresa_apis(empresa_id: int, current_user: Usuario = Depends(get_curren
     """Lista APIs conectadas a uma empresa"""
     session = SessionLocal()
     try:
-        empresa_apis = session.query(EmpresaAPI).filter(
-            EmpresaAPI.empresa_id == empresa_id,
-            EmpresaAPI.ativo == True
-        ).all()
+        # Importar o novo serviço
+        from services.empresa_api_service import EmpresaAPIService
         
-        apis_list = []
-        for empresa_api in empresa_apis:
-            api = empresa_api.api
-            apis_list.append({
-                "id": api.id,
-                "nome": api.nome,
-                "descricao": api.descricao,
-                "config": empresa_api.config,
-                "tools_count": len(api.schema_cache.get("endpoints", [])) if api.schema_cache else 0
-            })
+        # Buscar APIs ativas usando o novo serviço
+        apis = EmpresaAPIService.get_empresa_active_apis(session, empresa_id)
         
-        return {"success": True, "apis": apis_list}
+        return {"success": True, "apis": apis}
     except Exception as e:
         return {"success": False, "error": str(e)}
+    finally:
+        session.close()
+
+@app.get("/api/empresas/{empresa_slug}/apis")
+def get_empresa_apis_by_slug(empresa_slug: str, current_user: Usuario = Depends(get_current_user)):
+    """Buscar APIs ativas de uma empresa (para usuários da empresa)"""
+    session = SessionLocal()
+    try:
+        # Verificar se usuário tem acesso à empresa
+        if not current_user.is_superuser:
+            if not current_user.empresa_id:
+                raise HTTPException(status_code=403, detail="Acesso negado")
+            
+            empresa = session.query(Empresa).filter(Empresa.id == current_user.empresa_id).first()
+            if not empresa or empresa.slug != empresa_slug:
+                raise HTTPException(status_code=403, detail="Acesso negado à empresa")
+        else:
+            empresa = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
+            if not empresa:
+                raise HTTPException(status_code=404, detail="Empresa não encontrada")
+        
+        # Importar o novo serviço
+        from services.empresa_api_service import EmpresaAPIService
+        
+        # Buscar APIs ativas
+        apis = EmpresaAPIService.get_empresa_active_apis(session, empresa.id)
+        
+        return {"empresa": empresa.nome, "apis": apis}
+    finally:
+        session.close()
+
+@app.put("/api/empresas/{empresa_slug}/apis/{api_name}")
+def update_empresa_api_config(
+    empresa_slug: str,
+    api_name: str,
+    config: dict,
+    current_user: Usuario = Depends(get_current_user)
+):
+    """Atualizar configuração de uma API específica da empresa"""
+    session = SessionLocal()
+    try:
+        # Verificar se usuário tem acesso à empresa
+        if not current_user.is_superuser:
+            if not current_user.empresa_id:
+                raise HTTPException(status_code=403, detail="Acesso negado")
+            
+            empresa = session.query(Empresa).filter(Empresa.id == current_user.empresa_id).first()
+            if not empresa or empresa.slug != empresa_slug:
+                raise HTTPException(status_code=403, detail="Acesso negado à empresa")
+        else:
+            empresa = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
+            if not empresa:
+                raise HTTPException(status_code=404, detail="Empresa não encontrada")
+        
+        # Importar o novo serviço
+        from services.empresa_api_service import EmpresaAPIService
+        
+        # Atualizar configuração da API
+        success = EmpresaAPIService.update_empresa_api_config(session, empresa.id, api_name, config)
+        
+        if success:
+            return {"message": f"Configuração da API {api_name} atualizada com sucesso"}
+        else:
+            raise HTTPException(status_code=400, detail=f"Erro ao atualizar configuração da API {api_name}")
+            
+    finally:
+        session.close()
+
+@app.delete("/api/empresas/{empresa_slug}/apis/{api_name}")
+def deactivate_empresa_api(
+    empresa_slug: str,
+    api_name: str,
+    current_user: Usuario = Depends(get_current_user)
+):
+    """Desativar uma API da empresa"""
+    session = SessionLocal()
+    try:
+        # Verificar se usuário tem acesso à empresa
+        if not current_user.is_superuser:
+            if not current_user.empresa_id:
+                raise HTTPException(status_code=403, detail="Acesso negado")
+            
+            empresa = session.query(Empresa).filter(Empresa.id == current_user.empresa_id).first()
+            if not empresa or empresa.slug != empresa_slug:
+                raise HTTPException(status_code=403, detail="Acesso negado à empresa")
+        else:
+            empresa = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
+            if not empresa:
+                raise HTTPException(status_code=404, detail="Empresa não encontrada")
+        
+        # Importar o novo serviço
+        from services.empresa_api_service import EmpresaAPIService
+        
+        # Desativar API
+        success = EmpresaAPIService.deactivate_empresa_api(session, empresa.id, api_name)
+        
+        if success:
+            return {"message": f"API {api_name} desativada com sucesso"}
+        else:
+            raise HTTPException(status_code=400, detail=f"Erro ao desativar API {api_name}")
+            
     finally:
         session.close()
 

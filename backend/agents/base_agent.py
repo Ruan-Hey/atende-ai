@@ -65,107 +65,61 @@ class BaseAgent:
         return tools
     
     def _get_api_tools(self) -> List[Tool]:
-        """Gera Tools automaticamente das APIs conectadas"""
-        from sqlalchemy import create_engine
-        from sqlalchemy.orm import sessionmaker
-        from models import Empresa, EmpresaAPI, API
-        from config import Config
+        """Gera Tools automaticamente das APIs conectadas usando empresa_config"""
+        from tools.api_tools import APITools
         
         tools = []
         
         try:
-            # Buscar empresa
-            engine = create_engine(Config.POSTGRES_URL)
-            SessionLocal = sessionmaker(bind=engine)
-            session = SessionLocal()
-            
-            # Buscar empresa pelo slug
-            empresa_slug = self.empresa_config.get('slug')
-            if not empresa_slug:
-                return tools
-            
-            empresa = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
-            if not empresa:
-                return tools
-            
-            # Buscar APIs conectadas
-            empresa_apis = session.query(EmpresaAPI).filter(
-                EmpresaAPI.empresa_id == empresa.id,
-                EmpresaAPI.ativo == True
-            ).all()
-            
-            for empresa_api in empresa_apis:
-                api = empresa_api.api
-                if api.schema_cache and api.schema_cache.get('endpoints'):
-                    # Gerar Tools para cada endpoint
-                    for endpoint in api.schema_cache['endpoints']:
-                        tool = self._create_api_tool(api, endpoint, empresa_api.config)
+            # Buscar todas as APIs ativas no empresa_config
+            for key, value in self.empresa_config.items():
+                if key.endswith('_enabled') and value is True:
+                    # Extrair nome da API do prefixo
+                    api_name = key.replace('_enabled', '').replace('_', ' ').title()
+                    
+                    # Buscar configuração da API
+                    config_key = f"{key.replace('_enabled', '')}_config"
+                    api_config = self.empresa_config.get(config_key, {})
+                    
+                    if api_config:
+                        # Criar Tool genérica para a API
+                        tool = self._create_generic_api_tool(api_name, api_config)
                         if tool:
                             tools.append(tool)
-            
-            session.close()
             
         except Exception as e:
             logger.error(f"Erro ao gerar Tools das APIs: {e}")
         
         return tools
     
-    def _create_api_tool(self, api: API, endpoint: dict, config: dict) -> Tool:
-        """Cria uma Tool para um endpoint específico"""
+    def _create_generic_api_tool(self, api_name: str, config: dict) -> Tool:
+        """Cria uma Tool genérica para uma API"""
         try:
             from tools.api_tools import APITools
             
             # Criar função dinâmica
-            def api_call(**kwargs):
+            def api_call(endpoint_path: str, method: str = "GET", **kwargs):
                 api_tools = APITools()
                 return api_tools.call_api(
-                    api_name=api.nome,
-                    endpoint_path=endpoint['path'],
-                    method=endpoint['method'],
+                    api_name=api_name,
+                    endpoint_path=endpoint_path,
+                    method=method,
                     config=config,
                     **kwargs
                 )
             
             # Gerar descrição
-            description = endpoint.get('summary', endpoint.get('description', ''))
-            if not description:
-                description = f"{endpoint['method']} {endpoint['path']}"
-            
-            # Adicionar campos obrigatórios na descrição
-            required_fields = self._extract_required_fields(endpoint)
-            if required_fields:
-                description += f"\nCampos obrigatórios: {', '.join(required_fields)}"
+            description = f"Chama endpoints da API {api_name}. Use endpoint_path para especificar o caminho e method para o método HTTP (GET, POST, PUT, DELETE)."
             
             return Tool(
-                name=f"{api.nome.lower()}_{endpoint['operation_id']}",
+                name=f"{api_name.lower().replace(' ', '_')}_api_call",
                 func=api_call,
                 description=description
             )
             
         except Exception as e:
-            logger.error(f"Erro ao criar Tool para {endpoint['path']}: {e}")
+            logger.error(f"Erro ao criar Tool genérica para {api_name}: {e}")
             return None
-    
-    def _extract_required_fields(self, endpoint: dict) -> List[str]:
-        """Extrai campos obrigatórios do endpoint"""
-        required_fields = []
-        
-        # Verificar parâmetros obrigatórios
-        for param in endpoint.get('parameters', []):
-            if param.get('required', False):
-                required_fields.append(param['name'])
-        
-        # Verificar request body obrigatório
-        request_body = endpoint.get('request_body', {})
-        if request_body and request_body.get('required', False):
-            content = request_body.get('content', {})
-            for media_type, schema_info in content.items():
-                if 'application/json' in media_type:
-                    schema = schema_info.get('schema', {})
-                    required = schema.get('required', [])
-                    required_fields.extend(required)
-        
-        return list(set(required_fields))  # Remove duplicatas
     
     def _create_agent(self):
         """Cria o agent com as ferramentas configuradas"""

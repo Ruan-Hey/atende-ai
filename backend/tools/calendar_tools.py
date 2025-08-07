@@ -15,17 +15,30 @@ class CalendarTools:
     def _get_calendar_service(self, empresa_config: Dict[str, Any]) -> GoogleCalendarService:
         """Inicializa serviço do Google Calendar"""
         if not self.calendar_service:
-            self.calendar_service = GoogleCalendarService(
-                empresa_config.get('google_sheets_id')
-            )
+            # Criar configuração para o Google Calendar Service
+            calendar_config = {
+                'google_calendar_enabled': True,
+                'google_calendar_client_id': empresa_config.get('google_calendar_client_id'),
+                'google_calendar_client_secret': empresa_config.get('google_calendar_client_secret'),
+                'google_calendar_refresh_token': empresa_config.get('google_calendar_refresh_token'),
+                'google_sheets_id': empresa_config.get('google_sheets_id')
+            }
+            
+            self.calendar_service = GoogleCalendarService(calendar_config)
         return self.calendar_service
     
     def _get_sheets_service(self, empresa_config: Dict[str, Any]) -> GoogleSheetsService:
         """Inicializa serviço do Google Sheets"""
         if not self.sheets_service:
-            self.sheets_service = GoogleSheetsService(
-                empresa_config.get('google_sheets_id')
-            )
+            # Criar configuração para o Google Sheets Service
+            sheets_config = {
+                'google_sheets_id': empresa_config.get('google_sheets_id'),
+                'google_calendar_client_id': empresa_config.get('google_calendar_client_id'),
+                'google_calendar_client_secret': empresa_config.get('google_calendar_client_secret'),
+                'google_calendar_refresh_token': empresa_config.get('google_calendar_refresh_token')
+            }
+            
+            self.sheets_service = GoogleSheetsService(sheets_config)
         return self.sheets_service
     
     def verificar_disponibilidade(self, data: str, empresa_config: Dict[str, Any]) -> str:

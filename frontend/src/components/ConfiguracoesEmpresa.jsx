@@ -55,10 +55,23 @@ const ConfiguracoesEmpresa = () => {
 
   useEffect(() => {
     if (selectedEmpresa && selectedEmpresa !== 'nova-empresa') {
-    carregarConfiguracoes()
+      carregarConfiguracoes()
+    }
+  }, [selectedEmpresa])
+
+  // useEffect separado para carregar APIs SEM afetar os dados da empresa
+  useEffect(() => {
+    if (selectedEmpresa && selectedEmpresa !== 'nova-empresa') {
       carregarAPIs()
     }
   }, [selectedEmpresa])
+
+  // useEffect para mapear dados das APIs quando entrar na aba de APIs
+  useEffect(() => {
+    if (activeSection === 'conexoes-apis' && empresaAPIs.length > 0) {
+      mapearDadosAPIs(empresaAPIs)
+    }
+  }, [activeSection, empresaAPIs])
 
   const carregarEmpresas = async () => {
     try {
@@ -88,6 +101,8 @@ const ConfiguracoesEmpresa = () => {
       setLoading(true)
       const response = await apiService.getEmpresaConfiguracoes(selectedEmpresa)
       
+      console.log('Resposta da API:', response)
+      
       // Mapear os dados da API para o formato do formulário
       const configData = {
         nome: response.nome || '',
@@ -104,6 +119,8 @@ const ConfiguracoesEmpresa = () => {
         sheets_expanded: response.sheets_expanded || false,
         openai_expanded: response.openai_expanded || false
       }
+      
+      console.log('Configurações mapeadas:', configData)
       
       setConfiguracoes(configData)
 
@@ -158,7 +175,12 @@ const ConfiguracoesEmpresa = () => {
       if (empresa) {
         try {
           const empresaAPIsResponse = await apiService.getEmpresaAPIs(empresa.id)
+          console.log('APIs da empresa:', empresaAPIsResponse.apis)
+          console.log('Empresa ID:', empresa.id)
+          console.log('Empresa Slug:', empresa.slug)
           setEmpresaAPIs(empresaAPIsResponse.apis || [])
+          
+          // NÃO mapear aqui - será feito pelo useEffect quando entrar na aba
         } catch (error) {
           console.error('Erro ao carregar APIs da empresa:', error)
           setEmpresaAPIs([])
@@ -167,6 +189,42 @@ const ConfiguracoesEmpresa = () => {
     } catch (error) {
       console.error('Erro ao carregar APIs:', error)
     }
+  }
+
+  // Função separada para mapear dados das APIs - chamada apenas quando necessário
+  const mapearDadosAPIs = (empresaAPIs) => {
+    const novasConfiguracoes = { ...configuracoes }
+    
+    empresaAPIs.forEach(empApi => {
+      if (empApi.config) {
+        const apiId = empApi.api_id
+        
+        // Para APIs OAuth2 (Google Calendar, Google Sheets)
+        if (empApi.api_name === 'Google Calendar' || empApi.api_name === 'Google Sheets') {
+          if (empApi.config.google_calendar_client_id || empApi.config.google_sheets_client_id) {
+            novasConfiguracoes[`api_${apiId}_client_id`] = empApi.config.google_calendar_client_id || empApi.config.google_sheets_client_id
+          }
+          if (empApi.config.google_calendar_client_secret || empApi.config.google_sheets_client_secret) {
+            novasConfiguracoes[`api_${apiId}_client_secret`] = empApi.config.google_calendar_client_secret || empApi.config.google_sheets_client_secret
+          }
+        }
+        
+        // Para APIs com API Key (OpenAI, etc.)
+        else {
+          if (empApi.api_name === 'OpenAI' && empApi.config.openai_key) {
+            novasConfiguracoes[`api_${apiId}_key`] = empApi.config.openai_key
+          }
+          else {
+            const apiKey = empApi.config.api_key || empApi.config.key || empApi.config.token
+            if (apiKey) {
+              novasConfiguracoes[`api_${apiId}_key`] = apiKey
+            }
+          }
+        }
+      }
+    })
+    
+    setConfiguracoes(novasConfiguracoes)
   }
 
   const conectarAPI = async (apiId) => {
@@ -415,122 +473,108 @@ const ConfiguracoesEmpresa = () => {
                     {section.id === 'conexoes-apis' ? (
                       /* Integrações com accordion */
                       <div className="google-integrations">
-                        {/* APIs do Banco de Dados */}
-                        {apis.filter(api => api.ativo).map(api => (
-                          <div key={api.id} className="integration-group" data-api={api.nome.toLowerCase().replace(/\s+/g, '-')}>
-                            <div className="integration-header">
-                              <div className="integration-icon">
-                                {api.logo_url ? (
-                                  <img 
-                                    src={api.logo_url} 
-                                    alt={api.nome}
-                                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                                  />
-                                ) : (
-                                  '🔗'
-                                )}
+                        {/* Lista unificada de APIs */}
+                        {apis.filter(api => api.ativo).map(api => {
+                          // Verificar se a API está conectada
+                          const connectedAPI = empresaAPIs.find(empApi => empApi.api_name === api.nome)
+                          const isConnected = !!connectedAPI
+                          
+                          // Debug para Trinks
+                          if (api.nome.includes('Trinks')) {
+                            console.log('API Trinks encontrada:', api)
+                            console.log('Connected API:', connectedAPI)
+                            console.log('Is Connected:', isConnected)
+                            console.log('Todas as APIs da empresa:', empresaAPIs)
+                            console.log('Comparando nomes:')
+                            empresaAPIs.forEach(empApi => {
+                              console.log(`  - empApi.api_name: "${empApi.api_name}" vs api.nome: "${api.nome}"`)
+                            })
+                          }
+                          
+                          // Debug para Trinks
+                          if (api.nome.includes('Trinks')) {
+                            console.log('API Trinks encontrada:', api)
+                            console.log('Connected API:', connectedAPI)
+                            console.log('Is Connected:', isConnected)
+                            console.log('Todas as APIs da empresa:', empresaAPIs)
+                          }
+                          
+                          return (
+                            <div key={api.id} className="integration-group" data-api={api.nome.toLowerCase().replace(/\s+/g, '-')}>
+                              <div className="integration-header">
+                                <div className="integration-icon">
+                                  {api.logo_url ? (
+                                    <img 
+                                      src={api.logo_url} 
+                                      alt={api.nome}
+                                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                    />
+                                  ) : (
+                                    '🔗'
+                                  )}
+                                </div>
+                                <div className="integration-info">
+                                  <h3>{api.nome}</h3>
+                                  <p>{api.descricao}</p>
+                                </div>
+                                <button 
+                                  type="button"
+                                  className="accordion-toggle"
+                                  onClick={(e) => {
+                                    e.preventDefault()
+                                    e.stopPropagation()
+                                    setExpandedAccordions(prev => ({ ...prev, [`api_${api.id}`]: !prev[`api_${api.id}`] }))
+                                  }}
+                                >
+                                  {expandedAccordions[`api_${api.id}`] ? '−' : '+'}
+                                </button>
                               </div>
-                              <div className="integration-info">
-                                <h3>{api.nome}</h3>
-                                <p>{api.descricao}</p>
-                              </div>
-                              <button 
-                                type="button"
-                                className="accordion-toggle"
-                                onClick={(e) => {
-                                  e.preventDefault()
-                                  e.stopPropagation()
-                                  setExpandedAccordions(prev => ({ ...prev, [`api_${api.id}`]: !prev[`api_${api.id}`] }))
-                                }}
-                              >
-                                {expandedAccordions[`api_${api.id}`] ? '−' : '+'}
-                              </button>
-                            </div>
-                            
-                            {expandedAccordions[`api_${api.id}`] && (
-                              <div className="integration-fields">
-                                {api.tipo_auth === 'oauth2' ? (
-                                  <>
+                              
+                              {expandedAccordions[`api_${api.id}`] && (
+                                <div className="integration-fields">
+                                  {api.tipo_auth === 'oauth2' ? (
+                                    <>
+                                      <div className="field-group">
+                                        <label>Client ID</label>
+                                        <input
+                                          type="text"
+                                          name={`api_${api.id}_client_id`}
+                                          placeholder="Client ID"
+                                          className="form-input"
+                                          value={configuracoes[`api_${api.id}_client_id`] || ''}
+                                          onChange={handleChange}
+                                        />
+                                      </div>
+                                      <div className="field-group">
+                                        <label>Client Secret</label>
+                                        <input
+                                          type="password"
+                                          name={`api_${api.id}_client_secret`}
+                                          placeholder="Client Secret"
+                                          className="form-input"
+                                          value={configuracoes[`api_${api.id}_client_secret`] || ''}
+                                          onChange={handleChange}
+                                        />
+                                      </div>
+                                    </>
+                                  ) : (
                                     <div className="field-group">
-                                      <label>Client ID</label>
-                                      <input
-                                        type="text"
-                                        name={`api_${api.id}_client_id`}
-                                        placeholder="Client ID"
-                                        className="form-input"
-                                        value={configuracoes[`api_${api.id}_client_id`] || ''}
-                                        onChange={handleChange}
-                                      />
-                                    </div>
-                                    <div className="field-group">
-                                      <label>Client Secret</label>
+                                      <label>{api.nome} API Key</label>
                                       <input
                                         type="password"
-                                        name={`api_${api.id}_client_secret`}
-                                        placeholder="Client Secret"
+                                        name={`api_${api.id}_key`}
+                                        placeholder={`Chave da API ${api.nome}`}
                                         className="form-input"
-                                        value={configuracoes[`api_${api.id}_client_secret`] || ''}
+                                        value={configuracoes[`api_${api.id}_key`] || ''}
                                         onChange={handleChange}
                                       />
                                     </div>
-                                  </>
-                                ) : (
-                                  <div className="field-group">
-                                    <label>{api.nome} API Key</label>
-                                    <input
-                                      type="password"
-                                      name={`api_${api.id}_key`}
-                                      placeholder={`Chave da API ${api.nome}`}
-                                      className="form-input"
-                                      value={configuracoes[`api_${api.id}_key`] || ''}
-                                      onChange={handleChange}
-                                    />
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-
-                        {/* APIs Conectadas */}
-                        {empresaAPIs.filter(api => api.nome !== 'Trinks API V2').map(api => (
-                          <div key={api.id} className="integration-group" data-api={api.nome.toLowerCase().replace(/\s+/g, '-')}>
-                            <div className="integration-header">
-                              <div className="integration-icon">🔗</div>
-                              <div className="integration-info">
-                                <h3>{api.nome}</h3>
-                                <p>{api.descricao}</p>
-                              </div>
-                              <button 
-                                type="button"
-                                className="accordion-toggle"
-                                onClick={(e) => {
-                                  e.preventDefault()
-                                  e.stopPropagation()
-                                  setConfiguracoes(prev => ({ ...prev, [`api_${api.id}_expanded`]: !prev[`api_${api.id}_expanded`] }))
-                                }}
-                              >
-                                {configuracoes[`api_${api.id}_expanded`] ? '−' : '+'}
-                              </button>
-                            </div>
-                            
-                            {configuracoes[`api_${api.id}_expanded`] && (
-                              <div className="integration-fields">
-                                <div className="field-group">
-                                  <label>{api.nome} API Key</label>
-                                  <input
-                                    type="password"
-                                    name={`api_${api.id}_key`}
-                                    placeholder={`Chave da API ${api.nome}`}
-                                    className="form-input"
-                                    value={configuracoes[`api_${api.id}_key`] || ''}
-                                    onChange={handleChange}
-                                  />
+                                  )}
                                 </div>
-                              </div>
-                            )}
-                          </div>
-                        ))}
+                              )}
+                            </div>
+                          )
+                        })}
                       </div>
                     ) : (
                       /* Campos normais para outras abas */

@@ -14,32 +14,79 @@ import pickle
 logger = logging.getLogger(__name__)
 
 class GoogleCalendarService:
-    def __init__(self, config_path: str):
-        self.config_path = config_path
+    def __init__(self, config: Dict[str, any] = None):
+        """
+        Inicializa o serviço do Google Calendar
+        Args:
+            config: Dicionário com configurações (client_id, client_secret, refresh_token, etc.)
+        """
+        self.config = config or {}
         self.SCOPES = ['https://www.googleapis.com/auth/calendar.readonly', 
                        'https://www.googleapis.com/auth/calendar.events']
         self.creds = None
         self.service = None
-        self._load_config()
+        
+        # Verifica se o Google Calendar está habilitado
+        if not self.config.get('google_calendar_enabled', False):
+            logger.warning("Google Calendar não está habilitado na configuração")
+            return
+        
         self._authenticate()
-    
-    def _load_config(self):
-        """Carrega configuração do Google Calendar"""
-        try:
-            with open(self.config_path, 'r') as f:
-                self.config = json.load(f)
-            
-            # Verifica se o Google Calendar está habilitado
-            if not self.config.get('google_calendar_enabled', False):
-                logger.warning("Google Calendar não está habilitado na configuração")
-                return
-                
-        except Exception as e:
-            logger.error(f"Erro ao carregar configuração: {e}")
-            self.config = {}
     
     def _authenticate(self):
         """Autentica com Google Calendar API"""
+        try:
+            # Se temos configuração da nova arquitetura, usar ela
+            if self.config.get('google_calendar_client_id') and self.config.get('google_calendar_client_secret'):
+                logger.info("Usando configuração da nova arquitetura")
+                self._authenticate_with_config()
+            else:
+                # Fallback para arquivo de credenciais
+                logger.info("Usando arquivo de credenciais")
+                self._authenticate_with_file()
+            
+        except Exception as e:
+            logger.error(f"Erro na autenticação do Google Calendar: {e}")
+    
+    def _authenticate_with_config(self):
+        """Autentica usando configuração da nova arquitetura"""
+        try:
+            client_id = self.config.get('google_calendar_client_id')
+            client_secret = self.config.get('google_calendar_client_secret')
+            refresh_token = self.config.get('google_calendar_refresh_token')
+            
+            if not client_id or not client_secret:
+                logger.error("Client ID e Client Secret são obrigatórios")
+                return
+            
+            # Criar credenciais
+            if refresh_token:
+                # Usar refresh token se disponível
+                self.creds = Credentials(
+                    None,  # No access token initially
+                    refresh_token=refresh_token,
+                    token_uri="https://oauth2.googleapis.com/token",
+                    client_id=client_id,
+                    client_secret=client_secret,
+                    scopes=self.SCOPES
+                )
+                
+                # Refresh das credenciais
+                self.creds.refresh(Request())
+                logger.info("Autenticado com refresh token")
+            else:
+                # Fluxo OAuth2 (para desenvolvimento)
+                logger.warning("Refresh token não encontrado, usando fluxo OAuth2")
+                self._authenticate_with_file()
+            
+            self.service = build('calendar', 'v3', credentials=self.creds)
+            logger.info("Google Calendar autenticado com sucesso")
+            
+        except Exception as e:
+            logger.error(f"Erro na autenticação com configuração: {e}")
+    
+    def _authenticate_with_file(self):
+        """Autentica usando arquivo de credenciais (fallback)"""
         try:
             # Verifica se já temos credenciais salvas
             if os.path.exists('token.pickle'):
@@ -69,7 +116,7 @@ class GoogleCalendarService:
             logger.info("Google Calendar autenticado com sucesso")
             
         except Exception as e:
-            logger.error(f"Erro na autenticação do Google Calendar: {e}")
+            logger.error(f"Erro na autenticação com arquivo: {e}")
     
     def get_available_slots(self, date: str = None, days_ahead: int = 7) -> List[Dict]:
         """
