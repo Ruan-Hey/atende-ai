@@ -1,7 +1,9 @@
 from langchain.agents import initialize_agent, AgentType
-from langchain_openai import OpenAI
+from langchain_openai import OpenAI, ChatOpenAI
 from langchain.memory import ConversationBufferWindowMemory
 from langchain.tools import Tool
+from langchain_core.tools import tool as lc_tool
+from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, AIMessage
 from typing import Dict, Any, List
 import logging
 from models import API
@@ -18,12 +20,19 @@ class BaseAgent:
             temperature=0.1,
             max_tokens=500
         )
+        # Chat model para tool-calling
+        self.chat_llm = ChatOpenAI(
+            api_key=empresa_config.get('openai_key'),
+            temperature=0.1
+        )
         self.memory = ConversationBufferWindowMemory(
             k=20,
             return_messages=True
         )
         self.current_context: Dict[str, Any] = {}
         self.tools = self._setup_tools()
+        # Tools estruturadas para tool-calling nativo
+        self.structured_tools = self._setup_structured_tools()
         self.agent = self._create_agent()
     
     def _setup_tools(self) -> List[Tool]:
@@ -96,7 +105,7 @@ class BaseAgent:
                 return "Parâmetros ausentes: forneça {'mensagem': '...', 'cliente_id': '...'}"
             return message_tools.enviar_resposta(mensagem, cliente_id, self.empresa_config, canal=self.current_context.get('channel', 'whatsapp'))
         
-        # Tools básicas
+        # Tools básicas (modo compatibilidade com AgentExecutor)
         tools = [
             Tool(
                 name="buscar_cliente",
@@ -123,7 +132,42 @@ class BaseAgent:
         # Adicionar Tools das APIs conectadas
         tools.extend(self._get_api_tools())
         
+        # Guardar referências para wrappers no structured setup
+        self._wrappers = {
+            "buscar_cliente": buscar_cliente_wrapper,
+            "verificar_calendario": verificar_calendario_wrapper,
+            "fazer_reserva": fazer_reserva_wrapper,
+            "enviar_mensagem": enviar_mensagem_wrapper,
+        }
+        
         return tools
+    
+    def _setup_structured_tools(self):
+        """Cria StructuredTools com assinaturas tipadas para tool-calling nativo"""
+        from typing import Optional
+        structured = []
+        
+        @lc_tool("buscar_cliente")
+        def t_buscar_cliente(cliente_id: str) -> str:
+            return self._wrappers["buscar_cliente"](cliente_id=cliente_id)
+        structured.append(t_buscar_cliente)
+        
+        @lc_tool("verificar_calendario")
+        def t_verificar_calendario(data: str) -> str:
+            return self._wrappers["verificar_calendario"](data=data)
+        structured.append(t_verificar_calendario)
+        
+        @lc_tool("fazer_reserva")
+        def t_fazer_reserva(data: str, hora: str, cliente: str) -> str:
+            return self._wrappers["fazer_reserva"](data=data, hora=hora, cliente=cliente)
+        structured.append(t_fazer_reserva)
+        
+        @lc_tool("enviar_mensagem")
+        def t_enviar_mensagem(mensagem: str, cliente_id: str) -> str:
+            return self._wrappers["enviar_mensagem"](mensagem=mensagem, cliente_id=cliente_id)
+        structured.append(t_enviar_mensagem)
+        
+        return structured
     
     def _get_api_tools(self) -> List[Tool]:
         """Gera Tools automaticamente das APIs conectadas usando empresa_config"""
@@ -147,7 +191,7 @@ class BaseAgent:
                         tool = self._create_generic_api_tool(api_name, api_config)
                         if tool:
                             tools.append(tool)
-            
+        
         except Exception as e:
             logger.error(f"Erro ao gerar Tools das APIs: {e}")
         
@@ -183,7 +227,7 @@ class BaseAgent:
             return None
     
     def _create_agent(self):
-        """Cria o agent com as ferramentas configuradas"""
+        """Cria o agent com as ferramentas configuradas (modo legado)"""
         return initialize_agent(
             tools=self.tools,
             llm=self.llm,
@@ -194,32 +238,61 @@ class BaseAgent:
         )
     
     async def process_message(self, message: str, context: Dict[str, Any]) -> str:
-        """Processa mensagem usando o agent"""
+        """Processa mensagem usando tool-calling nativo (fallback para legado em erro)"""
         try:
             # Guardar contexto atual para wrappers
             self.current_context = context or {}
             
             # Construir prompt com contexto da empresa
             system_prompt = self._build_system_prompt(context)
-            
-            # Log do prompt para debug
             logger.info(f"System prompt: {system_prompt}")
             
-            # Usar o agent com as tools configuradas
-            # Instruir o modelo a usar JSON no Action Input
-            agent_input = (
-                f"{system_prompt}\n\nMensagem do cliente: {message}\n\n"
-                "Quando decidir usar uma ferramenta, SEMPRE forneça Action Input como um JSON válido."
-            )
+            # Montar conversa para tool-calling
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=message)
+            ]
             
-            # Executar o agent
-            response = await self.agent.ainvoke({"input": agent_input})
+            llm_with_tools = self.chat_llm.bind_tools(self.structured_tools)
             
-            return response["output"].strip()
+            # Loop de execução de tools (até 3 chamadas)
+            for _ in range(3):
+                ai_msg: AIMessage = await llm_with_tools.ainvoke(messages)
+                messages.append(ai_msg)
+                
+                if not ai_msg.tool_calls:
+                    # Sem tool calls → resposta final
+                    return (ai_msg.content or "").strip() or "Tudo certo! Como posso ajudar?"
+                
+                # Executar cada tool call
+                for call in ai_msg.tool_calls:
+                    name = call["name"] if isinstance(call, dict) else call.name
+                    args = call["args"] if isinstance(call, dict) else call.args
+                    try:
+                        tool_map = {t.name: t for t in self.structured_tools}
+                        if name in tool_map:
+                            result = tool_map[name].invoke(args)
+                        else:
+                            result = f"Tool desconhecida: {name}"
+                    except Exception as e:
+                        result = f"Erro na tool {name}: {e}"
+                    messages.append(ToolMessage(content=str(result), tool_call_id=(call.get("id") if isinstance(call, dict) else call.id)))
             
+            # Se exceder chamadas, retornar última resposta do modelo
+            return "Para continuar, preciso de mais detalhes (data/hora/cliente)."
+        
         except Exception as e:
-            logger.error(f"Erro ao processar mensagem com agent: {e}")
-            return "Desculpe, tive um problema técnico. Como posso ajudar?"
+            logger.error(f"Erro no tool-calling, usando modo legado: {e}")
+            # Fallback: modo legado
+            try:
+                agent_input = (
+                    f"{system_prompt}\n\nMensagem do cliente: {message}\n\n"
+                    "Quando decidir usar uma ferramenta, SEMPRE forneça Action Input como um JSON válido."
+                )
+                response = await self.agent.ainvoke({"input": agent_input})
+                return response["output"].strip()
+            except Exception:
+                return "Desculpe, tive um problema técnico. Como posso ajudar?"
     
     def _build_system_prompt(self, context: Dict[str, Any]) -> str:
         """Constrói prompt do sistema baseado na configuração da empresa"""
