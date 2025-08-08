@@ -69,7 +69,8 @@ const ConfiguracoesEmpresa = () => {
   // useEffect para mapear dados das APIs quando entrar na aba de APIs
   useEffect(() => {
     if (activeSection === 'conexoes-apis' && empresaAPIs.length > 0) {
-      mapearDadosAPIs(empresaAPIs)
+      // Só mapear dados que não existem no estado atual
+      mapearDadosAPIs(empresaAPIs, true)
     }
   }, [activeSection, empresaAPIs])
 
@@ -192,7 +193,7 @@ const ConfiguracoesEmpresa = () => {
   }
 
   // Função separada para mapear dados das APIs - chamada apenas quando necessário
-  const mapearDadosAPIs = (empresaAPIs) => {
+  const mapearDadosAPIs = (empresaAPIs, onlyNew = false) => {
     const novasConfiguracoes = { ...configuracoes }
     
     empresaAPIs.forEach(empApi => {
@@ -202,22 +203,38 @@ const ConfiguracoesEmpresa = () => {
         // Para APIs OAuth2 (Google Calendar, Google Sheets)
         if (empApi.api_name === 'Google Calendar' || empApi.api_name === 'Google Sheets') {
           if (empApi.config.google_calendar_client_id || empApi.config.google_sheets_client_id) {
-            novasConfiguracoes[`api_${apiId}_client_id`] = empApi.config.google_calendar_client_id || empApi.config.google_sheets_client_id
+            const fieldName = `api_${apiId}_client_id`
+            // Só mapear se não existe no estado ou se onlyNew é false
+            if (!onlyNew || !novasConfiguracoes[fieldName]) {
+              novasConfiguracoes[fieldName] = empApi.config.google_calendar_client_id || empApi.config.google_sheets_client_id
+            }
           }
           if (empApi.config.google_calendar_client_secret || empApi.config.google_sheets_client_secret) {
-            novasConfiguracoes[`api_${apiId}_client_secret`] = empApi.config.google_calendar_client_secret || empApi.config.google_sheets_client_secret
+            const fieldName = `api_${apiId}_client_secret`
+            // Só mapear se não existe no estado ou se onlyNew é false
+            if (!onlyNew || !novasConfiguracoes[fieldName]) {
+              novasConfiguracoes[fieldName] = empApi.config.google_calendar_client_secret || empApi.config.google_sheets_client_secret
+            }
           }
         }
         
         // Para APIs com API Key (OpenAI, etc.)
         else {
           if (empApi.api_name === 'OpenAI' && empApi.config.openai_key) {
-            novasConfiguracoes[`api_${apiId}_key`] = empApi.config.openai_key
+            const fieldName = `api_${apiId}_key`
+            // Só mapear se não existe no estado ou se onlyNew é false
+            if (!onlyNew || !novasConfiguracoes[fieldName]) {
+              novasConfiguracoes[fieldName] = empApi.config.openai_key
+            }
           }
           else {
             const apiKey = empApi.config.api_key || empApi.config.key || empApi.config.token
             if (apiKey) {
-              novasConfiguracoes[`api_${apiId}_key`] = apiKey
+              const fieldName = `api_${apiId}_key`
+              // Só mapear se não existe no estado ou se onlyNew é false
+              if (!onlyNew || !novasConfiguracoes[fieldName]) {
+                novasConfiguracoes[fieldName] = apiKey
+              }
             }
           }
         }
@@ -248,6 +265,7 @@ const ConfiguracoesEmpresa = () => {
   const handleChange = e => {
     const { name, value, type, checked } = e.target
     const newValue = type === 'checkbox' ? checked : value
+    console.log('Campo alterado:', name, 'Novo valor:', newValue)
     setConfiguracoes(f => ({ ...f, [name]: newValue }))
   }
 
@@ -257,7 +275,7 @@ const ConfiguracoesEmpresa = () => {
       setError('')
       setSuccess(false)
       
-
+      console.log('Dados sendo enviados:', configuracoes)
       
       await apiService.updateEmpresaConfiguracoes(selectedEmpresa, configuracoes)
       setSuccess(true)

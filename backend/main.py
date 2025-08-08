@@ -884,32 +884,70 @@ def get_empresa_configuracoes(
             if not empresa:
                 raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
-        # Importar o novo serviço
-        from services.empresa_api_service import EmpresaAPIService
+        # Buscar APIs conectadas da empresa
+        from models import EmpresaAPI, API
         
-        # Obter configurações da nova arquitetura
-        api_configs = EmpresaAPIService.get_all_empresa_configs(session, empresa.id)
+        empresa_apis = session.query(EmpresaAPI).filter(
+            EmpresaAPI.empresa_id == empresa.id,
+            EmpresaAPI.ativo == True
+        ).all()
         
-        # Retornar configurações no formato que o frontend espera
-        return {
+        # Inicializar configurações com dados da empresa
+        config_data = {
             "nome": empresa.nome,
             "whatsapp_number": empresa.whatsapp_number,
-            "google_sheets_id": api_configs.get("google_sheets_id"),
-            "openai_key": api_configs.get("openai_key"),
-            "twilio_sid": empresa.twilio_sid,  # Buscar diretamente da tabela empresas
-            "twilio_token": empresa.twilio_token,  # Buscar diretamente da tabela empresas
-            "twilio_number": empresa.twilio_number,  # Buscar diretamente da tabela empresas
-            "google_calendar_enabled": api_configs.get("google_calendar_enabled"),
-            "google_calendar_client_id": api_configs.get("google_calendar_client_id"),
-            "google_calendar_client_secret": api_configs.get("google_calendar_client_secret"),
-            "google_calendar_refresh_token": api_configs.get("google_calendar_refresh_token"),
-            "chatwoot_token": api_configs.get("chatwoot_token"),
-            "chatwoot_inbox_id": api_configs.get("chatwoot_inbox_id"),
-            "chatwoot_origem": api_configs.get("chatwoot_origem"),
+            "prompt": empresa.prompt,
             "usar_buffer": empresa.usar_buffer,
             "mensagem_quebrada": empresa.mensagem_quebrada,
-            "prompt": empresa.prompt
+            # Twilio vem diretamente da tabela empresas
+            "twilio_sid": empresa.twilio_sid,
+            "twilio_token": empresa.twilio_token,
+            "twilio_number": empresa.twilio_number
         }
+        
+        # Adicionar configurações das APIs conectadas
+        for empresa_api in empresa_apis:
+            api = empresa_api.api
+            config = empresa_api.config or {}
+            
+            # Criar prefixo baseado no nome da API
+            api_prefix = api.nome.lower().replace(' ', '_')
+            
+            # Adicionar configuração completa da API
+            config_data[f'{api_prefix}_config'] = config
+            
+            # Adicionar campos específicos para compatibilidade
+            if api.nome == "Google Calendar":
+                config_data['google_calendar_enabled'] = config.get('google_calendar_enabled', True)
+                config_data['google_calendar_client_id'] = config.get('google_calendar_client_id')
+                config_data['google_calendar_client_secret'] = config.get('google_calendar_client_secret')
+                config_data['google_calendar_refresh_token'] = config.get('google_calendar_refresh_token')
+            elif api.nome == "Google Sheets":
+                config_data['google_sheets_id'] = config.get('google_sheets_id')
+            elif api.nome == "OpenAI":
+                config_data['openai_key'] = config.get('openai_key')
+            elif api.nome == "Trinks":
+                config_data['trinks_api_key'] = config.get('api_key')
+                config_data['trinks_base_url'] = config.get('base_url')
+            elif api.nome == "Chatwoot":
+                config_data['chatwoot_token'] = config.get('chatwoot_token')
+                config_data['chatwoot_inbox_id'] = config.get('chatwoot_inbox_id')
+                config_data['chatwoot_origem'] = config.get('chatwoot_origem')
+            
+            # Adicionar campos genéricos para qualquer API
+            config_data[f'{api_prefix}_api_key'] = config.get('api_key')
+            config_data[f'{api_prefix}_base_url'] = config.get('base_url')
+            config_data[f'{api_prefix}_client_id'] = config.get('client_id')
+            config_data[f'{api_prefix}_client_secret'] = config.get('client_secret')
+            config_data[f'{api_prefix}_bearer_token'] = config.get('bearer_token')
+            config_data[f'{api_prefix}_username'] = config.get('username')
+            config_data[f'{api_prefix}_password'] = config.get('password')
+            
+            # Marcar API como ativa
+            config_data[f'{api_prefix}_enabled'] = True
+        
+        return config_data
+        
     finally:
         session.close()
 
@@ -922,6 +960,9 @@ def update_empresa_configuracoes(
     """Atualizar configurações da empresa"""
     session = SessionLocal()
     try:
+        logger.info(f"Recebendo atualização para empresa {empresa_slug}")
+        logger.info(f"Dados recebidos: {configuracoes}")
+        
         # Verificar se usuário tem acesso à empresa
         if not current_user.is_superuser:
             if not current_user.empresa_id:
@@ -934,9 +975,6 @@ def update_empresa_configuracoes(
             empresa = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
             if not empresa:
                 raise HTTPException(status_code=404, detail="Empresa não encontrada")
-        
-        # Importar o novo serviço
-        from services.empresa_api_service import EmpresaAPIService
         
         # Atualizar campos básicos da empresa
         if "nome" in configuracoes:
@@ -958,48 +996,100 @@ def update_empresa_configuracoes(
         if "twilio_number" in configuracoes:
             empresa.twilio_number = configuracoes["twilio_number"]
         
-        # Atualizar configurações de APIs usando a nova arquitetura
-        api_updates = {}
+        # Processar configurações de APIs dinamicamente
+        # Buscar todas as APIs disponíveis
+        from models import API, EmpresaAPI
         
-        # OpenAI
-        if "openai_key" in configuracoes:
-            api_updates["OpenAI"] = {"openai_key": configuracoes["openai_key"]}
+        # Processar campos que começam com 'api_' (formato dinâmico)
+        api_configs = {}
+        for key, value in configuracoes.items():
+            if key.startswith('api_') and value:  # Só processar se tem valor
+                # Extrair informações do campo (ex: api_7_key -> API ID 7, campo 'key')
+                parts = key.split('_')
+                if len(parts) >= 3:
+                    api_id = parts[1]
+                    field_name = '_'.join(parts[2:])
+                    
+                    if api_id not in api_configs:
+                        api_configs[api_id] = {}
+                    api_configs[api_id][field_name] = value
         
-        # Google Sheets
-        if "google_sheets_id" in configuracoes:
-            api_updates["Google Sheets"] = {"google_sheets_id": configuracoes["google_sheets_id"]}
+        logger.info(f"Configurações de APIs processadas: {api_configs}")
         
-        # Google Calendar
-        google_calendar_config = {}
-        if "google_calendar_enabled" in configuracoes:
-            google_calendar_config["google_calendar_enabled"] = configuracoes["google_calendar_enabled"]
-        if "google_calendar_client_id" in configuracoes:
-            google_calendar_config["google_calendar_client_id"] = configuracoes["google_calendar_client_id"]
-        if "google_calendar_client_secret" in configuracoes:
-            google_calendar_config["google_calendar_client_secret"] = configuracoes["google_calendar_client_secret"]
-        if "google_calendar_refresh_token" in configuracoes:
-            google_calendar_config["google_calendar_refresh_token"] = configuracoes["google_calendar_refresh_token"]
-        if google_calendar_config:
-            api_updates["Google Calendar"] = google_calendar_config
+        # Atualizar cada API encontrada
+        for api_id_str, config in api_configs.items():
+            try:
+                api_id = int(api_id_str)
+                
+                # Verificar se a API existe
+                api = session.query(API).filter(API.id == api_id).first()
+                if not api:
+                    logger.warning(f"API ID {api_id} não encontrada")
+                    continue
+                
+                logger.info(f"Processando API {api.nome} (ID: {api_id}) com config: {config}")
+                
+                # Mapear campos específicos para cada API
+                mapped_config = config.copy()
+                if api.nome == "OpenAI" and "key" in config:
+                    mapped_config["openai_key"] = config["key"]
+                    del mapped_config["key"]
+                    logger.info(f"Mapeamento OpenAI: {config} -> {mapped_config}")
+                elif api.nome == "Trinks" and "key" in config:
+                    mapped_config["api_key"] = config["key"]
+                    del mapped_config["key"]
+                elif api.nome == "Chatwoot" and "key" in config:
+                    mapped_config["chatwoot_token"] = config["key"]
+                    del mapped_config["key"]
+                
+                # Buscar ou criar conexão empresa-API
+                empresa_api = session.query(EmpresaAPI).filter(
+                    EmpresaAPI.empresa_id == empresa.id,
+                    EmpresaAPI.api_id == api_id
+                ).first()
+                
+                if not empresa_api:
+                    # Criar nova conexão
+                    empresa_api = EmpresaAPI(
+                        empresa_id=empresa.id,
+                        api_id=api_id,
+                        config=mapped_config,
+                        ativo=True
+                    )
+                    session.add(empresa_api)
+                    logger.info(f"Nova conexão criada para API {api.nome}")
+                else:
+                    # Atualizar configuração existente
+                    current_config = empresa_api.config or {}
+                    logger.info(f"Config atual: {current_config}")
+                    new_config = {**current_config, **mapped_config}
+                    logger.info(f"Config após update: {new_config}")
+                    empresa_api.config = new_config
+                    empresa_api.ativo = True
+                
+                logger.info(f"Atualizando API {api.nome} (ID: {api_id}) para empresa {empresa.nome}")
+                
+            except ValueError:
+                logger.warning(f"API ID inválido: {api_id_str}")
+                continue
         
-        # Chatwoot
-        chatwoot_config = {}
-        if "chatwoot_token" in configuracoes:
-            chatwoot_config["chatwoot_token"] = configuracoes["chatwoot_token"]
-        if "chatwoot_inbox_id" in configuracoes:
-            chatwoot_config["chatwoot_inbox_id"] = configuracoes["chatwoot_inbox_id"]
-        if "chatwoot_origem" in configuracoes:
-            chatwoot_config["chatwoot_origem"] = configuracoes["chatwoot_origem"]
-        if chatwoot_config:
-            api_updates["Chatwoot"] = chatwoot_config
+        # Remover seção de APIs específicas por nome - está conflitando com processamento dinâmico
+        # As APIs agora são processadas apenas via campos dinâmicos (api_X_key)
         
-        # Atualizar cada API
-        for api_name, config in api_updates.items():
-            EmpresaAPIService.update_empresa_api_config(session, empresa.id, api_name, config)
-        
+        session.flush()
         session.commit()
+        logger.info(f"Configurações atualizadas com sucesso para empresa {empresa.nome}")
+        
+        # Removido refresh pós-commit para evitar erros de sessão não vinculada
         
         return {"message": "Configurações atualizadas com sucesso"}
+        
+    except Exception as e:
+        # Só fazer rollback se realmente houve erro na transação
+        if session.is_active:
+            session.rollback()
+        logger.error(f"Erro ao atualizar configurações: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao atualizar configurações: {str(e)}")
     finally:
         session.close() 
 
