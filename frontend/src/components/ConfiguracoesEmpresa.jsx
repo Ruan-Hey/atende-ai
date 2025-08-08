@@ -277,6 +277,64 @@ const ConfiguracoesEmpresa = () => {
     setConfiguracoes(f => ({ ...f, [name]: newValue }))
   }
 
+  const handleServiceAccountUpload = async (e) => {
+    const file = e.target.files[0]
+    if (!file) {
+      console.log('Nenhum arquivo selecionado')
+      return
+    }
+    
+    console.log('Arquivo selecionado:', file.name, 'Tamanho:', file.size, 'Tipo:', file.type)
+    
+    try {
+      setSaving(true)
+      setError('')
+      
+      const formData = new FormData()
+      formData.append('file', file)
+      
+      console.log('FormData criado, enviando para API...')
+      
+      const response = await apiService.uploadGoogleServiceAccount(selectedEmpresa, formData)
+      
+      console.log('Resposta da API:', response)
+      
+      if (response.success) {
+        setSuccess('Service Account configurado com sucesso!')
+        setTimeout(() => setSuccess(false), 3000)
+        carregarConfiguracoes() // Recarregar configurações
+      }
+    } catch (error) {
+      console.error('Erro ao fazer upload:', error)
+      setError('Erro ao fazer upload do Service Account: ' + error.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleGoogleOAuth = async () => {
+    try {
+      setSaving(true)
+      setError('')
+      
+      // Buscar URL de autorização
+      const response = await apiService.getGoogleOAuthUrl(selectedEmpresa)
+      
+      if (response.oauth_url) {
+        // Abrir popup ou redirecionar
+        window.open(response.oauth_url, '_blank', 'width=500,height=600')
+        
+        setSuccess('Abrindo autorização do Google...')
+        setTimeout(() => setSuccess(false), 3000)
+      }
+    } catch (error) {
+      console.error('Erro ao iniciar OAuth2:', error)
+      setError('Erro ao conectar Google Calendar: ' + error.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleSalvar = async () => {
     try {
       setSaving(true)
@@ -597,6 +655,46 @@ const ConfiguracoesEmpresa = () => {
                                           Deixe vazio se ainda não configurou o OAuth2.
                                         </small>
                                       </div>
+                                      
+                                      {/* Service Account para Google Calendar */}
+                                      {api.nome === 'Google Calendar' && (
+                                        <div className="field-group">
+                                          <label>Service Account JSON</label>
+                                          <input
+                                            type="file"
+                                            accept=".json"
+                                            onChange={handleServiceAccountUpload}
+                                            className="form-input"
+                                            style={{ padding: '0.5rem' }}
+                                          />
+                                          <small className="field-hint">
+                                            Faça upload do arquivo JSON do Service Account para autenticação automática.
+                                            <br />
+                                            <a href="https://console.cloud.google.com/iam-admin/serviceaccounts" target="_blank" rel="noopener noreferrer">
+                                              Criar Service Account no Google Cloud Console
+                                            </a>
+                                          </small>
+                                          
+                                          {/* Botão OAuth2 */}
+                                          <div style={{ marginTop: '1rem' }}>
+                                            <button
+                                              type="button"
+                                              onClick={handleGoogleOAuth}
+                                              className="save-btn"
+                                              style={{ 
+                                                backgroundColor: '#4285f4', 
+                                                borderColor: '#4285f4',
+                                                marginTop: '0.5rem'
+                                              }}
+                                            >
+                                              🔗 Conectar Google Calendar (OAuth2)
+                                            </button>
+                                            <small className="field-hint">
+                                              Ou use OAuth2 para conectar automaticamente (mais simples)
+                                            </small>
+                                          </div>
+                                        </div>
+                                      )}
                                     </>
                                   ) : (
                                     <div className="field-group">

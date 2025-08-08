@@ -110,6 +110,48 @@ class ApiService {
     })
   }
 
+  // Upload de Service Account JSON para Google Calendar
+  async uploadGoogleServiceAccount(empresaSlug, formData) {
+    const url = `${this.baseURL}/api/empresas/${empresaSlug}/google-service-account`
+    const token = localStorage.getItem('token')
+    
+    if (!token) {
+      throw new Error('Usuário não autenticado')
+    }
+    
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          // Não incluir Content-Type para FormData
+        },
+        body: formData
+      })
+      
+      if (response.status === 401) {
+        this.logout()
+        window.location.href = '/#/login'
+        throw new Error('Sessão expirada')
+      }
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Erro no upload')
+      }
+      
+      return await response.json()
+    } catch (error) {
+      console.error('Upload failed:', error)
+      throw error
+    }
+  }
+
+  // Buscar URL de autorização OAuth2 do Google Calendar
+  async getGoogleOAuthUrl(empresaSlug) {
+    return this.authenticatedRequest(`/api/empresas/${empresaSlug}/google-oauth-url`)
+  }
+
   // APIs - Listar todas as APIs
   async getAPIs() {
     return this.authenticatedRequest('/api/admin/apis')

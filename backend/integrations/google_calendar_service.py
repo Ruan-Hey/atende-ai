@@ -56,6 +56,13 @@ class GoogleCalendarService:
             client_id = self.config.get('google_calendar_client_id')
             client_secret = self.config.get('google_calendar_client_secret')
             refresh_token = self.config.get('google_calendar_refresh_token')
+            service_account = self.config.get('google_calendar_service_account')
+            
+            # Verificar se temos Service Account (prioridade)
+            if service_account:
+                logger.info("Usando Service Account para autenticação")
+                self._authenticate_with_service_account(service_account)
+                return
             
             if not client_id or not client_secret:
                 logger.warning("Client ID e Client Secret não configurados para Google Calendar")
@@ -87,6 +94,24 @@ class GoogleCalendarService:
         except Exception as e:
             logger.warning(f"Google Calendar não configurado ou erro na autenticação: {e}")
             # Não falhar, apenas continuar sem autenticação
+            self.service = None
+    
+    def _authenticate_with_service_account(self, service_account_data):
+        """Autentica usando Service Account"""
+        try:
+            from google.oauth2 import service_account
+            
+            # Criar credenciais do Service Account
+            self.creds = service_account.Credentials.from_service_account_info(
+                service_account_data,
+                scopes=self.SCOPES
+            )
+            
+            self.service = build('calendar', 'v3', credentials=self.creds)
+            logger.info("Google Calendar autenticado com Service Account")
+            
+        except Exception as e:
+            logger.error(f"Erro na autenticação com Service Account: {e}")
             self.service = None
     
     def _authenticate_with_file(self):

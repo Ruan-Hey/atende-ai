@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, HTTPException, Request, Query, Depends
+from fastapi import FastAPI, HTTPException, Request, Query, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import logging
@@ -1470,6 +1470,258 @@ def deactivate_empresa_api(
             
     finally:
         session.close()
+
+@app.post("/api/empresas/{empresa_slug}/google-service-account")
+async def upload_google_service_account(
+    empresa_slug: str,
+    file: UploadFile = File(...),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """Upload de Service Account JSON para Google Calendar"""
+    logger.info(f"Recebendo upload de Service Account para empresa {empresa_slug}")
+    logger.info(f"Arquivo: {file.filename}, Tamanho: {file.size}")
+    
+    session = SessionLocal()
+    try:
+        # Verificar se usuário tem acesso à empresa
+        if not current_user.is_superuser:
+            if not current_user.empresa_id:
+                raise HTTPException(status_code=403, detail="Acesso negado")
+            
+            empresa = session.query(Empresa).filter(Empresa.id == current_user.empresa_id).first()
+            if not empresa or empresa.slug != empresa_slug:
+                raise HTTPException(status_code=403, detail="Acesso negado à empresa")
+        else:
+            empresa = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
+            if not empresa:
+                raise HTTPException(status_code=404, detail="Empresa não encontrada")
+        
+        logger.info(f"Empresa encontrada: {empresa.nome}")
+        
+        # Ler arquivo JSON
+        content = await file.read()
+        logger.info(f"Conteúdo do arquivo lido, tamanho: {len(content)} bytes")
+        logger.info(f"Primeiros 200 caracteres: {content.decode()[:200]}")
+        
+        try:
+            service_account_data = json.loads(content.decode())
+            logger.info("JSON parseado com sucesso")
+            logger.info(f"Campos encontrados: {list(service_account_data.keys())}")
+        except json.JSONDecodeError as e:
+            logger.error(f"Erro ao fazer parse do JSON: {e}")
+            logger.error(f"Conteúdo recebido: {content.decode()}")
+            raise HTTPException(status_code=400, detail="Arquivo JSON inválido")
+        
+        # Validar estrutura do Service Account
+        required_fields = ['type', 'project_id', 'private_key_id', 'private_key', 'client_email']
+        for field in required_fields:
+            if field not in service_account_data:
+                logger.error(f"Campo obrigatório '{field}' não encontrado")
+                raise HTTPException(status_code=400, detail=f"Campo obrigatório '{field}' não encontrado no JSON")
+        
+        logger.info("Validação dos campos concluída")
+        
+        # Buscar API Google Calendar
+        from models import API, EmpresaAPI
+        api = session.query(API).filter(API.nome == 'Google Calendar').first()
+        if not api:
+            logger.error("API Google Calendar não encontrada")
+            raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
+        
+        logger.info(f"API Google Calendar encontrada: {api.nome}")
+        
+        # Buscar ou criar conexão empresa-API
+        empresa_api = session.query(EmpresaAPI).filter(
+            EmpresaAPI.empresa_id == empresa.id,
+            EmpresaAPI.api_id == api.id
+        ).first()
+        
+        if not empresa_api:
+            # Criar nova conexão
+            logger.info("Criando nova conexão empresa-API")
+            empresa_api = EmpresaAPI(
+                empresa_id=empresa.id,
+                api_id=api.id,
+                config={
+                    'google_calendar_enabled': True,
+                    'google_calendar_service_account': service_account_data,
+                    'google_calendar_project_id': service_account_data.get('project_id'),
+                    'google_calendar_client_email': service_account_data.get('client_email')
+                },
+                ativo=True
+            )
+            session.add(empresa_api)
+        else:
+            # Atualizar configuração existente
+            logger.info("Atualizando configuração existente")
+            current_config = empresa_api.config or {}
+            current_config.update({
+                'google_calendar_enabled': True,
+                'google_calendar_service_account': service_account_data,
+                'google_calendar_project_id': service_account_data.get('project_id'),
+                'google_calendar_client_email': service_account_data.get('client_email')
+            })
+            empresa_api.config = current_config
+            empresa_api.ativo = True
+        
+        session.commit()
+        logger.info("Service Account salvo com sucesso no banco")
+        
+        return {
+            "success": True,
+            "message": "Service Account configurado com sucesso!",
+            "project_id": service_account_data.get('project_id'),
+            "client_email": service_account_data.get('client_email')
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro inesperado: {e}")
+        session.rollback()
+        raise HTTPException(status_code=500, detail=f"Erro ao processar Service Account: {str(e)}")
+    finally:
+        session.close()
+
+@app.get("/api/empresas/{empresa_slug}/google-oauth-url")
+async def get_google_oauth_url(
+    empresa_slug: str,
+    current_user: Usuario = Depends(get_current_user)
+):
+    """Gera URL de autorização OAuth2 para Google Calendar"""
+    session = SessionLocal()
+    try:
+        # Verificar se usuário tem acesso à empresa
+        if not current_user.is_superuser:
+            if not current_user.empresa_id:
+                raise HTTPException(status_code=403, detail="Acesso negado")
+            
+            empresa = session.query(Empresa).filter(Empresa.id == current_user.empresa_id).first()
+            if not empresa or empresa.slug != empresa_slug:
+                raise HTTPException(status_code=403, detail="Acesso negado à empresa")
+        else:
+            empresa = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
+            if not empresa:
+                raise HTTPException(status_code=404, detail="Empresa não encontrada")
+        
+        # Buscar configuração OAuth2 da empresa
+        from models import EmpresaAPI, API
+        api = session.query(API).filter(API.nome == 'Google Calendar').first()
+        if not api:
+            raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
+        
+        empresa_api = session.query(EmpresaAPI).filter(
+            EmpresaAPI.empresa_id == empresa.id,
+            EmpresaAPI.api_id == api.id
+        ).first()
+        
+        if not empresa_api or not empresa_api.config:
+            raise HTTPException(status_code=400, detail="Google Calendar não configurado")
+        
+        config = empresa_api.config
+        
+        # Gerar URL de autorização
+        from urllib.parse import urlencode
+        
+        oauth_params = {
+            'client_id': config.get('google_calendar_client_id'),
+            'redirect_uri': f'https://api.tinyteams.app/auth/google/callback',
+            'scope': 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events',
+            'response_type': 'code',
+            'access_type': 'offline',
+            'prompt': 'consent'
+        }
+        
+        oauth_url = f"https://accounts.google.com/o/oauth2/auth?{urlencode(oauth_params)}"
+        
+        return {
+            "oauth_url": oauth_url,
+            "message": "URL de autorização gerada"
+        }
+        
+    except Exception as e:
+        logger.error(f"Erro ao gerar URL OAuth2: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar URL de autorização: {str(e)}")
+    finally:
+        session.close()
+
+@app.get("/auth/google/callback")
+async def google_oauth_callback(
+    code: str = Query(...),
+    state: str = Query(None)
+):
+    """Callback do OAuth2 do Google Calendar"""
+    try:
+        logger.info(f"Recebendo callback OAuth2 com code: {code[:20]}...")
+        
+        # Buscar configuração OAuth2
+        session = SessionLocal()
+        
+        # Buscar empresa da sessão (pode ser passada via state)
+        empresa_slug = state or 'tinyteams'  # Fallback para TinyTeams
+        
+        empresa = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
+        if not empresa:
+            raise HTTPException(status_code=404, detail="Empresa não encontrada")
+        
+        # Buscar configuração da API
+        from models import EmpresaAPI, API
+        api = session.query(API).filter(API.nome == 'Google Calendar').first()
+        if not api:
+            raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
+        
+        empresa_api = session.query(EmpresaAPI).filter(
+            EmpresaAPI.empresa_id == empresa.id,
+            EmpresaAPI.api_id == api.id
+        ).first()
+        
+        if not empresa_api or not empresa_api.config:
+            raise HTTPException(status_code=400, detail="Google Calendar não configurado")
+        
+        config = empresa_api.config
+        
+        # Trocar code por tokens
+        import requests
+        
+        token_data = {
+            'client_id': config.get('google_calendar_client_id'),
+            'client_secret': config.get('google_calendar_client_secret'),
+            'code': code,
+            'grant_type': 'authorization_code',
+            'redirect_uri': f'https://api.tinyteams.app/auth/google/callback'
+        }
+        
+        response = requests.post('https://oauth2.googleapis.com/token', data=token_data)
+        
+        if response.status_code != 200:
+            logger.error(f"Erro ao trocar code por tokens: {response.text}")
+            raise HTTPException(status_code=400, detail="Erro na autorização OAuth2")
+        
+        tokens = response.json()
+        refresh_token = tokens.get('refresh_token')
+        
+        if not refresh_token:
+            raise HTTPException(status_code=400, detail="Refresh token não recebido")
+        
+        # Atualizar configuração com refresh_token
+        current_config = empresa_api.config or {}
+        current_config['google_calendar_refresh_token'] = refresh_token
+        empresa_api.config = current_config
+        
+        session.commit()
+        session.close()
+        
+        logger.info("OAuth2 configurado com sucesso!")
+        
+        return {
+            "success": True,
+            "message": "Google Calendar conectado com sucesso!",
+            "redirect_url": f"https://app.tinyteams.app/admin/{empresa_slug}/configuracoes"
+        }
+        
+    except Exception as e:
+        logger.error(f"Erro no callback OAuth2: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro no callback: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
