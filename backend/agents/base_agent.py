@@ -22,6 +22,7 @@ class BaseAgent:
             k=20,
             return_messages=True
         )
+        self.current_context: Dict[str, Any] = {}
         self.tools = self._setup_tools()
         self.agent = self._create_agent()
     
@@ -30,32 +31,72 @@ class BaseAgent:
         from tools.cliente_tools import ClienteTools
         from tools.calendar_tools import CalendarTools
         from tools.message_tools import MessageTools
+        import json
         
         cliente_tools = ClienteTools()
         calendar_tools = CalendarTools()
         message_tools = MessageTools()
         
+        # Wrappers que aceitam string (JSON) e usam contexto/empresa_config
+        def _parse_json(input_str: str) -> Dict[str, Any]:
+            try:
+                return json.loads(input_str) if isinstance(input_str, str) else (input_str or {})
+            except Exception:
+                return {}
+        
+        def buscar_cliente_wrapper(input_str: str) -> str:
+            data = _parse_json(input_str)
+            cliente_id = data.get('cliente_id') or self.current_context.get('cliente_id')
+            empresa_id = self.empresa_config.get('empresa_id')
+            if not cliente_id or not empresa_id:
+                return "Parâmetros ausentes: forneça {'cliente_id': '...'}; empresa_id vem do contexto."
+            return cliente_tools.buscar_cliente_info(cliente_id, int(empresa_id))
+        
+        def verificar_calendario_wrapper(input_str: str) -> str:
+            data = _parse_json(input_str)
+            data_str = data.get('data') or data.get('date')
+            if not data_str:
+                return "Parâmetros ausentes: forneça {'data': 'YYYY-MM-DD'}"
+            return calendar_tools.verificar_disponibilidade(data_str, self.empresa_config)
+        
+        def fazer_reserva_wrapper(input_str: str) -> str:
+            data = _parse_json(input_str)
+            data_str = data.get('data') or data.get('date')
+            hora = data.get('hora') or data.get('time')
+            cliente = data.get('cliente') or data.get('customer') or self.current_context.get('cliente_name') or 'Cliente'
+            if not data_str or not hora:
+                return "Parâmetros ausentes: forneça {'data': 'YYYY-MM-DD', 'hora': 'HH:MM', 'cliente': 'Nome'}"
+            return calendar_tools.fazer_reserva(data_str, hora, cliente, self.empresa_config)
+        
+        def enviar_mensagem_wrapper(input_str: str) -> str:
+            data = _parse_json(input_str)
+            mensagem = data.get('mensagem') or data.get('message') or (input_str if isinstance(input_str, str) else None)
+            cliente_id = data.get('cliente_id') or self.current_context.get('cliente_id')
+            if not mensagem or not cliente_id:
+                return "Parâmetros ausentes: forneça {'mensagem': '...', 'cliente_id': '...'}"
+            return message_tools.enviar_resposta(mensagem, cliente_id, self.empresa_config, canal=self.current_context.get('channel', 'whatsapp'))
+        
         # Tools básicas
         tools = [
             Tool(
                 name="buscar_cliente",
-                func=cliente_tools.buscar_cliente_info,
-                description="Busca informações do cliente no banco de dados. Use quando precisar de dados do cliente."
+                func=buscar_cliente_wrapper,
+                description="Busca informações do cliente no banco de dados. Use quando precisar de dados do cliente. Entrada: JSON {'cliente_id': '...'}"
             ),
             Tool(
                 name="verificar_calendario",
-                func=calendar_tools.verificar_disponibilidade,
-                description="Verifica disponibilidade real no Google Calendar. Use SEMPRE antes de sugerir horários. Parâmetro: data (formato YYYY-MM-DD)"
+                func=verificar_calendario_wrapper,
+                description="Verifica disponibilidade real no Google Calendar/Trinks/outros. Entrada: JSON {'data': 'YYYY-MM-DD'}"
             ),
             Tool(
                 name="fazer_reserva",
-                func=calendar_tools.fazer_reserva,
-                description="Faz reserva real no Google Calendar e registra no Google Sheets. Use apenas após confirmar disponibilidade. Parâmetros: data, hora, cliente, empresa_config"
+                func=fazer_reserva_wrapper,
+                description="Faz reserva real na agenda disponível. Entrada: JSON {'data': 'YYYY-MM-DD', 'hora': 'HH:MM', 'cliente': 'Nome'}"
             ),
             Tool(
                 name="enviar_mensagem",
-                func=message_tools.enviar_resposta,
-                description="Envia mensagem pelo canal apropriado. Use para enviar respostas confirmadas."
+                func=enviar_mensagem_wrapper,
+                description="Envia mensagem pelo canal apropriado. Entrada: JSON {'mensagem': '...', 'cliente_id': '...'}"
             )
         ]
         
@@ -135,6 +176,9 @@ class BaseAgent:
     async def process_message(self, message: str, context: Dict[str, Any]) -> str:
         """Processa mensagem usando o agent"""
         try:
+            # Guardar contexto atual para wrappers
+            self.current_context = context or {}
+            
             # Construir prompt com contexto da empresa
             system_prompt = self._build_system_prompt(context)
             
@@ -142,8 +186,11 @@ class BaseAgent:
             logger.info(f"System prompt: {system_prompt}")
             
             # Usar o agent com as tools configuradas
-            # Preparar input para o agent
-            agent_input = f"{system_prompt}\n\nMensagem do cliente: {message}\n\nResponda usando as ferramentas disponíveis quando necessário."
+            # Instruir o modelo a usar JSON no Action Input
+            agent_input = (
+                f"{system_prompt}\n\nMensagem do cliente: {message}\n\n"
+                "Quando decidir usar uma ferramenta, SEMPRE forneça Action Input como um JSON válido."
+            )
             
             # Executar o agent
             response = await self.agent.ainvoke({"input": agent_input})
@@ -174,7 +221,8 @@ IMPORTANTE - REGRAS DE USO:
 4. Para fazer reservas, use a ferramenta 'fazer_reserva' com dados reais
 5. Se não tiver acesso às ferramentas, diga que não pode fazer a operação
 6. Seja honesto sobre limitações - não invente funcionalidades
-7. Sempre confirme informações antes de agendar"""
+7. Sempre confirme informações antes de agendar
+8. Ao chamar uma ferramenta, o Action Input deve ser JSON válido com os campos esperados."""
         
         # Adicionar instruções específicas
         if self.empresa_config.get('mensagem_quebrada'):
