@@ -374,7 +374,6 @@ async def webhook_handler(empresa_slug: str, request: Request):
             empresa_config = {
                 'nome': empresa_db.nome,
                 'slug': empresa_db.slug,
-                'openai_key': empresa_db.openai_key,
                 'twilio_sid': empresa_db.twilio_sid,
                 'twilio_token': empresa_db.twilio_token,
                 'twilio_number': empresa_db.twilio_number,
@@ -403,7 +402,7 @@ async def webhook_handler(empresa_slug: str, request: Request):
                 elif api_name == "Google Sheets":
                     empresa_config['google_sheets_id'] = config.get('google_sheets_id')
                 elif api_name == "OpenAI":
-                    # OpenAI já vem da tabela empresas, mas pode ser sobrescrito
+                    # OpenAI vem da tabela empresa_apis
                     if config.get('openai_key'):
                         empresa_config['openai_key'] = config.get('openai_key')
                 elif api_name == "Trinks":
