@@ -1003,7 +1003,7 @@ def update_empresa_configuracoes(
         # Processar campos que começam com 'api_' (formato dinâmico)
         api_configs = {}
         for key, value in configuracoes.items():
-            if key.startswith('api_') and value:  # Só processar se tem valor
+            if key.startswith('api_'):  # Processar mesmo se vazio
                 # Extrair informações do campo (ex: api_7_key -> API ID 7, campo 'key')
                 parts = key.split('_')
                 if len(parts) >= 3:
@@ -1930,6 +1930,58 @@ async def setup_default_service_account():
     except Exception as e:
         logger.error(f"Erro ao configurar Service Account padrão: {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao configurar: {str(e)}")
+
+@app.get("/api/test/service-account-status")
+async def test_service_account_status():
+    """Verifica se Service Account está salvo no banco"""
+    try:
+        session = SessionLocal()
+        
+        # Buscar empresa TinyTeams
+        empresa = session.query(Empresa).filter(Empresa.slug == 'tinyteams').first()
+        if not empresa:
+            raise HTTPException(status_code=404, detail="Empresa não encontrada")
+        
+        # Buscar configuração da API
+        from models import EmpresaAPI, API
+        api = session.query(API).filter(API.nome == 'Google Calendar').first()
+        if not api:
+            raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
+        
+        empresa_api = session.query(EmpresaAPI).filter(
+            EmpresaAPI.empresa_id == empresa.id,
+            EmpresaAPI.api_id == api.id
+        ).first()
+        
+        if not empresa_api or not empresa_api.config:
+            return {
+                "status": "not_configured",
+                "message": "Service Account não configurado"
+            }
+        
+        config = empresa_api.config
+        
+        # Verificar se tem Service Account
+        service_account = config.get('google_calendar_service_account')
+        if not service_account:
+            return {
+                "status": "no_service_account",
+                "message": "Configuração existe mas não tem Service Account"
+            }
+        
+        return {
+            "status": "configured",
+            "message": "Service Account configurado",
+            "project_id": config.get('google_calendar_project_id'),
+            "client_email": config.get('google_calendar_client_email'),
+            "enabled": config.get('google_calendar_enabled', False)
+        }
+        
+    except Exception as e:
+        logger.error(f"Erro ao verificar Service Account: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao verificar: {str(e)}")
+    finally:
+        session.close()
 
 if __name__ == "__main__":
     import uvicorn
