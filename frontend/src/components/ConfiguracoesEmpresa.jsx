@@ -317,19 +317,60 @@ const ConfiguracoesEmpresa = () => {
       setSaving(true)
       setError('')
       
-      // Buscar URL de autorização
+      // Buscar URL de autorização ou configurar Service Account
       const response = await apiService.getGoogleOAuthUrl(selectedEmpresa)
       
+      if (response.method === 'service_account') {
+        // Service Account configurado automaticamente
+        setSuccess(response.message)
+        setTimeout(() => setSuccess(false), 5000)
+        carregarConfiguracoes()
+        return
+      }
+      
       if (response.oauth_url) {
-        // Abrir popup ou redirecionar
-        window.open(response.oauth_url, '_blank', 'width=500,height=600')
+        // Abrir popup OAuth2
+        const popup = window.open(response.oauth_url, '_blank', 'width=500,height=600')
+        
+        // Verificar se popup foi bloqueado
+        if (!popup || popup.closed) {
+          setError('Popup bloqueado! Permita popups para este site.')
+          return
+        }
         
         setSuccess('Abrindo autorização do Google...')
-        setTimeout(() => setSuccess(false), 3000)
+        
+        // Aguardar callback ou timeout
+        const checkClosed = setInterval(() => {
+          if (popup.closed) {
+            clearInterval(checkClosed)
+            // Recarregar configurações para ver se OAuth2 funcionou
+            setTimeout(() => {
+              carregarConfiguracoes()
+              setSuccess('Verificando conexão...')
+            }, 2000)
+          }
+        }, 1000)
+        
+        // Timeout após 5 minutos
+        setTimeout(() => {
+          clearInterval(checkClosed)
+          if (!popup.closed) {
+            popup.close()
+          }
+        }, 300000)
       }
     } catch (error) {
-      console.error('Erro ao iniciar OAuth2:', error)
-      setError('Erro ao conectar Google Calendar: ' + error.message)
+      console.error('Erro ao conectar Google Calendar:', error)
+      
+      // Mensagens de erro mais amigáveis
+      if (error.message.includes('não configurado')) {
+        setError('Google Calendar não configurado. Configure as credenciais OAuth2 no Google Cloud Console ou use Service Account.')
+      } else if (error.message.includes('verificação')) {
+        setError('App não verificado pelo Google. Use Service Account (upload de arquivo JSON) como alternativa.')
+      } else {
+        setError('Erro ao conectar Google Calendar: ' + error.message)
+      }
     } finally {
       setSaving(false)
     }
@@ -656,27 +697,25 @@ const ConfiguracoesEmpresa = () => {
                                         </small>
                                       </div>
                                       
-                                      {/* Service Account para Google Calendar */}
+                                      {/* Google Calendar - Conexão automática */}
                                       {api.nome === 'Google Calendar' && (
                                         <div className="field-group">
-                                          <label>Service Account JSON</label>
-                                          <input
-                                            type="file"
-                                            accept=".json"
-                                            onChange={handleServiceAccountUpload}
-                                            className="form-input"
-                                            style={{ padding: '0.5rem' }}
-                                          />
-                                          <small className="field-hint">
-                                            Faça upload do arquivo JSON do Service Account para autenticação automática.
-                                            <br />
-                                            <a href="https://console.cloud.google.com/iam-admin/serviceaccounts" target="_blank" rel="noopener noreferrer">
-                                              Criar Service Account no Google Cloud Console
-                                            </a>
-                                          </small>
+                                          <label>Google Calendar</label>
                                           
-                                          {/* Botão OAuth2 */}
-                                          <div style={{ marginTop: '1rem' }}>
+                                          {/* Botão principal - faz tudo automaticamente */}
+                                          <div style={{ 
+                                            border: '1px solid #e0e0e0', 
+                                            borderRadius: '8px', 
+                                            padding: '1rem', 
+                                            marginBottom: '1rem',
+                                            backgroundColor: '#f8f9fa'
+                                          }}>
+                                            <h4 style={{ margin: '0 0 0.5rem 0', color: '#4285f4' }}>
+                                              🔗 Conectar Google Calendar
+                                            </h4>
+                                            <p style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', color: '#666' }}>
+                                              Conecte automaticamente. Funciona com OAuth2 ou Service Account.
+                                            </p>
                                             <button
                                               type="button"
                                               onClick={handleGoogleOAuth}
@@ -684,13 +723,38 @@ const ConfiguracoesEmpresa = () => {
                                               style={{ 
                                                 backgroundColor: '#4285f4', 
                                                 borderColor: '#4285f4',
-                                                marginTop: '0.5rem'
+                                                width: '100%'
                                               }}
+                                              disabled={saving}
                                             >
-                                              🔗 Conectar Google Calendar (OAuth2)
+                                              {saving ? 'Conectando...' : '🔗 Conectar Google Calendar'}
                                             </button>
+                                          </div>
+                                          
+                                          {/* Opção manual Service Account */}
+                                          <div style={{ 
+                                            border: '1px solid #e0e0e0', 
+                                            borderRadius: '8px', 
+                                            padding: '1rem',
+                                            backgroundColor: '#f8f9fa'
+                                          }}>
+                                            <h4 style={{ margin: '0 0 0.5rem 0', color: '#34a853' }}>
+                                              🔑 Service Account (Manual)
+                                            </h4>
+                                            <p style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', color: '#666' }}>
+                                              Upload manual do arquivo JSON do Service Account.
+                                            </p>
+                                            <input
+                                              type="file"
+                                              accept=".json"
+                                              onChange={handleServiceAccountUpload}
+                                              className="form-input"
+                                              style={{ padding: '0.5rem', marginBottom: '0.5rem' }}
+                                            />
                                             <small className="field-hint">
-                                              Ou use OAuth2 para conectar automaticamente (mais simples)
+                                              <a href="https://console.cloud.google.com/iam-admin/serviceaccounts" target="_blank" rel="noopener noreferrer">
+                                                Criar Service Account no Google Cloud Console
+                                              </a>
                                             </small>
                                           </div>
                                         </div>

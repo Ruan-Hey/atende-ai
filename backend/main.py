@@ -1620,7 +1620,34 @@ async def get_google_oauth_url(
         
         config = empresa_api.config
         
-        # Gerar URL de autorização
+        # Verificar se tem Service Account configurado (fallback automático)
+        service_account = config.get('google_calendar_service_account')
+        if service_account:
+            # Se tem Service Account, usar ele automaticamente
+            logger.info("Service Account encontrado, configurando automaticamente")
+            
+            # Atualizar configuração para usar Service Account
+            current_config = empresa_api.config or {}
+            current_config['google_calendar_enabled'] = True
+            current_config['google_calendar_use_service_account'] = True
+            empresa_api.config = current_config
+            empresa_api.ativo = True
+            
+            session.commit()
+            
+            return {
+                "success": True,
+                "message": "Google Calendar configurado automaticamente com Service Account!",
+                "method": "service_account",
+                "project_id": service_account.get('project_id'),
+                "client_email": service_account.get('client_email')
+            }
+        
+        # Se não tem Service Account, tentar OAuth2
+        if not config.get('google_calendar_client_id'):
+            raise HTTPException(status_code=400, detail="Google Calendar OAuth2 não configurado. Configure as credenciais OAuth2 no Google Cloud Console.")
+        
+        # Gerar URL de autorização OAuth2
         from urllib.parse import urlencode
         
         oauth_params = {
@@ -1636,7 +1663,8 @@ async def get_google_oauth_url(
         
         return {
             "oauth_url": oauth_url,
-            "message": "URL de autorização gerada"
+            "message": "URL de autorização gerada",
+            "method": "oauth2"
         }
         
     except Exception as e:
@@ -1722,6 +1750,60 @@ async def google_oauth_callback(
     except Exception as e:
         logger.error(f"Erro no callback OAuth2: {e}")
         raise HTTPException(status_code=500, detail=f"Erro no callback: {str(e)}")
+
+@app.get("/api/test/google-oauth-simulation")
+async def test_google_oauth_simulation():
+    """Simula OAuth2 para testes locais"""
+    try:
+        # Simular refresh_token de teste
+        test_refresh_token = "test_refresh_token_12345"
+        
+        session = SessionLocal()
+        
+        # Buscar empresa TinyTeams
+        empresa = session.query(Empresa).filter(Empresa.slug == 'tinyteams').first()
+        if not empresa:
+            raise HTTPException(status_code=404, detail="Empresa não encontrada")
+        
+        # Buscar configuração da API
+        from models import EmpresaAPI, API
+        api = session.query(API).filter(API.nome == 'Google Calendar').first()
+        if not api:
+            raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
+        
+        empresa_api = session.query(EmpresaAPI).filter(
+            EmpresaAPI.empresa_id == empresa.id,
+            EmpresaAPI.api_id == api.id
+        ).first()
+        
+        if not empresa_api:
+            # Criar configuração se não existir
+            empresa_api = EmpresaAPI(
+                empresa_id=empresa.id,
+                api_id=api.id,
+                config={},
+                ativo=True
+            )
+            session.add(empresa_api)
+        
+        # Atualizar com refresh_token de teste
+        current_config = empresa_api.config or {}
+        current_config['google_calendar_refresh_token'] = test_refresh_token
+        current_config['google_calendar_enabled'] = True
+        empresa_api.config = current_config
+        
+        session.commit()
+        session.close()
+        
+        return {
+            "success": True,
+            "message": "Google Calendar conectado (modo teste)!",
+            "refresh_token": test_refresh_token
+        }
+        
+    except Exception as e:
+        logger.error(f"Erro na simulação OAuth2: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro na simulação: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
