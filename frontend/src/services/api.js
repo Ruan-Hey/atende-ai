@@ -130,8 +130,7 @@ class ApiService {
       })
       
       if (response.status === 401) {
-        this.logout()
-        window.location.href = '/#/login'
+        // Não redirecionar automaticamente, apenas retornar erro
         throw new Error('Sessão expirada')
       }
       

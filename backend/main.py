@@ -1862,6 +1862,75 @@ async def test_google_oauth_config():
     finally:
         session.close()
 
+@app.get("/api/setup-default-service-account")
+async def setup_default_service_account():
+    """Configura Service Account padrão para Google Calendar"""
+    try:
+        session = SessionLocal()
+        
+        # Buscar empresa TinyTeams
+        empresa = session.query(Empresa).filter(Empresa.slug == 'tinyteams').first()
+        if not empresa:
+            raise HTTPException(status_code=404, detail="Empresa não encontrada")
+        
+        # Buscar configuração da API
+        from models import EmpresaAPI, API
+        api = session.query(API).filter(API.nome == 'Google Calendar').first()
+        if not api:
+            raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
+        
+        empresa_api = session.query(EmpresaAPI).filter(
+            EmpresaAPI.empresa_id == empresa.id,
+            EmpresaAPI.api_id == api.id
+        ).first()
+        
+        if not empresa_api:
+            # Criar configuração se não existir
+            empresa_api = EmpresaAPI(
+                empresa_id=empresa.id,
+                api_id=api.id,
+                config={},
+                ativo=True
+            )
+            session.add(empresa_api)
+        
+        # Service Account padrão (você precisa criar um real)
+        default_service_account = {
+            "type": "service_account",
+            "project_id": "tinyteams-calendar",
+            "private_key_id": "default-key-id",
+            "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC...\n-----END PRIVATE KEY-----\n",
+            "client_email": "tinyteams@tinyteams-calendar.iam.gserviceaccount.com",
+            "client_id": "123456789",
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token"
+        }
+        
+        # Atualizar configuração
+        current_config = empresa_api.config or {}
+        current_config.update({
+            'google_calendar_enabled': True,
+            'google_calendar_service_account': default_service_account,
+            'google_calendar_project_id': default_service_account.get('project_id'),
+            'google_calendar_client_email': default_service_account.get('client_email'),
+            'google_calendar_use_service_account': True
+        })
+        empresa_api.config = current_config
+        empresa_api.ativo = True
+        
+        session.commit()
+        session.close()
+        
+        return {
+            "success": True,
+            "message": "Service Account padrão configurado!",
+            "note": "Você precisa criar um Service Account real no Google Cloud Console"
+        }
+        
+    except Exception as e:
+        logger.error(f"Erro ao configurar Service Account padrão: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao configurar: {str(e)}")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000) 

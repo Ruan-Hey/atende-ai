@@ -43,6 +43,9 @@ const ConfiguracoesEmpresa = () => {
   const [focusField, setFocusField] = useState('')
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
+  // Arquivo de Service Account pendente para envio somente ao salvar
+  const [pendingServiceAccountFile, setPendingServiceAccountFile] = useState(null)
+  const [pendingServiceAccountName, setPendingServiceAccountName] = useState('')
 
   const SENSITIVE_FIELDS = [
     { name: 'openai_key', label: 'OpenAI Key' },
@@ -278,38 +281,14 @@ const ConfiguracoesEmpresa = () => {
   }
 
   const handleServiceAccountUpload = async (e) => {
-    const file = e.target.files[0]
-    if (!file) {
-      console.log('Nenhum arquivo selecionado')
-      return
-    }
-    
-    console.log('Arquivo selecionado:', file.name, 'Tamanho:', file.size, 'Tipo:', file.type)
-    
-    try {
-      setSaving(true)
-      setError('')
-      
-      const formData = new FormData()
-      formData.append('file', file)
-      
-      console.log('FormData criado, enviando para API...')
-      
-      const response = await apiService.uploadGoogleServiceAccount(selectedEmpresa, formData)
-      
-      console.log('Resposta da API:', response)
-      
-      if (response.success) {
-        setSuccess('Service Account configurado com sucesso!')
-        setTimeout(() => setSuccess(false), 3000)
-        carregarConfiguracoes() // Recarregar configurações
-      }
-    } catch (error) {
-      console.error('Erro ao fazer upload:', error)
-      setError('Erro ao fazer upload do Service Account: ' + error.message)
-    } finally {
-      setSaving(false)
-    }
+    e.preventDefault()
+    e.stopPropagation()
+    const file = e.target.files && e.target.files[0]
+    if (!file) return
+    setPendingServiceAccountFile(file)
+    setPendingServiceAccountName(file.name)
+    setSuccess('Arquivo selecionado: ' + file.name)
+    setTimeout(() => setSuccess(false), 2000)
   }
 
   const handleGoogleOAuth = async () => {
@@ -384,12 +363,23 @@ const ConfiguracoesEmpresa = () => {
       
       console.log('Dados sendo enviados:', configuracoes)
       
+      // 1) Salvar configurações comuns
       await apiService.updateEmpresaConfiguracoes(selectedEmpresa, configuracoes)
+
+      // 2) Se houver arquivo de Service Account pendente, enviar agora
+      if (pendingServiceAccountFile) {
+        const formData = new FormData()
+        formData.append('file', pendingServiceAccountFile)
+        await apiService.uploadGoogleServiceAccount(selectedEmpresa, formData)
+        setPendingServiceAccountFile(null)
+        setPendingServiceAccountName('')
+      }
+
       setSuccess(true)
       setTimeout(() => setSuccess(false), 3000)
     } catch (error) {
       console.error('Erro ao salvar configurações:', error)
-      setError('Erro ao salvar configurações. Tente novamente.')
+      setError('Erro ao salvar configurações. Tente novamente. ' + error.message)
     } finally {
       setSaving(false)
     }
@@ -584,7 +574,17 @@ const ConfiguracoesEmpresa = () => {
           </div>
 
           {selectedEmpresa && selectedEmpresa !== 'nova-empresa' ? (
-            <form className="configuracoes-form">
+            <form className="configuracoes-form" onSubmit={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              return false
+            }} onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                e.stopPropagation()
+                return false
+              }
+            }}>
               {sections.map(section => (
                 <div
                   key={section.id}
@@ -748,9 +748,13 @@ const ConfiguracoesEmpresa = () => {
                                               type="file"
                                               accept=".json"
                                               onChange={handleServiceAccountUpload}
+                                              onClick={(e) => e.stopPropagation()}
                                               className="form-input"
                                               style={{ padding: '0.5rem', marginBottom: '0.5rem' }}
                                             />
+                                            {pendingServiceAccountName && (
+                                              <small className="field-hint">Selecionado: {pendingServiceAccountName}</small>
+                                            )}
                                             <small className="field-hint">
                                               <a href="https://console.cloud.google.com/iam-admin/serviceaccounts" target="_blank" rel="noopener noreferrer">
                                                 Criar Service Account no Google Cloud Console
