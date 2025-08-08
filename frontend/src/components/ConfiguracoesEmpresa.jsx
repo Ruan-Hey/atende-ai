@@ -216,6 +216,14 @@ const ConfiguracoesEmpresa = () => {
               novasConfiguracoes[fieldName] = empApi.config.google_calendar_client_secret || empApi.config.google_sheets_client_secret
             }
           }
+          // Adicionar suporte para refresh_token
+          if (empApi.config.google_calendar_refresh_token || empApi.config.google_sheets_refresh_token) {
+            const fieldName = `api_${apiId}_refresh_token`
+            // Só mapear se não existe no estado ou se onlyNew é false
+            if (!onlyNew || !novasConfiguracoes[fieldName]) {
+              novasConfiguracoes[fieldName] = empApi.config.google_calendar_refresh_token || empApi.config.google_sheets_refresh_token
+            }
+          }
         }
         
         // Para APIs com API Key (OpenAI, etc.)
@@ -573,6 +581,21 @@ const ConfiguracoesEmpresa = () => {
                                           value={configuracoes[`api_${api.id}_client_secret`] || ''}
                                           onChange={handleChange}
                                         />
+                                      </div>
+                                      <div className="field-group">
+                                        <label>Refresh Token</label>
+                                        <input
+                                          type="password"
+                                          name={`api_${api.id}_refresh_token`}
+                                          placeholder="Refresh Token (opcional)"
+                                          className="form-input"
+                                          value={configuracoes[`api_${api.id}_refresh_token`] || ''}
+                                          onChange={handleChange}
+                                        />
+                                        <small className="field-hint">
+                                          O refresh token é necessário para autenticação automática. 
+                                          Deixe vazio se ainda não configurou o OAuth2.
+                                        </small>
                                       </div>
                                     </>
                                   ) : (
