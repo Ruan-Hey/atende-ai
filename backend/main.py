@@ -1041,6 +1041,24 @@ def update_empresa_configuracoes(
                 elif api.nome == "Chatwoot" and "key" in config:
                     mapped_config["chatwoot_token"] = config["key"]
                     del mapped_config["key"]
+                elif api.nome == "Google Calendar":
+                    # Mapear campos específicos do Google Calendar
+                    if "client_id" in config:
+                        mapped_config["google_calendar_client_id"] = config["client_id"]
+                    if "client_secret" in config:
+                        mapped_config["google_calendar_client_secret"] = config["client_secret"]
+                    if "refresh_token" in config:
+                        mapped_config["google_calendar_refresh_token"] = config["refresh_token"]
+                    logger.info(f"Mapeamento Google Calendar: {config} -> {mapped_config}")
+                elif api.nome == "Google Sheets":
+                    # Mapear campos específicos do Google Sheets
+                    if "client_id" in config:
+                        mapped_config["google_sheets_client_id"] = config["client_id"]
+                    if "client_secret" in config:
+                        mapped_config["google_sheets_client_secret"] = config["client_secret"]
+                    if "refresh_token" in config:
+                        mapped_config["google_sheets_refresh_token"] = config["refresh_token"]
+                    logger.info(f"Mapeamento Google Sheets: {config} -> {mapped_config}")
                 
                 # Buscar ou criar conexão empresa-API
                 empresa_api = session.query(EmpresaAPI).filter(
