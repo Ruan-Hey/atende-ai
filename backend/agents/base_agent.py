@@ -149,21 +149,25 @@ class BaseAgent:
         
         @lc_tool("buscar_cliente")
         def t_buscar_cliente(cliente_id: str) -> str:
+            """Busca informações do cliente no banco de dados usando o ID fornecido."""
             return self._wrappers["buscar_cliente"](cliente_id=cliente_id)
         structured.append(t_buscar_cliente)
         
         @lc_tool("verificar_calendario")
         def t_verificar_calendario(data: str) -> str:
+            """Verifica disponibilidade no calendário para a data especificada (formato YYYY-MM-DD)."""
             return self._wrappers["verificar_calendario"](data=data)
         structured.append(t_verificar_calendario)
         
         @lc_tool("fazer_reserva")
         def t_fazer_reserva(data: str, hora: str, cliente: str) -> str:
+            """Faz uma reserva no calendário para a data, hora e cliente especificados."""
             return self._wrappers["fazer_reserva"](data=data, hora=hora, cliente=cliente)
         structured.append(t_fazer_reserva)
         
         @lc_tool("enviar_mensagem")
         def t_enviar_mensagem(mensagem: str, cliente_id: str) -> str:
+            """Envia uma mensagem para o cliente especificado."""
             return self._wrappers["enviar_mensagem"](mensagem=mensagem, cliente_id=cliente_id)
         structured.append(t_enviar_mensagem)
         
