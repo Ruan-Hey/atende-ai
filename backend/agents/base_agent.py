@@ -15,7 +15,7 @@ class BaseAgent:
         self.empresa_config = empresa_config
         self.llm = OpenAI(
             api_key=empresa_config.get('openai_key'),
-            temperature=0.7,
+            temperature=0.1,
             max_tokens=500
         )
         self.memory = ConversationBufferWindowMemory(
@@ -40,22 +40,22 @@ class BaseAgent:
             Tool(
                 name="buscar_cliente",
                 func=cliente_tools.buscar_cliente_info,
-                description="Busca informações do cliente no banco de dados"
+                description="Busca informações do cliente no banco de dados. Use quando precisar de dados do cliente."
             ),
             Tool(
                 name="verificar_calendario",
                 func=calendar_tools.verificar_disponibilidade,
-                description="Verifica disponibilidade no Google Calendar"
+                description="Verifica disponibilidade real no Google Calendar. Use SEMPRE antes de sugerir horários. Parâmetro: data (formato YYYY-MM-DD)"
             ),
             Tool(
                 name="fazer_reserva",
                 func=calendar_tools.fazer_reserva,
-                description="Faz reserva no Google Calendar e registra no Google Sheets"
+                description="Faz reserva real no Google Calendar e registra no Google Sheets. Use apenas após confirmar disponibilidade. Parâmetros: data, hora, cliente, empresa_config"
             ),
             Tool(
                 name="enviar_mensagem",
                 func=message_tools.enviar_resposta,
-                description="Envia mensagem pelo canal apropriado"
+                description="Envia mensagem pelo canal apropriado. Use para enviar respostas confirmadas."
             )
         ]
         
@@ -141,12 +141,14 @@ class BaseAgent:
             # Log do prompt para debug
             logger.info(f"System prompt: {system_prompt}")
             
-            # Usar diretamente o LLM em vez do agent para garantir que o prompt seja respeitado
-            full_prompt = f"{system_prompt}\n\nMensagem do cliente: {message}\n\nResposta:"
+            # Usar o agent com as tools configuradas
+            # Preparar input para o agent
+            agent_input = f"{system_prompt}\n\nMensagem do cliente: {message}\n\nResponda usando as ferramentas disponíveis quando necessário."
             
-            response = await self.llm.agenerate([full_prompt])
+            # Executar o agent
+            response = await self.agent.ainvoke({"input": agent_input})
             
-            return response.generations[0][0].text.strip()
+            return response["output"].strip()
             
         except Exception as e:
             logger.error(f"Erro ao processar mensagem com agent: {e}")
@@ -161,6 +163,18 @@ class BaseAgent:
         if cliente_info:
             base_prompt += f"\n\nCliente: {cliente_info.get('nome', 'Cliente')}"
             base_prompt += f"\nÚltima interação: {cliente_info.get('ultima_atividade', 'N/A')}"
+        
+        # Adicionar instruções específicas sobre ferramentas
+        base_prompt += """
+        
+IMPORTANTE - REGRAS DE USO:
+1. SEMPRE use as ferramentas disponíveis para verificar informações reais
+2. NUNCA invente horários, datas ou informações de calendário
+3. Para agendamentos, use a ferramenta 'verificar_calendario' primeiro
+4. Para fazer reservas, use a ferramenta 'fazer_reserva' com dados reais
+5. Se não tiver acesso às ferramentas, diga que não pode fazer a operação
+6. Seja honesto sobre limitações - não invente funcionalidades
+7. Sempre confirme informações antes de agendar"""
         
         # Adicionar instruções específicas
         if self.empresa_config.get('mensagem_quebrada'):
