@@ -46,7 +46,9 @@ class GoogleCalendarService:
                 self._authenticate_with_file()
             
         except Exception as e:
-            logger.error(f"Erro na autenticação do Google Calendar: {e}")
+            logger.warning(f"Google Calendar não configurado ou erro na autenticação: {e}")
+            # Não falhar, apenas continuar sem autenticação
+            self.service = None
     
     def _authenticate_with_config(self):
         """Autentica usando configuração da nova arquitetura"""
@@ -56,7 +58,7 @@ class GoogleCalendarService:
             refresh_token = self.config.get('google_calendar_refresh_token')
             
             if not client_id or not client_secret:
-                logger.error("Client ID e Client Secret são obrigatórios")
+                logger.warning("Client ID e Client Secret não configurados para Google Calendar")
                 return
             
             # Criar credenciais
@@ -76,14 +78,16 @@ class GoogleCalendarService:
                 logger.info("Autenticado com refresh token")
             else:
                 # Fluxo OAuth2 (para desenvolvimento)
-                logger.warning("Refresh token não encontrado, usando fluxo OAuth2")
-                self._authenticate_with_file()
+                logger.warning("Refresh token não encontrado, Google Calendar não configurado")
+                return
             
             self.service = build('calendar', 'v3', credentials=self.creds)
             logger.info("Google Calendar autenticado com sucesso")
             
         except Exception as e:
-            logger.error(f"Erro na autenticação com configuração: {e}")
+            logger.warning(f"Google Calendar não configurado ou erro na autenticação: {e}")
+            # Não falhar, apenas continuar sem autenticação
+            self.service = None
     
     def _authenticate_with_file(self):
         """Autentica usando arquivo de credenciais (fallback)"""
@@ -100,7 +104,7 @@ class GoogleCalendarService:
                 else:
                     # Verifica se existe o arquivo de credenciais
                     if not os.path.exists('credentials.json'):
-                        logger.warning("Arquivo 'credentials.json' não encontrado. Execute setup_google_calendar.py primeiro.")
+                        logger.warning("Arquivo 'credentials.json' não encontrado. Google Calendar não configurado.")
                         return
                     
                     # Faz o fluxo de autenticação
@@ -116,7 +120,9 @@ class GoogleCalendarService:
             logger.info("Google Calendar autenticado com sucesso")
             
         except Exception as e:
-            logger.error(f"Erro na autenticação com arquivo: {e}")
+            logger.warning(f"Google Calendar não configurado ou erro na autenticação: {e}")
+            # Não falhar, apenas continuar sem autenticação
+            self.service = None
     
     def get_available_slots(self, date: str = None, days_ahead: int = 7) -> List[Dict]:
         """
