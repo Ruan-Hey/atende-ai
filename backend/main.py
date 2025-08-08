@@ -1719,11 +1719,20 @@ async def google_oauth_callback(
             'redirect_uri': f'https://api.tinyteams.app/auth/google/callback'
         }
         
+        logger.info(f"Tentando trocar code por tokens...")
+        logger.info(f"Client ID: {config.get('google_calendar_client_id')}")
+        logger.info(f"Client Secret: {config.get('google_calendar_client_secret')[:10]}...")
+        logger.info(f"Code: {code[:20]}...")
+        logger.info(f"Redirect URI: https://api.tinyteams.app/auth/google/callback")
+        
         response = requests.post('https://oauth2.googleapis.com/token', data=token_data)
+        
+        logger.info(f"Response status: {response.status_code}")
+        logger.info(f"Response text: {response.text}")
         
         if response.status_code != 200:
             logger.error(f"Erro ao trocar code por tokens: {response.text}")
-            raise HTTPException(status_code=400, detail="Erro na autorização OAuth2")
+            raise HTTPException(status_code=400, detail=f"Erro na autorização OAuth2: {response.text}")
         
         tokens = response.json()
         refresh_token = tokens.get('refresh_token')
@@ -1804,6 +1813,54 @@ async def test_google_oauth_simulation():
     except Exception as e:
         logger.error(f"Erro na simulação OAuth2: {e}")
         raise HTTPException(status_code=500, detail=f"Erro na simulação: {str(e)}")
+
+@app.get("/api/test/google-oauth-config")
+async def test_google_oauth_config():
+    """Verifica configurações OAuth2 do Google Calendar"""
+    try:
+        session = SessionLocal()
+        
+        # Buscar empresa TinyTeams
+        empresa = session.query(Empresa).filter(Empresa.slug == 'tinyteams').first()
+        if not empresa:
+            raise HTTPException(status_code=404, detail="Empresa não encontrada")
+        
+        # Buscar configuração da API
+        from models import EmpresaAPI, API
+        api = session.query(API).filter(API.nome == 'Google Calendar').first()
+        if not api:
+            raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
+        
+        empresa_api = session.query(EmpresaAPI).filter(
+            EmpresaAPI.empresa_id == empresa.id,
+            EmpresaAPI.api_id == api.id
+        ).first()
+        
+        if not empresa_api or not empresa_api.config:
+            return {
+                "status": "error",
+                "message": "Google Calendar não configurado",
+                "config": None
+            }
+        
+        config = empresa_api.config
+        
+        return {
+            "status": "success",
+            "message": "Configurações encontradas",
+            "config": {
+                "client_id": config.get('google_calendar_client_id'),
+                "client_secret": config.get('google_calendar_client_secret')[:10] + "..." if config.get('google_calendar_client_secret') else None,
+                "refresh_token": "***" if config.get('google_calendar_refresh_token') else None,
+                "service_account": "Configurado" if config.get('google_calendar_service_account') else None
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Erro ao verificar configurações: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao verificar configurações: {str(e)}")
+    finally:
+        session.close()
 
 if __name__ == "__main__":
     import uvicorn
