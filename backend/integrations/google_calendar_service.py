@@ -314,7 +314,7 @@ class GoogleCalendarService:
             
             event = {
                 'summary': f'Reunião TinyTeams - {company}',
-                'description': f'Reunião com {name} da empresa {company}',
+                'description': f'Reunião com {name} ({email}) da empresa {company}',
                 'start': {
                     'dateTime': meeting_time.isoformat(),
                     'timeZone': 'America/Sao_Paulo',
@@ -323,13 +323,10 @@ class GoogleCalendarService:
                     'dateTime': end_time.isoformat(),
                     'timeZone': 'America/Sao_Paulo',
                 },
-                'attendees': [
-                    {'email': email},
-                ],
+                # Removido 'attendees' para funcionar com Service Account
                 'reminders': {
                     'useDefault': False,
                     'overrides': [
-                        {'method': 'email', 'minutes': 24 * 60},
                         {'method': 'popup', 'minutes': 30},
                     ],
                 },

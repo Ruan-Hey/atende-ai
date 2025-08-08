@@ -23,6 +23,9 @@ class CalendarTools:
                 'google_calendar_client_id': empresa_config.get('google_calendar_client_id'),
                 'google_calendar_client_secret': empresa_config.get('google_calendar_client_secret'),
                 'google_calendar_refresh_token': empresa_config.get('google_calendar_refresh_token'),
+                'google_calendar_service_account': empresa_config.get('google_calendar_service_account'),
+                'google_calendar_project_id': empresa_config.get('google_calendar_project_id'),
+                'google_calendar_client_email': empresa_config.get('google_calendar_client_email'),
                 'google_sheets_id': empresa_config.get('google_sheets_id')
             }
             

@@ -593,7 +593,49 @@ def get_logs(empresa: str = None, limit: int = 100, level: str = None, exclude_i
 def get_available_slots(date: str = None):
     """Retorna horários disponíveis para agendamento"""
     try:
-        return {"message": "Calendar slots functionality is currently disabled."}
+        # Buscar configurações da empresa TinyTeams
+        session = SessionLocal()
+        try:
+            empresa = session.query(Empresa).filter(Empresa.slug == 'tinyteams').first()
+            if not empresa:
+                raise HTTPException(status_code=404, detail="Empresa TinyTeams não encontrada")
+            
+            # Buscar configurações da API Google Calendar
+            from models import API, EmpresaAPI
+            api = session.query(API).filter(API.nome == 'Google Calendar').first()
+            if not api:
+                raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
+            
+            empresa_api = session.query(EmpresaAPI).filter(
+                EmpresaAPI.empresa_id == empresa.id,
+                EmpresaAPI.api_id == api.id
+            ).first()
+            
+            if not empresa_api or not empresa_api.config:
+                return {"message": "Google Calendar não configurado"}
+            
+            # Criar configuração para o Google Calendar Service
+            calendar_config = {
+                'google_calendar_enabled': empresa_api.config.get('google_calendar_enabled', True),
+                'google_calendar_client_id': empresa_api.config.get('google_calendar_client_id'),
+                'google_calendar_client_secret': empresa_api.config.get('google_calendar_client_secret'),
+                'google_calendar_refresh_token': empresa_api.config.get('google_calendar_refresh_token'),
+                'google_calendar_service_account': empresa_api.config.get('google_calendar_service_account'),
+                'google_calendar_project_id': empresa_api.config.get('google_calendar_project_id'),
+                'google_calendar_client_email': empresa_api.config.get('google_calendar_client_email')
+            }
+            
+            # Usar Google Calendar Service
+            from integrations.google_calendar_service import GoogleCalendarService
+            calendar_service = GoogleCalendarService(calendar_config)
+            
+            # Buscar slots disponíveis
+            slots = calendar_service.get_available_slots(date)
+            return slots
+            
+        finally:
+            session.close()
+            
     except Exception as e:
         logger.error(f"Erro ao buscar horários disponíveis: {e}")
         raise HTTPException(status_code=500, detail="Erro ao verificar agenda")
@@ -652,7 +694,49 @@ def get_conversation_history(
 def schedule_meeting(email: str, name: str, company: str, date_time: str):
     """Agenda uma reunião"""
     try:
-        return {"message": "Calendar scheduling functionality is currently disabled."}
+        # Buscar configurações da empresa TinyTeams
+        session = SessionLocal()
+        try:
+            empresa = session.query(Empresa).filter(Empresa.slug == 'tinyteams').first()
+            if not empresa:
+                raise HTTPException(status_code=404, detail="Empresa TinyTeams não encontrada")
+            
+            # Buscar configurações da API Google Calendar
+            from models import API, EmpresaAPI
+            api = session.query(API).filter(API.nome == 'Google Calendar').first()
+            if not api:
+                raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
+            
+            empresa_api = session.query(EmpresaAPI).filter(
+                EmpresaAPI.empresa_id == empresa.id,
+                EmpresaAPI.api_id == api.id
+            ).first()
+            
+            if not empresa_api or not empresa_api.config:
+                return {"message": "Google Calendar não configurado"}
+            
+            # Criar configuração para o Google Calendar Service
+            calendar_config = {
+                'google_calendar_enabled': empresa_api.config.get('google_calendar_enabled', True),
+                'google_calendar_client_id': empresa_api.config.get('google_calendar_client_id'),
+                'google_calendar_client_secret': empresa_api.config.get('google_calendar_client_secret'),
+                'google_calendar_refresh_token': empresa_api.config.get('google_calendar_refresh_token'),
+                'google_calendar_service_account': empresa_api.config.get('google_calendar_service_account'),
+                'google_calendar_project_id': empresa_api.config.get('google_calendar_project_id'),
+                'google_calendar_client_email': empresa_api.config.get('google_calendar_client_email')
+            }
+            
+            # Usar Google Calendar Service
+            from integrations.google_calendar_service import GoogleCalendarService
+            calendar_service = GoogleCalendarService(calendar_config)
+            
+            # Agendar reunião
+            result = calendar_service.schedule_meeting(email, name, company, date_time)
+            return result
+            
+        finally:
+            session.close()
+            
     except Exception as e:
         logger.error(f"Erro ao agendar reunião: {e}")
         raise HTTPException(status_code=500, detail="Erro ao agendar reunião")
@@ -1539,39 +1623,77 @@ async def upload_google_service_account(
             EmpresaAPI.api_id == api.id
         ).first()
         
+        logger.info(f"Empresa API encontrada: {empresa_api is not None}")
+        if empresa_api:
+            logger.info(f"Config atual: {empresa_api.config}")
+        
         if not empresa_api:
             # Criar nova conexão
             logger.info("Criando nova conexão empresa-API")
-            empresa_api = EmpresaAPI(
-                empresa_id=empresa.id,
-                api_id=api.id,
-                config={
-                    'google_calendar_enabled': True,
-                    'google_calendar_service_account': service_account_data,
-                    'google_calendar_project_id': service_account_data.get('project_id'),
-                    'google_calendar_client_email': service_account_data.get('client_email')
-                },
-                ativo=True
-            )
-            session.add(empresa_api)
-        else:
-            # Atualizar configuração existente
-            logger.info("Atualizando configuração existente")
-            current_config = empresa_api.config or {}
-            current_config.update({
+            new_config = {
                 'google_calendar_enabled': True,
                 'google_calendar_service_account': service_account_data,
                 'google_calendar_project_id': service_account_data.get('project_id'),
                 'google_calendar_client_email': service_account_data.get('client_email')
-            })
-            empresa_api.config = current_config
+            }
+            logger.info(f"Nova config a ser salva: {new_config}")
+            
+            empresa_api = EmpresaAPI(
+                empresa_id=empresa.id,
+                api_id=api.id,
+                config=new_config,
+                ativo=True
+            )
+            session.add(empresa_api)
+            logger.info("EmpresaAPI adicionada à sessão")
+        else:
+            # Atualizar configuração existente
+            logger.info("Atualizando configuração existente")
+            current_config = empresa_api.config or {}
+            logger.info(f"Config atual: {current_config}")
+            
+            updated_config = {
+                'google_calendar_enabled': True,
+                'google_calendar_service_account': service_account_data,
+                'google_calendar_project_id': service_account_data.get('project_id'),
+                'google_calendar_client_email': service_account_data.get('client_email')
+            }
+            logger.info(f"Config atualizada: {updated_config}")
+            
+            # Substituir completamente a configuração em vez de fazer update
+            empresa_api.config = updated_config
             empresa_api.ativo = True
+            logger.info(f"Config final: {empresa_api.config}")
         
-        session.commit()
-        logger.info("Service Account salvo com sucesso no banco")
+        logger.info("Antes do flush - empresa_api.config: %s", empresa_api.config)
+        try:
+            session.flush()
+            logger.info("Após flush - empresa_api.config: %s", empresa_api.config)
+            
+            session.commit()
+            logger.info("Service Account salvo com sucesso no banco")
+        except Exception as e:
+            logger.error(f"Erro no commit: {e}")
+            session.rollback()
+            raise
+        
+        # Recarregar do banco para confirmar persistência
+        empresa_api_verif = session.query(EmpresaAPI).filter(
+            EmpresaAPI.empresa_id == empresa.id,
+            EmpresaAPI.api_id == api.id
+        ).first()
+        
+        logger.info(f"Verificação pós-commit - empresa_api_verif: {empresa_api_verif}")
+        if empresa_api_verif:
+            logger.info(f"Verificação pós-commit - config: {empresa_api_verif.config}")
+            logger.info(f"Verificação pós-commit - service_account: {empresa_api_verif.config.get('google_calendar_service_account') if empresa_api_verif.config else None}")
+        
+        saved = bool(empresa_api_verif and empresa_api_verif.config and empresa_api_verif.config.get('google_calendar_service_account'))
+        logger.info(f"Confirmação de persistência no banco: saved={saved}")
         
         return {
             "success": True,
+            "saved": saved,
             "message": "Service Account configurado com sucesso!",
             "project_id": service_account_data.get('project_id'),
             "client_email": service_account_data.get('client_email')
