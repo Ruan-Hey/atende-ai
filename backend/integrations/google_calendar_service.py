@@ -36,9 +36,16 @@ class GoogleCalendarService:
     def _authenticate(self):
         """Autentica com Google Calendar API"""
         try:
-            # Se temos configuração da nova arquitetura, usar ela
+            # Verificar se temos Service Account (prioridade máxima)
+            service_account = self.config.get('google_calendar_service_account')
+            if service_account:
+                logger.info("Usando Service Account para autenticação")
+                self._authenticate_with_service_account(service_account)
+                return
+            
+            # Verificar se temos configuração OAuth2
             if self.config.get('google_calendar_client_id') and self.config.get('google_calendar_client_secret'):
-                logger.info("Usando configuração da nova arquitetura")
+                logger.info("Usando configuração OAuth2")
                 self._authenticate_with_config()
             else:
                 # Fallback para arquivo de credenciais
