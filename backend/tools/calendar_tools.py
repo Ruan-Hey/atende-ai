@@ -214,22 +214,31 @@ class CalendarTools:
             calendar_service = self._get_calendar_service(empresa_config)
             sheets_service = self._get_sheets_service(empresa_config)
             
-            # 1. Criar evento no Google Calendar
-            event_id = calendar_service.create_event(
-                date_time=f"{data} {hora}",
-                description=f"Reserva para {cliente}",
-                attendees=[cliente]
+            # 1. Criar evento no Google Calendar (sem enviar convite)
+            date_time = f"{data}T{hora}:00"
+            result = calendar_service.schedule_meeting(
+                email="",  # Não enviar email
+                name=cliente,
+                company=empresa_config.get('nome', 'Empresa'),
+                date_time=date_time,
+                duration_minutes=60
             )
             
-            # 2. Registrar no Google Sheets
-            sheets_service.add_reservation(
-                data=data,
-                hora=hora,
-                cliente=cliente,
-                empresa=empresa_config.get('nome', 'Empresa')
-            )
+            if not result.get('success'):
+                return f"❌ Erro ao criar evento no Google Calendar: {result.get('message')}"
             
-            return f"✅ Reserva confirmada no Google Calendar!\nData: {data}\nHora: {hora}\nCliente: {cliente}\nID do evento: {event_id}"
+            # 2. Registrar no Google Sheets (se configurado)
+            try:
+                sheets_service.add_reservation(
+                    data=data,
+                    hora=hora,
+                    cliente=cliente,
+                    empresa=empresa_config.get('nome', 'Empresa')
+                )
+            except Exception as e:
+                logger.warning(f"Erro ao registrar no Google Sheets: {e}")
+            
+            return f"✅ Evento criado no Google Calendar!\nData: {data}\nHora: {hora}\nCliente: {cliente}\nID do evento: {result.get('event_id')}"
             
         except Exception as e:
             logger.error(f"Erro ao fazer reserva no Google Calendar: {e}")

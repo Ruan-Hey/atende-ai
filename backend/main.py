@@ -399,6 +399,10 @@ async def webhook_handler(empresa_slug: str, request: Request):
                 if api_name == "Google Calendar":
                     empresa_config['google_calendar_client_id'] = config.get('google_calendar_client_id')
                     empresa_config['google_calendar_client_secret'] = config.get('google_calendar_client_secret')
+                    empresa_config['google_calendar_service_account'] = config.get('google_calendar_service_account')
+                    empresa_config['google_calendar_project_id'] = config.get('google_calendar_project_id')
+                    empresa_config['google_calendar_client_email'] = config.get('google_calendar_client_email')
+                    empresa_config['google_calendar_enabled'] = config.get('google_calendar_enabled', True)
                     empresa_config['google_sheets_id'] = config.get('google_sheets_id')
                 elif api_name == "Google Sheets":
                     empresa_config['google_sheets_id'] = config.get('google_sheets_id')

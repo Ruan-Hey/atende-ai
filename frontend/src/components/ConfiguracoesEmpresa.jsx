@@ -363,17 +363,20 @@ const ConfiguracoesEmpresa = () => {
       
       console.log('Dados sendo enviados:', configuracoes)
       
-      // 1) Salvar configurações comuns
-      await apiService.updateEmpresaConfiguracoes(selectedEmpresa, configuracoes)
-
-      // 2) Se houver arquivo de Service Account pendente, enviar agora
+      // 1) Se houver arquivo de Service Account pendente, enviar primeiro
       if (pendingServiceAccountFile) {
         const formData = new FormData()
         formData.append('file', pendingServiceAccountFile)
         await apiService.uploadGoogleServiceAccount(selectedEmpresa, formData)
         setPendingServiceAccountFile(null)
         setPendingServiceAccountName('')
+        
+        // Aguardar um pouco para o banco processar
+        await new Promise(resolve => setTimeout(resolve, 500))
       }
+
+      // 2) Salvar configurações comuns (que agora incluirão os dados do Service Account)
+      await apiService.updateEmpresaConfiguracoes(selectedEmpresa, configuracoes)
 
       setSuccess(true)
       setTimeout(() => setSuccess(false), 3000)
