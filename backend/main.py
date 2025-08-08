@@ -922,6 +922,9 @@ def get_empresa_configuracoes(
                 config_data['google_calendar_client_id'] = config.get('google_calendar_client_id')
                 config_data['google_calendar_client_secret'] = config.get('google_calendar_client_secret')
                 config_data['google_calendar_refresh_token'] = config.get('google_calendar_refresh_token')
+                config_data['google_calendar_service_account'] = config.get('google_calendar_service_account')
+                config_data['google_calendar_project_id'] = config.get('google_calendar_project_id')
+                config_data['google_calendar_client_email'] = config.get('google_calendar_client_email')
             elif api.nome == "Google Sheets":
                 config_data['google_sheets_id'] = config.get('google_sheets_id')
             elif api.nome == "OpenAI":
