@@ -44,23 +44,38 @@ class BaseAgent:
             except Exception:
                 return {}
         
-        def buscar_cliente_wrapper(tool_input: str) -> str:
-            data = _parse_json(tool_input)
+        def buscar_cliente_wrapper(tool_input: str = None, **kwargs) -> str:
+            # Aceitar tanto tool_input quanto kwargs
+            if tool_input:
+                data = _parse_json(tool_input)
+            else:
+                data = kwargs
+            
             cliente_id = data.get('cliente_id') or self.current_context.get('cliente_id')
             empresa_id = self.empresa_config.get('empresa_id')
             if not cliente_id or not empresa_id:
                 return "Parâmetros ausentes: forneça {'cliente_id': '...'}; empresa_id vem do contexto."
             return cliente_tools.buscar_cliente_info(cliente_id, int(empresa_id))
         
-        def verificar_calendario_wrapper(tool_input: str) -> str:
-            data = _parse_json(tool_input)
+        def verificar_calendario_wrapper(tool_input: str = None, **kwargs) -> str:
+            # Aceitar tanto tool_input quanto kwargs
+            if tool_input:
+                data = _parse_json(tool_input)
+            else:
+                data = kwargs
+            
             data_str = data.get('data') or data.get('date')
             if not data_str:
                 return "Parâmetros ausentes: forneça {'data': 'YYYY-MM-DD'}"
             return calendar_tools.verificar_disponibilidade(data_str, self.empresa_config)
         
-        def fazer_reserva_wrapper(tool_input: str) -> str:
-            data = _parse_json(tool_input)
+        def fazer_reserva_wrapper(tool_input: str = None, **kwargs) -> str:
+            # Aceitar tanto tool_input quanto kwargs
+            if tool_input:
+                data = _parse_json(tool_input)
+            else:
+                data = kwargs
+            
             data_str = data.get('data') or data.get('date')
             hora = data.get('hora') or data.get('time')
             cliente = data.get('cliente') or data.get('customer') or self.current_context.get('cliente_name') or 'Cliente'
@@ -68,8 +83,13 @@ class BaseAgent:
                 return "Parâmetros ausentes: forneça {'data': 'YYYY-MM-DD', 'hora': 'HH:MM', 'cliente': 'Nome'}"
             return calendar_tools.fazer_reserva(data_str, hora, cliente, self.empresa_config)
         
-        def enviar_mensagem_wrapper(tool_input: str) -> str:
-            data = _parse_json(tool_input)
+        def enviar_mensagem_wrapper(tool_input: str = None, **kwargs) -> str:
+            # Aceitar tanto tool_input quanto kwargs
+            if tool_input:
+                data = _parse_json(tool_input)
+            else:
+                data = kwargs
+            
             mensagem = data.get('mensagem') or data.get('message') or (tool_input if isinstance(tool_input, str) else None)
             cliente_id = data.get('cliente_id') or self.current_context.get('cliente_id')
             if not mensagem or not cliente_id:
