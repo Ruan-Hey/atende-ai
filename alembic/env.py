@@ -9,10 +9,15 @@ import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'backend'))
 from models import Base
+from config import Config as AppConfig
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+
+# Force sqlalchemy.url to match the application database URL
+if AppConfig.POSTGRES_URL:
+    config.set_main_option("sqlalchemy.url", AppConfig.POSTGRES_URL)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

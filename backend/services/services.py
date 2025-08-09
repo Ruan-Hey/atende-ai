@@ -3,10 +3,13 @@ import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from config import Config
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
-from models import Mensagem, Cliente, Atendimento, Atividade
+from ..models import Mensagem, Cliente, Atendimento, Atividade
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +34,7 @@ class DatabaseService:
             session.add(mensagem)
             
             # Atualizar ou criar registro do cliente
-            from models import Cliente
+            from ..models import Cliente
             cliente = session.query(Cliente).filter(
                 Cliente.empresa_id == empresa_id,
                 Cliente.cliente_id == cliente_id
@@ -157,8 +160,8 @@ class MetricsService:
             # Buscar todas as empresas
             from sqlalchemy import create_engine
             from sqlalchemy.orm import sessionmaker
-            from models import Empresa
-            from config import Config
+            from ..models import Empresa
+            from .config import Config
             
             engine = create_engine(Config.POSTGRES_URL)
             SessionLocal = sessionmaker(bind=engine)
@@ -218,8 +221,8 @@ class MetricsService:
         try:
             from sqlalchemy import create_engine
             from sqlalchemy.orm import sessionmaker
-            from models import Empresa
-            from config import Config
+            from ..models import Empresa
+            from .config import Config
             
             engine = create_engine(Config.POSTGRES_URL)
             SessionLocal = sessionmaker(bind=engine)

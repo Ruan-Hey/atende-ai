@@ -41,6 +41,50 @@ class BaseAgent:
             "enviar_mensagem": self._get_enviar_mensagem_wrapper(),
         }
         
+        # Cache simples em memória por execução
+        self._knowledge_cache: Dict[str, str] = {}
+        
+        # Adicionar wrapper de conhecimento de negócios
+        def _get_business_knowledge_wrapper():
+            def wrapper(key: str) -> str:
+                try:
+                    if not key:
+                        return "Parâmetros ausentes: forneça key"
+                    cache_key = f"{self.empresa_config.get('empresa_id')}::knowledge::{key}"
+                    if cache_key in self._knowledge_cache:
+                        return self._knowledge_cache[cache_key]
+                    knowledge = self.empresa_config.get('knowledge_json') or {}
+                    items = knowledge.get('items') if isinstance(knowledge, dict) else []
+                    if not isinstance(items, list):
+                        items = []
+                    # Matching por key exata; fallback por title case-insensitive
+                    found = None
+                    for it in items:
+                        if isinstance(it, dict) and it.get('key') == key:
+                            found = it
+                            break
+                    if not found:
+                        for it in items:
+                            if isinstance(it, dict) and it.get('title', '').strip().lower() == key.strip().lower():
+                                found = it
+                                break
+                    if not found and isinstance(key, str):
+                        # aliases opcionais
+                        for it in items:
+                            aliases = it.get('aliases', []) if isinstance(it, dict) else []
+                            if isinstance(aliases, list) and any(a.strip().lower() == key.strip().lower() for a in aliases if isinstance(a, str)):
+                                found = it
+                                break
+                    if not found:
+                        return ""
+                    desc = found.get('description') or ""
+                    self._knowledge_cache[cache_key] = desc
+                    return desc
+                except Exception:
+                    return ""
+            return wrapper
+        self._wrappers["get_business_knowledge"] = _get_business_knowledge_wrapper()
+        
         # Tools estruturadas para tool-calling nativo
         self.structured_tools = self._setup_structured_tools()
         self.agent = self._create_agent()
@@ -116,6 +160,12 @@ class BaseAgent:
                 return "Parâmetros ausentes: forneça {'mensagem': '...', 'cliente_id': '...'}"
             return message_tools.enviar_resposta(mensagem, cliente_id, self.empresa_config, canal=self.current_context.get('channel', 'whatsapp'))
         
+        def get_business_knowledge_wrapper(tool_input: str = None, **kwargs) -> str:
+            # Aceitar tanto tool_input quanto kwargs
+            data = _parse_json(tool_input) if tool_input else kwargs
+            key = data.get('key') or data.get('titulo') or data.get('title')
+            return self._wrappers["get_business_knowledge"](key)
+        
         # Tools básicas (modo compatibilidade com AgentExecutor)
         tools = [
             Tool(
@@ -137,6 +187,11 @@ class BaseAgent:
                 name="enviar_mensagem",
                 func=enviar_mensagem_wrapper,
                 description="Envia mensagem pelo canal apropriado. Entrada: JSON {'mensagem': '...', 'cliente_id': '...'}"
+            ),
+            Tool(
+                name="get_business_knowledge",
+                func=get_business_knowledge_wrapper,
+                description="Retorna um texto curto a partir do conhecimento da empresa. Entrada: JSON {'key': 'slug ou título'}"
             )
         ]
         
@@ -228,6 +283,12 @@ class BaseAgent:
             return self._wrappers["enviar_mensagem"](mensagem=mensagem, cliente_id=cliente_id)
         structured.append(t_enviar_mensagem)
         
+        @lc_tool("get_business_knowledge")
+        def t_get_business_knowledge(key: str) -> str:
+            """Retorna texto curto de conhecimento da empresa para a chave informada (slug ou título)."""
+            return self._wrappers["get_business_knowledge"](key)
+        structured.append(t_get_business_knowledge)
+        
         # Adicionar StructuredTools dinâmicos para APIs conectadas
         from tools.api_tools import APITools
         for key, value in self.empresa_config.items():
@@ -261,12 +322,11 @@ class BaseAgent:
                         except Exception as e:
                             return f"Erro ao chamar API {api_name_local}: {str(e)}"
                     return wrapper
-                dyn_wrapper = _make_dyn_wrapper(api_name, api_config)
-                self._wrappers[tool_name] = dyn_wrapper
+                self._wrappers[tool_name] = _make_dyn_wrapper(api_name, api_config)
                 
                 @lc_tool(tool_name)
                 def t_dynamic_api_call(endpoint_path: str, method: str = "GET", params_json: str = "") -> str:  # type: ignore
-                    """Chama endpoints da API conectada. Passe endpoint_path (ex: /slots), method (GET/POST/...) e params_json com JSON de parâmetros."""
+                    """Chama dinamicamente um endpoint da API conectada à empresa."""
                     return self._wrappers[tool_name](endpoint_path=endpoint_path, method=method, params_json=params_json)
                 structured.append(t_dynamic_api_call)
         
@@ -483,15 +543,17 @@ FERRAMENTAS DISPONÍVEIS:
 2. verificar_calendario - Verifica disponibilidade real no Google Calendar
 3. fazer_reserva - Faz reserva real na agenda (e envia convite ao cliente)
 4. enviar_mensagem - Envia mensagem
+5. get_business_knowledge - Consulta informações específicas da empresa (horários, regras, promoções, etc.) - Use quando o cliente perguntar sobre horários de funcionamento, regras, promoções ou outras informações da empresa
 APIs dinâmicas conectadas (tool genérica):
 {dynamic_tools_info}
 
 INSTRUÇÕES IMPORTANTES (POLÍTICA DE DECISÃO):
 - Quando o cliente pedir para agendar/confirmar um horário, extraia data e hora do contexto recente e chame a ferramenta apropriada.
-- Se JÁ tivermos data e hora e o cliente confirmar (ex.: “pode agendar às 17h”), peça o email do cliente se ainda não tiver e então chame DIRETAMENTE a ferramenta fazer_reserva com data, hora, nome e email.
+- Se JÁ tivermos data e hora e o cliente confirmar (ex.: "pode agendar às 17h"), peça o email do cliente se ainda não tiver e então chame DIRETAMENTE a ferramenta fazer_reserva com data, hora, nome e email.
 - Se faltar apenas UM dado (data, hora ou email), pergunte somente o que falta. Não repita perguntas já respondidas.
-- Sempre que o cliente mencionar “hoje”, use {current_date}. Para dias da semana (ex.: segunda-feira), calcule a próxima ocorrência a partir da data atual.
+- Sempre que o cliente mencionar "hoje", use {current_date}. Para dias da semana (ex.: segunda-feira), calcule a próxima ocorrência a partir da data atual.
 - Para verificar disponibilidade, use verificar_calendario (YYYY-MM-DD). Depois que o cliente escolher um horário dessa lista e fornecer o email, chame fazer_reserva.
+- **IMPORTANTE**: Quando o cliente perguntar sobre horários de funcionamento, regras, promoções ou outras informações específicas da empresa, SEMPRE use a ferramenta get_business_knowledge para consultar essas informações antes de responder.
 - Evite respostas longas. Priorize executar a ferramenta e responder com o resultado real.
 
 PROMPT ESPECÍFICO DA EMPRESA:

@@ -23,7 +23,8 @@ const NovaEmpresa = () => {
     calendar_expanded: false,
     sheets_expanded: false,
     openai_expanded: false,
-    trinks_expanded: false
+    trinks_expanded: false,
+    knowledge_json: { items: [] }
   })
   
   // Estado separado para controlar accordions
@@ -42,6 +43,47 @@ const NovaEmpresa = () => {
   const [focusField, setFocusField] = useState('')
   const [activeSection, setActiveSection] = useState('dados-empresa')
   const navigate = useNavigate()
+
+  // Função para lidar com quebras de linha nos campos textarea
+  const handleTextareaKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      const cursorPosition = e.target.selectionStart
+      const value = e.target.value
+      const newValue = value.slice(0, cursorPosition) + '\n' + value.slice(cursorPosition)
+      
+      // Atualizar o valor do campo
+      const { name } = e.target
+      if (name) {
+        setForm(prev => ({ ...prev, [name]: newValue }))
+      }
+      
+      // Manter o cursor na posição correta após a quebra de linha
+      setTimeout(() => {
+        const newCursorPosition = cursorPosition + 1
+        e.target.setSelectionRange(newCursorPosition, newCursorPosition)
+      }, 0)
+    }
+  }
+
+  // Função para lidar com quebras de linha nos campos de conhecimento
+  const handleKnowledgeTextareaKeyDown = (e, index, field) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      const cursorPosition = e.target.selectionStart
+      const value = e.target.value
+      const newValue = value.slice(0, cursorPosition) + '\n' + value.slice(cursorPosition)
+      
+      // Atualizar o valor do campo de conhecimento
+      handleKnowledgeChange(index, field, newValue)
+      
+      // Manter o cursor na posição correta após a quebra de linha
+      setTimeout(() => {
+        const newCursorPosition = cursorPosition + 1
+        e.target.setSelectionRange(newCursorPosition, newCursorPosition)
+      }, 0)
+    }
+  }
 
   const handleNextSection = () => {
     const currentIndex = sections.findIndex(section => section.id === activeSection)
@@ -107,6 +149,58 @@ const NovaEmpresa = () => {
   const handleChange = e => {
     const { name, value, type, checked } = e.target
     setForm(f => ({ ...f, [name]: type === 'checkbox' ? checked : value }))
+  }
+
+  const handleKnowledgeChange = (index, field, value) => {
+    setForm(prev => {
+      const kj = prev.knowledge_json || { items: [] }
+      const items = Array.isArray(kj.items) ? [...kj.items] : []
+      items[index] = { ...items[index], [field]: value }
+      return { ...prev, knowledge_json: { ...kj, items } }
+    })
+  }
+
+  const handleAddKnowledgeItem = () => {
+    setForm(prev => {
+      const kj = prev.knowledge_json || { items: [] }
+      const items = Array.isArray(kj.items) ? [...kj.items] : []
+      items.push({ key: '', title: '', description: '', active: true })
+      return { ...prev, knowledge_json: { ...kj, items } }
+    })
+  }
+
+  const handleRemoveKnowledgeItem = (index) => {
+    setForm(prev => {
+      const kj = prev.knowledge_json || { items: [] }
+      const items = Array.isArray(kj.items) ? [...kj.items] : []
+      items.splice(index, 1)
+      return { ...prev, knowledge_json: { ...kj, items } }
+    })
+  }
+
+  const slugify = (text) => {
+    return (text || '')
+      .toString()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s-]/g, '')
+      .trim()
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+  }
+
+  const ensureKeyForItem = (index) => {
+    setForm(prev => {
+      const kj = prev.knowledge_json || { items: [] }
+      const items = Array.isArray(kj.items) ? [...kj.items] : []
+      const item = items[index] || {}
+      if (!item.key && item.title) {
+        item.key = slugify(item.title)
+        items[index] = item
+      }
+      return { ...prev, knowledge_json: { ...kj, items } }
+    })
   }
 
   const handleAPISelection = (apiId) => {
@@ -235,6 +329,7 @@ const NovaEmpresa = () => {
             {...commonProps}
             rows={6}
             className="form-textarea"
+            onKeyDown={handleTextareaKeyDown}
           />
         </div>
       )
@@ -312,7 +407,7 @@ const NovaEmpresa = () => {
                   <div className="google-integrations">
                     {/* APIs do Banco de Dados */}
                     {apis.filter(api => api.ativo).map(api => (
-                      <div key={api.id} className="integration-group" data-api={api.nome.toLowerCase().replace(/\s+/g, '-')}>
+                      <div key={api.id} className="integration-group" data-api={api.nome.toLowerCase().replace(/\s+/g, '-')}> 
                         <div className="integration-header">
                           <div className="integration-icon">
                             {api.logo_url ? (
@@ -390,7 +485,53 @@ const NovaEmpresa = () => {
                   </div>
                 ) : (
                   /* Campos normais para outras abas */
-                  section.fields.map(renderField)
+                  <>
+                    {section.fields.map(renderField)}
+                    {section.id === 'dados-empresa' && (
+                      <div className="knowledge-section">
+                        <h3 style={{ marginTop: '1rem' }}>Conhecimento da Empresa</h3>
+                        <p className="field-hint">Adicione linhas com Título (esquerda) e Descrição (direita). A chave (key) é gerada automaticamente a partir do título.</p>
+                        {(form.knowledge_json?.items || []).map((item, idx) => (
+                          <div key={idx} className="knowledge-row">
+                            <div className="field-group">
+                              <label>Título</label>
+                              <input
+                                type="text"
+                                className="form-input"
+                                value={item.title || ''}
+                                onChange={(e) => handleKnowledgeChange(idx, 'title', e.target.value)}
+                                onBlur={() => ensureKeyForItem(idx)}
+                                placeholder="Ex: Horário de funcionamento"
+                              />
+                            </div>
+                            <div className="field-group">
+                              <label>Descrição</label>
+                              <textarea
+                                className="form-textarea"
+                                rows={3}
+                                value={item.description || ''}
+                                onChange={(e) => handleKnowledgeChange(idx, 'description', e.target.value)}
+                                onKeyDown={(e) => handleKnowledgeTextareaKeyDown(e, idx, 'description')}
+                                placeholder="Ex: Seg-Sex 9h–18h, Sáb 10h–14h"
+                              />
+                            </div>
+                            <div className="actions">
+                              <div className="field-group" style={{ width: '130px' }}>
+                                <label>Ativo</label>
+                                <input
+                                  type="checkbox"
+                                  checked={item.active !== false}
+                                  onChange={(e) => handleKnowledgeChange(idx, 'active', e.target.checked)}
+                                />
+                              </div>
+                              <button type="button" className="remove-btn" onClick={() => handleRemoveKnowledgeItem(idx)}>Remover</button>
+                            </div>
+                          </div>
+                        ))}
+                        <button type="button" className="add-btn" onClick={handleAddKnowledgeItem}>+ Adicionar Linha</button>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -402,29 +543,29 @@ const NovaEmpresa = () => {
               )}
 
                               {/* Botões de navegação */}
-                <div className="form-actions">
-                  {activeSection === 'prompt' ? (
-                    // Última aba - botão salvar
-                    <button type="submit" className="save-btn" disabled={loading}>
-                      {loading ? 'Salvando...' : 'Salvar Empresa'}
-                    </button>
-                  ) : (
-                    // Abas intermediárias - botão próximo
-                    <button type="button" className="next-btn" onClick={handleNextSection}>
-                      Próximo
-                    </button>
-                  )}
-                </div>
-            </div>
-          ))}
+              <div className="form-actions">
+                {activeSection === 'prompt' ? (
+                  // Última aba - botão salvar
+                  <button type="submit" className="save-btn" disabled={loading}>
+                    {loading ? 'Salvando...' : 'Salvar Empresa'}
+                  </button>
+                ) : (
+                  // Abas intermediárias - botão próximo
+                  <button type="button" className="next-btn" onClick={handleNextSection}>
+                    Próximo
+                  </button>
+                )}
+              </div>
+          </div>
+        ))}
 
-        </form>
+      </form>
 
-        {/* Mensagens de sucesso e erro fora do formulário */}
-        {success && <div className="success-msg">✅ Empresa cadastrada com sucesso!</div>}
-        {error && <div className="error-msg">❌ {error}</div>}
-      </div>
+      {/* Mensagens de sucesso e erro fora do formulário */}
+      {success && <div className="success-msg">✅ Empresa cadastrada com sucesso!</div>}
+      {error && <div className="error-msg">❌ {error}</div>}
     </div>
+  </div>
   )
 }
 

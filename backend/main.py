@@ -11,9 +11,9 @@ import random
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from config import Config
-from models import WebhookData, MessageResponse, AdminMetrics, EmpresaMetrics, HealthCheck, Base, Empresa, Mensagem, Log, Usuario, gerar_hash_senha, Atendimento, Cliente, Atividade, API, EmpresaAPI
-from services import MetricsService
+from .config import Config
+from .models import WebhookData, MessageResponse, AdminMetrics, EmpresaMetrics, HealthCheck, Base, Empresa, Mensagem, Log, Usuario, gerar_hash_senha, Atendimento, Cliente, Atividade, API, EmpresaAPI
+from .services import MetricsService
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from jose import jwt, JWTError
@@ -143,18 +143,12 @@ async def criar_empresa(data: dict, current_user: Usuario = Depends(get_current_
             nome=data["nome"],
             prompt=data.get("prompt"),
             whatsapp_number=data.get("whatsapp_number"),
-            google_sheets_id=data.get("google_sheets_id"),
-            chatwoot_token=data.get("chatwoot_token"),
-            openai_key=data.get("openai_key"),
+            usar_buffer=data.get("usar_buffer", True),
+            mensagem_quebrada=data.get("mensagem_quebrada", False),
             twilio_sid=data.get("twilio_sid"),
             twilio_token=data.get("twilio_token"),
             twilio_number=data.get("twilio_number"),
-            chatwoot_inbox_id=data.get("chatwoot_inbox_id"),
-            chatwoot_origem=data.get("chatwoot_origem"),
-            horario_funcionamento=data.get("horario_funcionamento"),
-            filtros_chatwoot=data.get("filtros_chatwoot", []),
-            usar_buffer=data.get("usar_buffer", True),
-            mensagem_quebrada=data.get("mensagem_quebrada", False)
+            knowledge_json=data.get("knowledge_json") or {"items": []}
         )
         session.add(empresa)
         session.commit()
@@ -380,7 +374,8 @@ async def webhook_handler(empresa_slug: str, request: Request):
                 'twilio_number': empresa_db.twilio_number,
                 'mensagem_quebrada': empresa_db.mensagem_quebrada or False,
                 'prompt': empresa_db.prompt,
-                'usar_buffer': empresa_db.usar_buffer if empresa_db.usar_buffer is not None else True
+                'usar_buffer': empresa_db.usar_buffer if empresa_db.usar_buffer is not None else True,
+                'knowledge_json': empresa_db.knowledge_json or {"items": []}
             }
             
             # Adicionar configurações das APIs conectadas
@@ -606,7 +601,7 @@ def get_available_slots(date: str = None):
                 raise HTTPException(status_code=404, detail="Empresa TinyTeams não encontrada")
             
             # Buscar configurações da API Google Calendar
-            from models import API, EmpresaAPI
+            from .models import API, EmpresaAPI
             api = session.query(API).filter(API.nome == 'Google Calendar').first()
             if not api:
                 raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
@@ -707,7 +702,7 @@ def schedule_meeting(email: str, name: str, company: str, date_time: str):
                 raise HTTPException(status_code=404, detail="Empresa TinyTeams não encontrada")
             
             # Buscar configurações da API Google Calendar
-            from models import API, EmpresaAPI
+            from .models import API, EmpresaAPI
             api = session.query(API).filter(API.nome == 'Google Calendar').first()
             if not api:
                 raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
@@ -974,7 +969,7 @@ def get_empresa_configuracoes(
                 raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
         # Buscar APIs conectadas da empresa
-        from models import EmpresaAPI, API
+        from .models import EmpresaAPI, API
         
         empresa_apis = session.query(EmpresaAPI).filter(
             EmpresaAPI.empresa_id == empresa.id,
@@ -991,8 +986,13 @@ def get_empresa_configuracoes(
             # Twilio vem diretamente da tabela empresas
             "twilio_sid": empresa.twilio_sid,
             "twilio_token": empresa.twilio_token,
-            "twilio_number": empresa.twilio_number
+            "twilio_number": empresa.twilio_number,
+            # Conhecimento da empresa (JSON) para o admin
+            "knowledge_json": empresa.knowledge_json or {"items": []}
         }
+        
+        # Log para debug do knowledge_json
+        logger.info(f"📖 Retornando knowledge_json: {config_data['knowledge_json']}")
         
         # Adicionar configurações das APIs conectadas
         for empresa_api in empresa_apis:
@@ -1080,6 +1080,18 @@ def update_empresa_configuracoes(
         if "mensagem_quebrada" in configuracoes:
             empresa.mensagem_quebrada = configuracoes["mensagem_quebrada"]
         
+        # Atualizar conhecimento (JSON) diretamente na tabela empresas
+        if "knowledge_json" in configuracoes:
+            # Garantir estrutura mínima
+            kj = configuracoes["knowledge_json"] or {}
+            if not isinstance(kj, dict):
+                kj = {"items": []}
+            if "items" not in kj or not isinstance(kj["items"], list):
+                kj["items"] = []
+            logger.info(f"💾 Salvando knowledge_json: {kj}")
+            empresa.knowledge_json = kj
+            logger.info(f"✅ knowledge_json atribuído ao objeto empresa")
+        
         # Atualizar dados do Twilio diretamente na tabela empresas
         if "twilio_sid" in configuracoes:
             empresa.twilio_sid = configuracoes["twilio_sid"]
@@ -1090,7 +1102,7 @@ def update_empresa_configuracoes(
         
         # Processar configurações de APIs dinamicamente
         # Buscar todas as APIs disponíveis
-        from models import API, EmpresaAPI
+        from .models import API, EmpresaAPI
         
         # Processar campos que começam com 'api_' (formato dinâmico)
         api_configs = {}
@@ -1614,7 +1626,7 @@ async def upload_google_service_account(
         logger.info("Validação dos campos concluída")
         
         # Buscar API Google Calendar
-        from models import API, EmpresaAPI
+        from .models import API, EmpresaAPI
         api = session.query(API).filter(API.nome == 'Google Calendar').first()
         if not api:
             logger.error("API Google Calendar não encontrada")
@@ -1735,7 +1747,7 @@ async def get_google_oauth_url(
                 raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
         # Buscar configuração OAuth2 da empresa
-        from models import EmpresaAPI, API
+        from .models import EmpresaAPI, API
         api = session.query(API).filter(API.nome == 'Google Calendar').first()
         if not api:
             raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
@@ -1823,7 +1835,7 @@ async def google_oauth_callback(
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
         # Buscar configuração da API
-        from models import EmpresaAPI, API
+        from .models import EmpresaAPI, API
         api = session.query(API).filter(API.nome == 'Google Calendar').first()
         if not api:
             raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
@@ -1905,7 +1917,7 @@ async def test_google_oauth_simulation():
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
         # Buscar configuração da API
-        from models import EmpresaAPI, API
+        from .models import EmpresaAPI, API
         api = session.query(API).filter(API.nome == 'Google Calendar').first()
         if not api:
             raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
@@ -1956,7 +1968,7 @@ async def test_google_oauth_config():
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
         # Buscar configuração da API
-        from models import EmpresaAPI, API
+        from .models import EmpresaAPI, API
         api = session.query(API).filter(API.nome == 'Google Calendar').first()
         if not api:
             raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
@@ -2004,7 +2016,7 @@ async def setup_default_service_account():
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
         # Buscar configuração da API
-        from models import EmpresaAPI, API
+        from .models import EmpresaAPI, API
         api = session.query(API).filter(API.nome == 'Google Calendar').first()
         if not api:
             raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
@@ -2073,7 +2085,7 @@ async def test_service_account_status():
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
         # Buscar configuração da API
-        from models import EmpresaAPI, API
+        from .models import EmpresaAPI, API
         api = session.query(API).filter(API.nome == 'Google Calendar').first()
         if not api:
             raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")

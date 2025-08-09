@@ -120,6 +120,32 @@ const APIManager = () => {
     setShowForm(false);
   };
 
+  // Função para lidar com quebras de linha nos campos textarea
+  const handleTextareaKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      const cursorPosition = e.target.selectionStart
+      const value = e.target.value
+      const newValue = value.slice(0, cursorPosition) + '\n' + value.slice(cursorPosition)
+      
+      // Atualizar o valor do campo
+      const { name } = e.target
+      if (name) {
+        if (isEditing) {
+          setEditingApi(prev => ({ ...prev, [name]: newValue }))
+        } else {
+          setNewApi(prev => ({ ...prev, [name]: newValue }))
+        }
+      }
+      
+      // Manter o cursor na posição correta após a quebra de linha
+      setTimeout(() => {
+        const newCursorPosition = cursorPosition + 1
+        e.target.setSelectionRange(newCursorPosition, newCursorPosition)
+      }, 0)
+    }
+  }
+
   if (loading) {
     return <LoadingSpinner type="content" />;
   }
@@ -171,6 +197,7 @@ const APIManager = () => {
                 name="descricao"
                 value={isEditing ? editingApi.descricao : newApi.descricao}
                 onChange={handleInputChange}
+                onKeyDown={handleTextareaKeyDown}
                 rows="3"
                 placeholder="Descrição da funcionalidade da API"
               />

@@ -24,6 +24,8 @@ class Empresa(Base):
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
     mensagens = relationship('Mensagem', back_populates='empresa')
+    # New optional JSON field to store company knowledge (title/description items)
+    knowledge_json = Column(JSON, nullable=True)
 
 class Mensagem(Base):
     __tablename__ = 'messages'

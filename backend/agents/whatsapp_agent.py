@@ -26,7 +26,7 @@ class WhatsAppAgent(BaseAgent):
             from sqlalchemy import create_engine
             from sqlalchemy.orm import sessionmaker
             from models import Empresa
-            from config import Config
+            from .config import Config
             
             engine = create_engine(Config.POSTGRES_URL)
             SessionLocal = sessionmaker(bind=engine)

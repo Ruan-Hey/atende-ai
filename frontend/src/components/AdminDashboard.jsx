@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import apiService from '../services/api'
+import api from '../services/api'
 import LoadingSpinner from './LoadingSpinner'
 
 const AdminDashboard = () => {
@@ -42,9 +42,9 @@ const AdminDashboard = () => {
     try {
       // Carregar todos os dados em paralelo para melhor performance
       const [metricsData, empresasData, errosData] = await Promise.all([
-        apiService.getAdminMetrics(),
-        apiService.listEmpresas(),
-        apiService.getErros24h()
+        api.getAdminMetrics(),
+        api.listEmpresas(),
+        api.getErros24h()
       ]);
       
       // Atualizar todos os estados de uma vez
@@ -72,6 +72,29 @@ const AdminDashboard = () => {
     const { name, value, type, checked } = e.target
     setForm(f => ({ ...f, [name]: type === 'checkbox' ? checked : value }))
   }
+
+  // Função para lidar com quebras de linha nos campos textarea
+  const handleTextareaKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      const cursorPosition = e.target.selectionStart
+      const value = e.target.value
+      const newValue = value.slice(0, cursorPosition) + '\n' + value.slice(cursorPosition)
+      
+      // Atualizar o valor do campo
+      const { name } = e.target
+      if (name) {
+        setForm(prev => ({ ...prev, [name]: newValue }))
+      }
+      
+      // Manter o cursor na posição correta após a quebra de linha
+      setTimeout(() => {
+        const newCursorPosition = cursorPosition + 1
+        e.target.setSelectionRange(newCursorPosition, newCursorPosition)
+      }, 0)
+    }
+  }
+
   const handleSubmit = async e => {
     e.preventDefault()
     // Enviar para backend
@@ -193,7 +216,7 @@ const AdminDashboard = () => {
             <input name="filtros_chatwoot" placeholder="Filtros Chatwoot (JSON)" value={form.filtros_chatwoot} onChange={handleChange} />
             <label><input type="checkbox" name="usar_buffer" checked={form.usar_buffer} onChange={handleChange} /> Usar Buffer</label>
             <label><input type="checkbox" name="mensagem_quebrada" checked={form.mensagem_quebrada} onChange={handleChange} /> Mensagem Quebrada</label>
-            <textarea name="prompt" placeholder="Prompt da Empresa" value={form.prompt} onChange={handleChange} />
+            <textarea name="prompt" placeholder="Prompt da Empresa" value={form.prompt} onChange={handleChange} onKeyDown={handleTextareaKeyDown} />
             <div style={{margin:'10px 0',fontSize:'0.9em',color:'#555'}}>Webhook para Twilio: <b>{webhookUrl}</b></div>
             <button type="submit">Salvar</button>
             <button type="button" onClick={() => setShowModal(false)}>Cancelar</button>

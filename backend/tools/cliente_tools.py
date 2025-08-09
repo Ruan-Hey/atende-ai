@@ -2,7 +2,7 @@ from typing import Dict, Any
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from models import Cliente, Mensagem
-from config import Config
+from .config import Config
 import logging
 
 logger = logging.getLogger(__name__)

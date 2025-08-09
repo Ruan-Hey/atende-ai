@@ -659,4 +659,72 @@
 
 .integration-fields .field-group:last-child {
   margin-bottom: 0;
+}
+
+/* Conhecimento da Empresa - linhas lado a lado */
+.knowledge-section {
+  grid-column: 1 / -1;
+}
+
+.knowledge-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 1rem;
+  align-items: start;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #f1f3f5;
+}
+
+.knowledge-row:last-child {
+  border-bottom: none;
+}
+
+.knowledge-row .field-group {
+  margin: 0;
+}
+
+/* Linha inferior com Ativo e Remover, alinhados e com respiro */
+.knowledge-row .actions {
+  grid-column: 1 / span 2;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding-top: 0.5rem;
+}
+
+.knowledge-row .actions .field-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.add-btn,
+.remove-btn {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e9ecef;
+  background: #fff;
+  color: #212529;
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+/* Espaçamento extra entre a última linha e o botão adicionar */
+.add-btn {
+  margin-top: 0.75rem;
+}
+
+.add-btn:hover,
+.remove-btn:hover {
+  background: #f8f9fa;
+}
+
+@media (max-width: 768px) {
+  .knowledge-row {
+    grid-template-columns: 1fr;
+  }
+  .knowledge-row .actions {
+    grid-column: auto;
+  }
 } 

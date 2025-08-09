@@ -26,7 +26,8 @@ const ConfiguracoesEmpresa = () => {
     calendar_expanded: false,
     sheets_expanded: false,
     openai_expanded: false,
-    trinks_expanded: false
+    trinks_expanded: false,
+    knowledge_json: { items: [] }
   })
   
   // Estado separado para controlar accordions
@@ -51,6 +52,47 @@ const ConfiguracoesEmpresa = () => {
     { name: 'openai_key', label: 'OpenAI Key' },
     { name: 'twilio_token', label: 'Twilio Token' }
   ]
+
+  // Função para lidar com quebras de linha nos campos textarea
+  const handleTextareaKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      const cursorPosition = e.target.selectionStart
+      const value = e.target.value
+      const newValue = value.slice(0, cursorPosition) + '\n' + value.slice(cursorPosition)
+      
+      // Atualizar o valor do campo
+      const { name } = e.target
+      if (name) {
+        setConfiguracoes(prev => ({ ...prev, [name]: newValue }))
+      }
+      
+      // Manter o cursor na posição correta após a quebra de linha
+      setTimeout(() => {
+        const newCursorPosition = cursorPosition + 1
+        e.target.setSelectionRange(newCursorPosition, newCursorPosition)
+      }, 0)
+    }
+  }
+
+  // Função para lidar com quebras de linha nos campos de conhecimento
+  const handleKnowledgeTextareaKeyDown = (e, index, field) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      const cursorPosition = e.target.selectionStart
+      const value = e.target.value
+      const newValue = value.slice(0, cursorPosition) + '\n' + value.slice(cursorPosition)
+      
+      // Atualizar o valor do campo de conhecimento
+      handleKnowledgeChange(index, field, newValue)
+      
+      // Manter o cursor na posição correta após a quebra de linha
+      setTimeout(() => {
+        const newCursorPosition = cursorPosition + 1
+        e.target.setSelectionRange(newCursorPosition, newCursorPosition)
+      }, 0)
+    }
+  }
 
   useEffect(() => {
     carregarEmpresas()
@@ -106,6 +148,7 @@ const ConfiguracoesEmpresa = () => {
       const response = await apiService.getEmpresaConfiguracoes(selectedEmpresa)
       
       console.log('Resposta da API:', response)
+      console.log('📖 Knowledge JSON recebido:', response.knowledge_json)
       
       // Mapear os dados da API para o formato do formulário
       const configData = {
@@ -121,10 +164,12 @@ const ConfiguracoesEmpresa = () => {
         prompt: response.prompt || '',
         calendar_expanded: response.calendar_expanded || false,
         sheets_expanded: response.sheets_expanded || false,
-        openai_expanded: response.openai_expanded || false
+        openai_expanded: response.openai_expanded || false,
+        knowledge_json: response.knowledge_json || { items: [] }
       }
       
       console.log('Configurações mapeadas:', configData)
+      console.log('📝 Knowledge JSON no estado:', configData.knowledge_json)
       
       setConfiguracoes(configData)
 
@@ -278,6 +323,58 @@ const ConfiguracoesEmpresa = () => {
     const newValue = type === 'checkbox' ? checked : value
     console.log('Campo alterado:', name, 'Novo valor:', newValue)
     setConfiguracoes(f => ({ ...f, [name]: newValue }))
+  }
+
+  const handleKnowledgeChange = (index, field, value) => {
+    setConfiguracoes(prev => {
+      const kj = prev.knowledge_json || { items: [] }
+      const items = Array.isArray(kj.items) ? [...kj.items] : []
+      items[index] = { ...items[index], [field]: value }
+      return { ...prev, knowledge_json: { ...kj, items } }
+    })
+  }
+
+  const handleAddKnowledgeItem = () => {
+    setConfiguracoes(prev => {
+      const kj = prev.knowledge_json || { items: [] }
+      const items = Array.isArray(kj.items) ? [...kj.items] : []
+      items.push({ key: '', title: '', description: '', active: true })
+      return { ...prev, knowledge_json: { ...kj, items } }
+    })
+  }
+
+  const handleRemoveKnowledgeItem = (index) => {
+    setConfiguracoes(prev => {
+      const kj = prev.knowledge_json || { items: [] }
+      const items = Array.isArray(kj.items) ? [...kj.items] : []
+      items.splice(index, 1)
+      return { ...prev, knowledge_json: { ...kj, items } }
+    })
+  }
+
+  const slugify = (text) => {
+    return (text || '')
+      .toString()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s-]/g, '')
+      .trim()
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+  }
+
+  const ensureKeyForItem = (index) => {
+    setConfiguracoes(prev => {
+      const kj = prev.knowledge_json || { items: [] }
+      const items = Array.isArray(kj.items) ? [...kj.items] : []
+      const item = items[index] || {}
+      if (!item.key && item.title) {
+        item.key = slugify(item.title)
+        items[index] = item
+      }
+      return { ...prev, knowledge_json: { ...kj, items } }
+    })
   }
 
   const handleServiceAccountUpload = async (e) => {
@@ -477,7 +574,7 @@ const ConfiguracoesEmpresa = () => {
         await new Promise(resolve => setTimeout(resolve, 500))
       }
 
-      // 2) Salvar configurações comuns (que agora incluirão os dados do Service Account)
+      // 2) Salvar configurações comuns (que agora incluirão knowledge_json)
       await apiService.updateEmpresaConfiguracoes(selectedEmpresa, configuracoes)
 
       setSuccess(true)
@@ -585,6 +682,7 @@ const ConfiguracoesEmpresa = () => {
             {...commonProps}
             rows={6}
             className="form-textarea"
+            onKeyDown={(e) => handleTextareaKeyDown(e)}
           />
         </div>
       )
@@ -730,7 +828,7 @@ const ConfiguracoesEmpresa = () => {
                           }
                           
                           return (
-                            <div key={api.id} className="integration-group" data-api={api.nome.toLowerCase().replace(/\s+/g, '-')}>
+                            <div key={api.id} className="integration-group" data-api={api.nome.toLowerCase().replace(/\s+/g, '-')}> 
                               <div className="integration-header">
                                 <div className="integration-icon">
                                   {api.logo_url ? (
@@ -908,7 +1006,53 @@ const ConfiguracoesEmpresa = () => {
                       </div>
                     ) : (
                       /* Campos normais para outras abas */
-                      section.fields.map(renderField)
+                      <>
+                        {section.fields.map(renderField)}
+                        {section.id === 'dados-empresa' && (
+                          <div className="knowledge-section">
+                            <h3 style={{ marginTop: '1rem' }}>Conhecimento da Empresa</h3>
+                            <p className="field-hint">Adicione linhas com Título (esquerda) e Descrição (direita). O sistema gera uma "key" automaticamente a partir do título.</p>
+                            {(configuracoes.knowledge_json?.items || []).map((item, idx) => (
+                              <div key={idx} className="knowledge-row">
+                                <div className="field-group">
+                                  <label>Título</label>
+                                  <input
+                                    type="text"
+                                    className="form-input"
+                                    value={item.title || ''}
+                                    onChange={(e) => handleKnowledgeChange(idx, 'title', e.target.value)}
+                                    onBlur={() => ensureKeyForItem(idx)}
+                                    placeholder="Ex: Horário de funcionamento"
+                                  />
+                                </div>
+                                <div className="field-group">
+                                  <label>Descrição</label>
+                                  <textarea
+                                    className="form-textarea"
+                                    rows={3}
+                                    value={item.description || ''}
+                                    onChange={(e) => handleKnowledgeChange(idx, 'description', e.target.value)}
+                                    onKeyDown={(e) => handleKnowledgeTextareaKeyDown(e, idx, 'description')}
+                                    placeholder="Ex: Seg-Sex 9h–18h, Sáb 10h–14h"
+                                  />
+                                </div>
+                                <div className="actions">
+                                  <div className="field-group" style={{ width: '130px' }}>
+                                    <label>Ativo</label>
+                                    <input
+                                      type="checkbox"
+                                      checked={item.active !== false}
+                                      onChange={(e) => handleKnowledgeChange(idx, 'active', e.target.checked)}
+                                    />
+                                  </div>
+                                  <button type="button" className="remove-btn" onClick={() => handleRemoveKnowledgeItem(idx)}>Remover</button>
+                                </div>
+                              </div>
+                            ))}
+                            <button type="button" className="add-btn" onClick={handleAddKnowledgeItem}>+ Adicionar Linha</button>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
 

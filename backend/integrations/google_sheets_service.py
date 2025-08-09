@@ -123,7 +123,7 @@ class GoogleSheetsService:
         except Exception as e:
             logger.error(f"Erro ao abrir planilha {spreadsheet_id}: {e}")
             raise
-
+    
     def add_reserva(self, spreadsheet_id: str, reserva_data: Dict[str, Any]) -> bool:
         """Assinatura antiga: adiciona nova reserva à planilha informada."""
         try:
@@ -144,7 +144,7 @@ class GoogleSheetsService:
         except Exception as e:
             logger.error(f"Erro ao adicionar reserva: {e}")
             return False
-
+    
     def update_reserva(self, spreadsheet_id: str, nome: str, reserva_data: Dict[str, Any]) -> bool:
         try:
             spreadsheet = self._get_spreadsheet(spreadsheet_id)
@@ -169,7 +169,7 @@ class GoogleSheetsService:
         except Exception as e:
             logger.error(f"Erro ao atualizar reserva: {e}")
             return False
-
+    
     def cancel_reserva(self, spreadsheet_id: str, nome: str) -> bool:
         try:
             spreadsheet = self._get_spreadsheet(spreadsheet_id)
@@ -192,7 +192,7 @@ class GoogleSheetsService:
         except Exception as e:
             logger.error(f"Erro ao cancelar reserva: {e}")
             return False
-
+    
     def get_reservas(self, spreadsheet_id: str) -> List[Dict[str, Any]]:
         try:
             spreadsheet = self._get_spreadsheet(spreadsheet_id)
@@ -212,13 +212,13 @@ class GoogleSheetsService:
                             "pessoas": row[4],
                             "observacoes": row[5],
                             "ultima_alteracao": row[6],
-                        }
+                    }
                     )
             return reservas
         except Exception as e:
             logger.error(f"Erro ao buscar reservas: {e}")
             return []
-
+    
     def read_data(self, spreadsheet_id: str) -> List[Dict[str, Any]]:
         try:
             spreadsheet = self._get_spreadsheet(spreadsheet_id)
@@ -238,7 +238,7 @@ class GoogleSheetsService:
         except Exception as e:
             logger.error(f"Erro ao ler dados da planilha: {e}")
             return []
-
+    
     def write_data(self, spreadsheet_id: str, data: List[Dict[str, Any]]) -> bool:
         try:
             spreadsheet = self._get_spreadsheet(spreadsheet_id)

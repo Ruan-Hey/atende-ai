@@ -1,7 +1,7 @@
 import openai
 import logging
 from typing import Dict, Any, Optional
-from config import Config
+from .config import Config
 
 logger = logging.getLogger(__name__)
 
