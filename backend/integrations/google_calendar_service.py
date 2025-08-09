@@ -10,6 +10,7 @@ from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 import pickle
+from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,13 @@ class GoogleCalendarService:
         self.SCOPES = ['https://www.googleapis.com/auth/calendar']  # Escopo único e válido
         self.creds = None
         self.service = None
+        
+        # Timezone padrão Brasil; pode ser sobrescrito por config
+        tz_name = self.config.get('google_calendar_timezone', 'America/Sao_Paulo')
+        try:
+            self.tz = ZoneInfo(tz_name)
+        except Exception:
+            self.tz = ZoneInfo('America/Sao_Paulo')
         
         # Verifica se o Google Calendar está habilitado
         if not self.config.get('google_calendar_enabled', False):
@@ -146,7 +154,7 @@ class GoogleCalendarService:
             # Não falhar, apenas continuar sem autenticação
             self.service = None
     
-    def get_available_slots(self, date: str = None, days_ahead: int = 7) -> List[Dict]:
+    def get_available_slots(self, date: Optional[str] = None, days_ahead: int = 7) -> List[Dict[str, str]]:
         """
         Retorna horários disponíveis para agendamento
         Args:
@@ -158,29 +166,28 @@ class GoogleCalendarService:
             return self._get_default_slots()
         
         try:
-            # Define período de busca com timezone consistente
-            now = datetime.now()
-            local_timezone = now.astimezone().tzinfo
-            
-            # Garante que now tenha timezone
-            if now.tzinfo is None:
-                now = now.replace(tzinfo=local_timezone)
+            # Define período de busca com timezone consistente (Brasil por padrão)
+            now = datetime.now(self.tz)
             
             if date:
-                start_date = datetime.strptime(date, '%Y-%m-%d').replace(tzinfo=local_timezone)
+                start_date = datetime.strptime(date, '%Y-%m-%d').replace(tzinfo=self.tz)
             else:
-                # Usa a data atual, não o ano futuro
+                # Usa a data atual na timezone definida
                 start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
             
             end_date = start_date + timedelta(days=days_ahead)
             
-            # Busca eventos no calendário
+            # Calendar a consultar (padrão primary)
+            calendar_id = self.config.get('google_calendar_calendar_id', 'primary')
+            
+            # Busca eventos no calendário (informando timezone)
             events_result = self.service.events().list(
-                calendarId='primary',
+                calendarId=calendar_id,
                 timeMin=start_date.isoformat(),
                 timeMax=end_date.isoformat(),
                 singleEvents=True,
-                orderBy='startTime'
+                orderBy='startTime',
+                timeZone=str(self.tz)
             ).execute()
             
             events = events_result.get('items', [])
@@ -210,19 +217,15 @@ class GoogleCalendarService:
                             # Converte strings para datetime com timezone consistente
                             if 'T' in event_start_str:  # Tem time
                                 event_start = datetime.fromisoformat(event_start_str.replace('Z', '+00:00'))
-                                # Converte para timezone local se necessário
-                                if event_start.tzinfo != local_timezone:
-                                    event_start = event_start.astimezone(local_timezone)
+                                event_start = event_start.astimezone(self.tz)
                             else:  # Só data
-                                event_start = datetime.strptime(event_start_str, '%Y-%m-%d').replace(tzinfo=local_timezone)
+                                event_start = datetime.strptime(event_start_str, '%Y-%m-%d').replace(tzinfo=self.tz)
                             
                             if 'T' in event_end_str:  # Tem time
                                 event_end = datetime.fromisoformat(event_end_str.replace('Z', '+00:00'))
-                                # Converte para timezone local se necessário
-                                if event_end.tzinfo != local_timezone:
-                                    event_end = event_end.astimezone(local_timezone)
+                                event_end = event_end.astimezone(self.tz)
                             else:  # Só data
-                                event_end = datetime.strptime(event_end_str, '%Y-%m-%d').replace(tzinfo=local_timezone)
+                                event_end = datetime.strptime(event_end_str, '%Y-%m-%d').replace(tzinfo=self.tz)
                             
                             # Se há sobreposição, o horário não está disponível
                             if (slot_start < event_end and slot_end > event_start):
