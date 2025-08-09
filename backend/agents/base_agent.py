@@ -20,10 +20,11 @@ class BaseAgent:
             temperature=0.1,
             max_tokens=500
         )
-        # Chat model para tool-calling
+        # Chat model para tool-calling (mais determinístico)
         self.chat_llm = ChatOpenAI(
             api_key=empresa_config.get('openai_key'),
-            temperature=0.1
+            temperature=0.0,
+            model="gpt-4o"
         )
         self.memory = ConversationBufferWindowMemory(
             k=20,
@@ -327,15 +328,19 @@ class BaseAgent:
             return None
     
     def _create_agent(self):
-        """Cria o agent com as ferramentas configuradas (modo legado)"""
-        return initialize_agent(
-            tools=self.tools,
-            llm=self.llm,
-            agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-            memory=self.memory,
-            verbose=True,
-            handle_parsing_errors=True
-        )
+        """Cria o agent com as ferramentas configuradas (modo legado). Protegido por try/except."""
+        try:
+            return initialize_agent(
+                tools=self.tools,
+                llm=self.llm,
+                agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
+                memory=self.memory,
+                verbose=True,
+                handle_parsing_errors=True
+            )
+        except Exception as e:
+            logger.warning(f"Falha ao criar agent legado (seguindo apenas com tool-calling nativo): {e}")
+            return None
     
     async def process_message(self, message: str, context: Dict[str, Any]) -> str:
         """Processa uma mensagem usando tool-calling: executa tools antes de responder"""
@@ -479,17 +484,17 @@ FERRAMENTAS DISPONÍVEIS:
 APIs dinâmicas conectadas (tool genérica):
 {dynamic_tools_info}
 
-INSTRUÇÕES IMPORTANTES:
-- SEMPRE use a data atual ({current_date}) como referência quando o cliente não especificar data
-- Para verificar disponibilidade, use a ferramenta verificar_calendario com a data no formato YYYY-MM-DD
-- Para fazer reservas, use a ferramenta fazer_reserva com data, hora e nome do cliente
-- Quando o cliente perguntar sobre horários disponíveis ou solicitar agendamento, PRIMEIRO chame a ferramenta apropriada e SÓ DEPOIS responda ao cliente com o resultado. Não prometa disponibilidade sem verificar.
-- Se o cliente mencionar "hoje", use {current_date}; se mencionar dias da semana (ex.: segunda-feira), calcule a próxima ocorrência a partir da data atual.
-- Para qualquer API conectada (ex.: clínicas), utilize a tool específica {"{api}_api_call"} correspondente, informando endpoint_path/method/params_json.
+INSTRUÇÕES IMPORTANTES (POLÍTICA DE DECISÃO):
+- Quando o cliente pedir para agendar/confirmar um horário, extraia data e hora do contexto recente (histórico) e chame a ferramenta apropriada.
+- Se JÁ tivermos data e hora (ex.: acabamos de listar horários para {current_date} ou o cliente confirmou “pode agendar às 17h”), chame DIRETAMENTE a ferramenta fazer_reserva com esses valores, sem perguntar novamente.
+- Se faltar apenas UM dos dois (data ou hora), pergunte somente o que falta. Não repita perguntas já respondidas.
+- Sempre que o cliente mencionar “hoje”, use {current_date}. Para dias da semana (ex.: segunda-feira), calcule a próxima ocorrência a partir da data atual.
+- Para verificar disponibilidade, use verificar_calendario (YYYY-MM-DD). Depois que o cliente escolher um horário dessa lista, chame fazer_reserva.
+- Evite respostas longas. Priorize executar a ferramenta e responder com o resultado real.
 
 PROMPT ESPECÍFICO DA EMPRESA:
 {prompt_empresa}
 
-Lembre-se: Seja útil e profissional. Use as ferramentas para fornecer informações precisas e não responda conclusões sem executar as ferramentas necessárias."""
+Lembre-se: Use as ferramentas para fornecer informações precisas e não responda conclusões sem executar as ferramentas necessárias."""
         
         return system_prompt 
