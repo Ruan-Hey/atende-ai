@@ -334,7 +334,7 @@ class GoogleCalendarService:
         """
         Agenda uma reunião no Google Calendar
         Args:
-            email: Email do cliente
+            email: Email do cliente (se fornecido, envia convite)
             name: Nome do cliente
             company: Nome da empresa
             date_time: Data/hora da reunião (ISO format)
@@ -345,7 +345,7 @@ class GoogleCalendarService:
             return {'success': False, 'message': 'Calendário não configurado'}
         
         try:
-            calendar_id = self._resolve_calendar_id()
+            calendar_id = self._resolve_calendar_id() if hasattr(self, '_resolve_calendar_id') else self.config.get('google_calendar_calendar_id', 'primary')
             # Converte string para datetime
             meeting_time = datetime.fromisoformat(date_time.replace('Z', '+00:00'))
             end_time = meeting_time + timedelta(minutes=duration_minutes)
@@ -361,7 +361,6 @@ class GoogleCalendarService:
                     'dateTime': end_time.isoformat(),
                     'timeZone': 'America/Sao_Paulo',
                 },
-                # Removido 'attendees' para funcionar com Service Account
                 'reminders': {
                     'useDefault': False,
                     'overrides': [
@@ -370,7 +369,11 @@ class GoogleCalendarService:
                 },
             }
             
-            event = self.service.events().insert(calendarId=calendar_id, body=event).execute()
+            # Incluir convidado se email fornecido
+            if email:
+                event['attendees'] = [{'email': email}]
+            
+            event = self.service.events().insert(calendarId=calendar_id, body=event, sendUpdates='all' if email else 'none').execute()
             
             logger.info(f'Reunião agendada: {event.get("htmlLink")}')
             return {

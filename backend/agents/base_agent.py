@@ -97,10 +97,11 @@ class BaseAgent:
             
             data_str = data.get('data') or data.get('date')
             hora = data.get('hora') or data.get('time')
+            email = data.get('email') or data.get('cliente_email')
             cliente = data.get('cliente') or data.get('customer') or self.current_context.get('cliente_name') or 'Cliente'
             if not data_str or not hora:
-                return "Parâmetros ausentes: forneça {'data': 'YYYY-MM-DD', 'hora': 'HH:MM', 'cliente': 'Nome'}"
-            return calendar_tools.fazer_reserva(data_str, hora, cliente, self.empresa_config)
+                return "Parâmetros ausentes: forneça {'data': 'YYYY-MM-DD', 'hora': 'HH:MM', 'cliente': 'Nome', 'email': 'email@cliente'}"
+            return calendar_tools.fazer_reserva(data_str, hora, cliente, self.empresa_config, email=email)
         
         def enviar_mensagem_wrapper(tool_input: str = None, **kwargs) -> str:
             # Aceitar tanto tool_input quanto kwargs
@@ -130,7 +131,7 @@ class BaseAgent:
             Tool(
                 name="fazer_reserva",
                 func=fazer_reserva_wrapper,
-                description="Faz reserva real na agenda disponível. Entrada: JSON {'data': 'YYYY-MM-DD', 'hora': 'HH:MM', 'cliente': 'Nome'}"
+                description="Faz reserva real na agenda disponível e envia convite se 'email' for informado. Entrada: JSON {'data': 'YYYY-MM-DD', 'hora': 'HH:MM', 'cliente': 'Nome', 'email': 'email@cliente'}"
             ),
             Tool(
                 name="enviar_mensagem",
@@ -174,13 +175,14 @@ class BaseAgent:
         from tools.calendar_tools import CalendarTools
         calendar_tools = CalendarTools()
         
-        def wrapper(data: str = None, hora: str = None, cliente: str = None, **kwargs) -> str:
+        def wrapper(data: str = None, hora: str = None, cliente: str = None, email: str = None, **kwargs) -> str:
             data_str = data or kwargs.get('data') or kwargs.get('date')
             hora_str = hora or kwargs.get('hora') or kwargs.get('time')
+            email_str = email or kwargs.get('email') or kwargs.get('cliente_email')
             cliente_str = cliente or kwargs.get('cliente') or kwargs.get('customer') or self.current_context.get('cliente_name') or 'Cliente'
             if not data_str or not hora_str:
                 return "Parâmetros ausentes: forneça data (YYYY-MM-DD) e hora (HH:MM)"
-            return calendar_tools.fazer_reserva(data_str, hora_str, cliente_str, self.empresa_config)
+            return calendar_tools.fazer_reserva(data_str, hora_str, cliente_str, self.empresa_config, email=email_str)
         return wrapper
     
     def _get_enviar_mensagem_wrapper(self):
@@ -215,9 +217,9 @@ class BaseAgent:
         structured.append(t_verificar_calendario)
         
         @lc_tool("fazer_reserva")
-        def t_fazer_reserva(data: str, hora: str, cliente: str) -> str:
-            """Faz uma reserva no calendário para a data, hora e cliente especificados."""
-            return self._wrappers["fazer_reserva"](data=data, hora=hora, cliente=cliente)
+        def t_fazer_reserva(data: str, hora: str, cliente: str, email: str = "") -> str:
+            """Faz uma reserva no calendário (envia convite se email for informado)."""
+            return self._wrappers["fazer_reserva"](data=data, hora=hora, cliente=cliente, email=email)
         structured.append(t_fazer_reserva)
         
         @lc_tool("enviar_mensagem")
@@ -479,17 +481,17 @@ INFORMAÇÕES DO CLIENTE:
 FERRAMENTAS DISPONÍVEIS:
 1. buscar_cliente - Busca informações do cliente
 2. verificar_calendario - Verifica disponibilidade real no Google Calendar
-3. fazer_reserva - Faz reserva real na agenda
+3. fazer_reserva - Faz reserva real na agenda (e envia convite ao cliente)
 4. enviar_mensagem - Envia mensagem
 APIs dinâmicas conectadas (tool genérica):
 {dynamic_tools_info}
 
 INSTRUÇÕES IMPORTANTES (POLÍTICA DE DECISÃO):
-- Quando o cliente pedir para agendar/confirmar um horário, extraia data e hora do contexto recente (histórico) e chame a ferramenta apropriada.
-- Se JÁ tivermos data e hora (ex.: acabamos de listar horários para {current_date} ou o cliente confirmou “pode agendar às 17h”), chame DIRETAMENTE a ferramenta fazer_reserva com esses valores, sem perguntar novamente.
-- Se faltar apenas UM dos dois (data ou hora), pergunte somente o que falta. Não repita perguntas já respondidas.
+- Quando o cliente pedir para agendar/confirmar um horário, extraia data e hora do contexto recente e chame a ferramenta apropriada.
+- Se JÁ tivermos data e hora e o cliente confirmar (ex.: “pode agendar às 17h”), peça o email do cliente se ainda não tiver e então chame DIRETAMENTE a ferramenta fazer_reserva com data, hora, nome e email.
+- Se faltar apenas UM dado (data, hora ou email), pergunte somente o que falta. Não repita perguntas já respondidas.
 - Sempre que o cliente mencionar “hoje”, use {current_date}. Para dias da semana (ex.: segunda-feira), calcule a próxima ocorrência a partir da data atual.
-- Para verificar disponibilidade, use verificar_calendario (YYYY-MM-DD). Depois que o cliente escolher um horário dessa lista, chame fazer_reserva.
+- Para verificar disponibilidade, use verificar_calendario (YYYY-MM-DD). Depois que o cliente escolher um horário dessa lista e fornecer o email, chame fazer_reserva.
 - Evite respostas longas. Priorize executar a ferramenta e responder com o resultado real.
 
 PROMPT ESPECÍFICO DA EMPRESA:

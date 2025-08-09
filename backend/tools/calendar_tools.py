@@ -184,7 +184,7 @@ class CalendarTools:
             logger.error(f"Erro ao verificar {api_name}: {e}")
             return f"Erro ao verificar {api_name} para {data}: {str(e)}"
     
-    def fazer_reserva(self, data: str, hora: str, cliente: str, empresa_config: Dict[str, Any]) -> str:
+    def fazer_reserva(self, data: str, hora: str, cliente: str, empresa_config: Dict[str, Any], email: str | None = None) -> str:
         """Faz reserva usando qualquer API de agenda disponível"""
         try:
             # Encontrar API de agenda disponível
@@ -212,7 +212,7 @@ class CalendarTools:
             
             # Usar API específica ou genérica
             if api_name == "Google Calendar":
-                return self._fazer_reserva_google_calendar(data, hora, cliente, empresa_config)
+                return self._fazer_reserva_google_calendar(data, hora, cliente, empresa_config, email=email)
             elif api_name == "Trinks":
                 return self._fazer_reserva_trinks(data, hora, cliente, api_config)
             else:
@@ -222,16 +222,16 @@ class CalendarTools:
             logger.error(f"Erro ao fazer reserva: {e}")
             return f"❌ Erro ao fazer reserva: {str(e)}"
     
-    def _fazer_reserva_google_calendar(self, data: str, hora: str, cliente: str, empresa_config: Dict[str, Any]) -> str:
-        """Faz reserva no Google Calendar"""
+    def _fazer_reserva_google_calendar(self, data: str, hora: str, cliente: str, empresa_config: Dict[str, Any], email: str | None = None) -> str:
+        """Faz reserva no Google Calendar (com invite se email informado)"""
         try:
             calendar_service = self._get_calendar_service(empresa_config)
             sheets_service = self._get_sheets_service(empresa_config)
             
-            # 1. Criar evento no Google Calendar (sem enviar convite)
+            # 1. Criar evento no Google Calendar (com invite se houver email)
             date_time = f"{data}T{hora}:00"
             result = calendar_service.schedule_meeting(
-                email="",  # Não enviar email
+                email=(email or ""),
                 name=cliente,
                 company=empresa_config.get('nome', 'Empresa'),
                 date_time=date_time,
@@ -253,7 +253,8 @@ class CalendarTools:
             except Exception as e:
                 logger.warning(f"Erro ao registrar no Google Sheets: {e}")
             
-            return f"✅ Evento criado no Google Calendar!\nData: {data}\nHora: {hora}\nCliente: {cliente}\nID do evento: {result.get('event_id')}"
+            invite_msg = f"\nConvite enviado para: {email}" if email else ""
+            return f"✅ Evento criado no Google Calendar!{invite_msg}\nData: {data}\nHora: {hora}\nCliente: {cliente}\nID do evento: {result.get('event_id')}"
             
         except Exception as e:
             logger.error(f"Erro ao fazer reserva no Google Calendar: {e}")
