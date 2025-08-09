@@ -31,6 +31,15 @@ class BaseAgent:
         )
         self.current_context: Dict[str, Any] = {}
         self.tools = self._setup_tools()
+        
+        # Guardar referências para wrappers ANTES de criar structured_tools
+        self._wrappers = {
+            "buscar_cliente": self._get_buscar_cliente_wrapper(),
+            "verificar_calendario": self._get_verificar_calendario_wrapper(),
+            "fazer_reserva": self._get_fazer_reserva_wrapper(),
+            "enviar_mensagem": self._get_enviar_mensagem_wrapper(),
+        }
+        
         # Tools estruturadas para tool-calling nativo
         self.structured_tools = self._setup_structured_tools()
         self.agent = self._create_agent()
@@ -132,15 +141,59 @@ class BaseAgent:
         # Adicionar Tools das APIs conectadas
         tools.extend(self._get_api_tools())
         
-        # Guardar referências para wrappers no structured setup
-        self._wrappers = {
-            "buscar_cliente": buscar_cliente_wrapper,
-            "verificar_calendario": verificar_calendario_wrapper,
-            "fazer_reserva": fazer_reserva_wrapper,
-            "enviar_mensagem": enviar_mensagem_wrapper,
-        }
-        
         return tools
+    
+    def _get_buscar_cliente_wrapper(self):
+        """Retorna wrapper para buscar_cliente"""
+        from tools.cliente_tools import ClienteTools
+        cliente_tools = ClienteTools()
+        
+        def wrapper(cliente_id: str = None, **kwargs) -> str:
+            cliente_id = cliente_id or self.current_context.get('cliente_id')
+            empresa_id = self.empresa_config.get('empresa_id')
+            if not cliente_id or not empresa_id:
+                return "Parâmetros ausentes: forneça cliente_id; empresa_id vem do contexto."
+            return cliente_tools.buscar_cliente_info(cliente_id, int(empresa_id))
+        return wrapper
+    
+    def _get_verificar_calendario_wrapper(self):
+        """Retorna wrapper para verificar_calendario"""
+        from tools.calendar_tools import CalendarTools
+        calendar_tools = CalendarTools()
+        
+        def wrapper(data: str = None, **kwargs) -> str:
+            data_str = data or kwargs.get('data') or kwargs.get('date')
+            if not data_str:
+                return "Parâmetros ausentes: forneça data no formato YYYY-MM-DD"
+            return calendar_tools.verificar_disponibilidade(data_str, self.empresa_config)
+        return wrapper
+    
+    def _get_fazer_reserva_wrapper(self):
+        """Retorna wrapper para fazer_reserva"""
+        from tools.calendar_tools import CalendarTools
+        calendar_tools = CalendarTools()
+        
+        def wrapper(data: str = None, hora: str = None, cliente: str = None, **kwargs) -> str:
+            data_str = data or kwargs.get('data') or kwargs.get('date')
+            hora_str = hora or kwargs.get('hora') or kwargs.get('time')
+            cliente_str = cliente or kwargs.get('cliente') or kwargs.get('customer') or self.current_context.get('cliente_name') or 'Cliente'
+            if not data_str or not hora_str:
+                return "Parâmetros ausentes: forneça data (YYYY-MM-DD) e hora (HH:MM)"
+            return calendar_tools.fazer_reserva(data_str, hora_str, cliente_str, self.empresa_config)
+        return wrapper
+    
+    def _get_enviar_mensagem_wrapper(self):
+        """Retorna wrapper para enviar_mensagem"""
+        from tools.message_tools import MessageTools
+        message_tools = MessageTools()
+        
+        def wrapper(mensagem: str = None, cliente_id: str = None, **kwargs) -> str:
+            mensagem_str = mensagem or kwargs.get('mensagem') or kwargs.get('message')
+            cliente_id_str = cliente_id or kwargs.get('cliente_id') or self.current_context.get('cliente_id')
+            if not mensagem_str or not cliente_id_str:
+                return "Parâmetros ausentes: forneça mensagem e cliente_id"
+            return message_tools.enviar_resposta(mensagem_str, cliente_id_str, self.empresa_config, canal=self.current_context.get('channel', 'whatsapp'))
+        return wrapper
     
     def _setup_structured_tools(self):
         """Cria StructuredTools com assinaturas tipadas para tool-calling nativo"""
