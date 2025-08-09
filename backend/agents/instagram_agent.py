@@ -1,46 +1,6 @@
-import sys
-import os
-from pathlib import Path
-
-# Adicionar o diretório backend ao path
-backend_dir = Path(__file__).parent.parent
-if str(backend_dir) not in sys.path:
-    sys.path.insert(0, str(backend_dir))
-
-try:
-    from .base_agent import BaseAgent
-except ImportError:
-    from base_agent import BaseAgent
-
-from typing import Dict, Any, List
+from .base_agent import BaseAgent
+from typing import Dict, Any
 import logging
-import json
-from datetime import datetime, timedelta
-import sqlalchemy
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
-
-try:
-    from tools.cliente_tools import ClienteTools
-except ImportError:
-    from ..tools.cliente_tools import ClienteTools
-
-from langchain.agents import AgentExecutor
-from langchain.tools import Tool
-from langchain_core.tools import tool as lc_tool
-from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.messages import HumanMessage, AIMessage
-from langchain_core.output_parsers import JsonOutputParser
-from langchain_core.pydantic_v1 import BaseModel, Field
-import re
-
-try:
-    from models import Empresa
-    from config import Config
-except ImportError:
-    from ..models import Empresa
-    from ..config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -62,22 +22,14 @@ class InstagramAgent(BaseAgent):
             profile_name = webhook_data.get('sender_name', 'Cliente')
             
             # Buscar informações do cliente
-            try:
-                from tools.cliente_tools import ClienteTools
-            except ImportError:
-                from ..tools.cliente_tools import ClienteTools
+            from ..tools.cliente_tools import ClienteTools
             cliente_tools = ClienteTools()
             
             # Buscar empresa_id
             from sqlalchemy import create_engine
             from sqlalchemy.orm import sessionmaker
-            
-            try:
-                from models import Empresa
-                from config import Config
-            except ImportError:
-                from ..models import Empresa
-                from ..config import Config
+            from ..models import Empresa
+            from ..config import Config
             
             engine = create_engine(Config.POSTGRES_URL)
             SessionLocal = sessionmaker(bind=engine)
@@ -104,10 +56,7 @@ class InstagramAgent(BaseAgent):
                 response = await self.process_message(message_text, context)
                 
                 # Salvar mensagem no banco
-                try:
-                    from services.services import DatabaseService
-                except ImportError:
-                    from ..services.services import DatabaseService
+                from ..services.services import DatabaseService
                 db_service = DatabaseService()
                 db_service.save_message(
                     empresa_db.id, 

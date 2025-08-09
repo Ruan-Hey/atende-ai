@@ -1,7 +1,7 @@
 from typing import Dict, Any
-from integrations.google_calendar_service import GoogleCalendarService
-from integrations.google_sheets_service import GoogleSheetsService
-from tools.api_tools import APITools
+from ..integrations.google_calendar_service import GoogleCalendarService
+from ..integrations.google_sheets_service import GoogleSheetsService
+from .api_tools import APITools
 import logging
 
 logger = logging.getLogger(__name__)

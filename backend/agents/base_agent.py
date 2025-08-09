@@ -6,7 +6,7 @@ from langchain_core.tools import tool as lc_tool
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, AIMessage
 from typing import Dict, Any, List
 import logging
-from models import API
+from ..models import API
 
 logger = logging.getLogger(__name__)
 

@@ -1,5 +1,5 @@
 from typing import Dict, Any
-from integrations.twilio_service import TwilioService
+from ..integrations.twilio_service import TwilioService
 import logging
 
 logger = logging.getLogger(__name__)
