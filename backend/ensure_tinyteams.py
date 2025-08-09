@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
-from models import Empresa
+from .models import Empresa
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from config import Config
+from .config import Config
 
 def ensure_tinyteams():
     """Garante que a empresa TinyTeams esteja cadastrada"""
