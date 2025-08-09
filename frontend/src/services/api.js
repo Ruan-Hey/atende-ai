@@ -148,7 +148,18 @@ class ApiService {
 
   // Buscar URL de autorização OAuth2 do Google Calendar
   async getGoogleOAuthUrl(empresaSlug) {
-    return this.authenticatedRequest(`/api/empresas/${empresaSlug}/google-oauth-url`)
+    return this.authenticatedRequest(`/api/admin/${empresaSlug}/google-oauth-url`)
+  }
+
+  async generateOAuthToken(empresaSlug, code, clientId, clientSecret) {
+    return this.authenticatedRequest(`/api/admin/${empresaSlug}/oauth/generate-token`, {
+      method: 'POST',
+      body: JSON.stringify({
+        code,
+        client_id: clientId,
+        client_secret: clientSecret
+      })
+    })
   }
 
   // APIs - Listar todas as APIs

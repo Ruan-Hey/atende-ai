@@ -355,6 +355,108 @@ const ConfiguracoesEmpresa = () => {
     }
   }
 
+  const handleGenerateRefreshToken = async (apiId) => {
+    try {
+      setSaving(true)
+      setError('')
+      
+      // Verificar se Client ID e Client Secret estão preenchidos
+      const clientId = configuracoes[`api_${apiId}_client_id`]
+      const clientSecret = configuracoes[`api_${apiId}_client_secret`]
+      
+      if (!clientId || !clientSecret) {
+        setError('Client ID e Client Secret são obrigatórios para gerar o Refresh Token.')
+        return
+      }
+      
+      // Buscar API para obter o nome
+      const api = apis.find(a => a.id === apiId)
+      if (!api) {
+        setError('API não encontrada.')
+        return
+      }
+      
+      // Detectar se está em desenvolvimento ou produção
+      const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+      const redirectUri = isDevelopment 
+        ? 'http://localhost:8000/oauth/callback'
+        : 'https://api.tinyteams.app/oauth/callback'
+      
+      // Gerar URL de autorização OAuth2
+      const authParams = new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        scope: 'https://www.googleapis.com/auth/calendar',
+        response_type: 'code',
+        access_type: 'offline',
+        prompt: 'consent'
+      })
+      
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${authParams.toString()}`
+      
+      // Abrir popup com a URL de autorização
+      const popup = window.open(authUrl, '_blank', 'width=500,height=600')
+      
+      if (!popup || popup.closed) {
+        setError('Popup bloqueado! Permita popups para este site.')
+        return
+      }
+      
+      setSuccess('Abrindo autorização do Google... Aguarde a conclusão.')
+      
+      // Aguardar callback ou timeout
+      const checkClosed = setInterval(async () => {
+        if (popup.closed) {
+          clearInterval(checkClosed)
+          
+          // Aguardar um pouco para o callback ser processado
+          setTimeout(async () => {
+            try {
+              // Tentar obter o código do callback
+              const callbackResponse = await fetch('http://localhost:8000/oauth/callback')
+              const callbackData = await callbackResponse.json()
+              
+              if (callbackData.code) {
+                // Gerar Refresh Token automaticamente
+                const tokenResponse = await apiService.generateOAuthToken(
+                  selectedEmpresa,
+                  callbackData.code,
+                  clientId,
+                  clientSecret
+                )
+                
+                if (tokenResponse.success) {
+                  setSuccess('Refresh Token gerado com sucesso!')
+                  carregarConfiguracoes()
+                } else {
+                  setError('Erro ao gerar Refresh Token: ' + tokenResponse.error)
+                }
+              } else {
+                setError('Código de autorização não encontrado. Tente novamente.')
+              }
+            } catch (error) {
+              setError('Erro ao processar autorização: ' + error.message)
+            }
+          }, 2000)
+        }
+      }, 1000)
+      
+      // Timeout após 5 minutos
+      setTimeout(() => {
+        clearInterval(checkClosed)
+        if (!popup.closed) {
+          popup.close()
+        }
+      }, 300000)
+      
+    } catch (error) {
+      console.error('Erro ao gerar Refresh Token:', error)
+      setError('Erro ao gerar Refresh Token: ' + error.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleSalvar = async () => {
     try {
       setSaving(true)
@@ -686,17 +788,35 @@ const ConfiguracoesEmpresa = () => {
                                       </div>
                                       <div className="field-group">
                                         <label>Refresh Token</label>
-                                        <input
-                                          type="password"
-                                          name={`api_${api.id}_refresh_token`}
-                                          placeholder="Refresh Token (opcional)"
-                                          className="form-input"
-                                          value={configuracoes[`api_${api.id}_refresh_token`] || ''}
-                                          onChange={handleChange}
-                                        />
+                                        <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
+                                          <input
+                                            type="password"
+                                            name={`api_${api.id}_refresh_token`}
+                                            placeholder="Refresh Token (opcional)"
+                                            className="form-input"
+                                            style={{ flex: 1 }}
+                                            value={configuracoes[`api_${api.id}_refresh_token`] || ''}
+                                            onChange={handleChange}
+                                          />
+                                          <button
+                                            type="button"
+                                            onClick={() => handleGenerateRefreshToken(api.id)}
+                                            className="save-btn"
+                                            style={{ 
+                                              backgroundColor: '#34a853', 
+                                              borderColor: '#34a853',
+                                              padding: '8px 16px',
+                                              fontSize: '0.9rem',
+                                              whiteSpace: 'nowrap'
+                                            }}
+                                            disabled={saving}
+                                          >
+                                            {saving ? 'Gerando...' : '🔑 Gerar'}
+                                          </button>
+                                        </div>
                                         <small className="field-hint">
                                           O refresh token é necessário para autenticação automática. 
-                                          Deixe vazio se ainda não configurou o OAuth2.
+                                          Clique em "Gerar" para abrir a autorização do Google.
                                         </small>
                                       </div>
                                       

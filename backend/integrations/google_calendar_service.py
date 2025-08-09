@@ -21,8 +21,7 @@ class GoogleCalendarService:
             config: Dicionário com configurações (client_id, client_secret, refresh_token, etc.)
         """
         self.config = config or {}
-        self.SCOPES = ['https://www.googleapis.com/auth/calendar.readonly', 
-                       'https://www.googleapis.com/auth/calendar.events']
+        self.SCOPES = ['https://www.googleapis.com/auth/calendar']  # Escopo único e válido
         self.creds = None
         self.service = None
         
@@ -36,72 +35,63 @@ class GoogleCalendarService:
     def _authenticate(self):
         """Autentica com Google Calendar API"""
         try:
-            # Verificar se temos Service Account (prioridade máxima)
+            # PRIORIDADE 1: Verificar se temos configuração OAuth2 completa
+            client_id = self.config.get('google_calendar_client_id')
+            client_secret = self.config.get('google_calendar_client_secret')
+            refresh_token = self.config.get('google_calendar_refresh_token')
+            
+            if client_id and client_secret and refresh_token:
+                logger.info("Usando OAuth2 para autenticação (prioridade)")
+                self._authenticate_with_oauth2()
+                return
+            
+            # PRIORIDADE 2: Verificar se temos Service Account (fallback)
             service_account = self.config.get('google_calendar_service_account')
             if service_account:
-                logger.info("Usando Service Account para autenticação")
+                logger.info("Usando Service Account para autenticação (fallback)")
                 self._authenticate_with_service_account(service_account)
                 return
             
-            # Verificar se temos configuração OAuth2
-            if self.config.get('google_calendar_client_id') and self.config.get('google_calendar_client_secret'):
-                logger.info("Usando configuração OAuth2")
-                self._authenticate_with_config()
-            else:
-                # Fallback para arquivo de credenciais
-                logger.info("Usando arquivo de credenciais")
-                self._authenticate_with_file()
+            # PRIORIDADE 3: Fallback para arquivo de credenciais
+            logger.info("Usando arquivo de credenciais (fallback)")
+            self._authenticate_with_file()
             
         except Exception as e:
             logger.warning(f"Google Calendar não configurado ou erro na autenticação: {e}")
             # Não falhar, apenas continuar sem autenticação
             self.service = None
     
-    def _authenticate_with_config(self):
-        """Autentica usando configuração da nova arquitetura"""
+    def _authenticate_with_oauth2(self):
+        """Autentica usando OAuth2 (client_id, client_secret, refresh_token)"""
         try:
             client_id = self.config.get('google_calendar_client_id')
             client_secret = self.config.get('google_calendar_client_secret')
             refresh_token = self.config.get('google_calendar_refresh_token')
-            service_account = self.config.get('google_calendar_service_account')
             
-            # Verificar se temos Service Account (prioridade)
-            if service_account:
-                logger.info("Usando Service Account para autenticação")
-                self._authenticate_with_service_account(service_account)
+            if not all([client_id, client_secret, refresh_token]):
+                logger.warning("Credenciais OAuth2 incompletas")
                 return
             
-            if not client_id or not client_secret:
-                logger.warning("Client ID e Client Secret não configurados para Google Calendar")
-                return
+            # Criar credenciais OAuth2
+            self.creds = Credentials(
+                None,  # No access token initially
+                refresh_token=refresh_token,
+                token_uri="https://oauth2.googleapis.com/token",
+                client_id=client_id,
+                client_secret=client_secret,
+                scopes=self.SCOPES
+            )
             
-            # Criar credenciais
-            if refresh_token:
-                # Usar refresh token se disponível
-                self.creds = Credentials(
-                    None,  # No access token initially
-                    refresh_token=refresh_token,
-                    token_uri="https://oauth2.googleapis.com/token",
-                    client_id=client_id,
-                    client_secret=client_secret,
-                    scopes=self.SCOPES
-                )
-                
-                # Refresh das credenciais
-                self.creds.refresh(Request())
-                logger.info("Autenticado com refresh token")
-            else:
-                # Fluxo OAuth2 (para desenvolvimento)
-                logger.warning("Refresh token não encontrado, Google Calendar não configurado")
-                return
+            # Refresh das credenciais
+            self.creds.refresh(Request())
+            logger.info("Autenticado com OAuth2 (refresh token)")
             
             self.service = build('calendar', 'v3', credentials=self.creds)
-            logger.info("Google Calendar autenticado com sucesso")
+            logger.info("Google Calendar autenticado com sucesso via OAuth2")
             
         except Exception as e:
-            logger.warning(f"Google Calendar não configurado ou erro na autenticação: {e}")
-            # Não falhar, apenas continuar sem autenticação
-            self.service = None
+            logger.error(f"Erro na autenticação OAuth2: {e}")
+            raise
     
     def _authenticate_with_service_account(self, service_account_data):
         """Autentica usando Service Account"""

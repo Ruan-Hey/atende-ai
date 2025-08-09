@@ -2112,6 +2112,254 @@ async def test_service_account_status():
     finally:
         session.close()
 
+@app.get("/oauth/callback")
+async def oauth_callback(code: str = None, error: str = None):
+    """Callback para OAuth2 do Google"""
+    if error:
+        return {"error": f"Erro na autorização: {error}"}
+    
+    if not code:
+        return {"error": "Código de autorização não fornecido"}
+    
+    try:
+        # Aqui você pode processar o código e gerar o refresh token
+        # Por enquanto, apenas retorna o código para o usuário copiar
+        return {
+            "success": True,
+            "message": "Código de autorização recebido",
+            "code": code,
+            "instructions": "Copie este código e cole no terminal para gerar o Refresh Token"
+        }
+    except Exception as e:
+        return {"error": f"Erro ao processar código: {str(e)}"}
+
+@app.post("/api/admin/{empresa_slug}/oauth/generate-token")
+async def generate_oauth_token(empresa_slug: str, request: Request):
+    """Gera Refresh Token a partir do código de autorização"""
+    try:
+        data = await request.json()
+        code = data.get('code')
+        client_id = data.get('client_id')
+        client_secret = data.get('client_secret')
+        
+        if not all([code, client_id, client_secret]):
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "message": "Código, client_id e client_secret são obrigatórios"}
+            )
+        
+        # Determinar redirect_uri baseado no ambiente
+        is_development = os.getenv('ENVIRONMENT', 'production') == 'development'
+        redirect_uri = 'http://localhost:8000/oauth/callback' if is_development else 'https://api.tinyteams.app/oauth/callback'
+        
+        # Trocar código por tokens
+        token_url = "https://oauth2.googleapis.com/token"
+        token_data = {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "code": code,
+            "grant_type": "authorization_code",
+            "redirect_uri": redirect_uri
+        }
+        
+        import requests
+        response = requests.post(token_url, data=token_data)
+        
+        if response.status_code != 200:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "message": f"Erro ao trocar código por token: {response.text}"}
+            )
+        
+        tokens = response.json()
+        refresh_token = tokens.get('refresh_token')
+        access_token = tokens.get('access_token')
+        
+        if not refresh_token:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "message": "Refresh token não foi retornado pelo Google"}
+            )
+        
+        # Salvar no banco de dados
+        session = SessionLocal()
+        try:
+            empresa = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
+            if not empresa:
+                return JSONResponse(
+                    status_code=404,
+                    content={"success": False, "message": "Empresa não encontrada"}
+                )
+            
+            # Verificar se já existe configuração para Google Calendar
+            empresa_api = session.query(EmpresaAPI).filter(
+                EmpresaAPI.empresa_id == empresa.id,
+                EmpresaAPI.api_name == 'google_calendar'
+            ).first()
+            
+            if empresa_api:
+                # Atualizar configuração existente
+                empresa_api.config = {
+                    **empresa_api.config,
+                    'client_id': client_id,
+                    'client_secret': client_secret,
+                    'refresh_token': refresh_token,
+                    'access_token': access_token
+                }
+            else:
+                # Criar nova configuração
+                empresa_api = EmpresaAPI(
+                    empresa_id=empresa.id,
+                    api_name='google_calendar',
+                    config={
+                        'client_id': client_id,
+                        'client_secret': client_secret,
+                        'refresh_token': refresh_token,
+                        'access_token': access_token
+                    }
+                )
+                session.add(empresa_api)
+            
+            session.commit()
+            
+            return JSONResponse(
+                content={
+                    "success": True,
+                    "message": "Refresh Token gerado e salvo com sucesso",
+                    "refresh_token": refresh_token
+                }
+            )
+            
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Erro ao salvar no banco: {e}")
+            return JSONResponse(
+                status_code=500,
+                content={"success": False, "message": f"Erro ao salvar no banco: {str(e)}"}
+            )
+        finally:
+            session.close()
+            
+    except Exception as e:
+        logger.error(f"Erro ao gerar token: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "message": f"Erro interno: {str(e)}"}
+        )
+
+@app.get("/api/admin/{empresa_slug}/oauth/generate-token")
+async def generate_oauth_token_get(
+    empresa_slug: str, 
+    code: str = Query(...),
+    client_id: str = Query(...),
+    client_secret: str = Query(...)
+):
+    """Gera Refresh Token a partir do código de autorização via GET"""
+    try:
+        if not all([code, client_id, client_secret]):
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "message": "Código, client_id e client_secret são obrigatórios"}
+            )
+        
+        # Usar sempre o redirect_uri de localhost já que o código foi obtido através do callback local
+        redirect_uri = 'http://localhost:8000/oauth/callback'
+        
+        # Trocar código por tokens
+        token_url = "https://oauth2.googleapis.com/token"
+        token_data = {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "code": code,
+            "grant_type": "authorization_code",
+            "redirect_uri": redirect_uri
+        }
+        
+        import requests
+        response = requests.post(token_url, data=token_data)
+        
+        if response.status_code != 200:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "message": f"Erro ao trocar código por token: {response.text}"}
+            )
+        
+        tokens = response.json()
+        refresh_token = tokens.get('refresh_token')
+        access_token = tokens.get('access_token')
+        
+        if not refresh_token:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "message": "Refresh token não foi retornado pelo Google"}
+            )
+        
+        # Salvar no banco de dados
+        session = SessionLocal()
+        try:
+            empresa = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
+            if not empresa:
+                return JSONResponse(
+                    status_code=404,
+                    content={"success": False, "message": "Empresa não encontrada"}
+                )
+            
+            # Verificar se já existe configuração para Google Calendar
+            empresa_api = session.query(EmpresaAPI).filter(
+                EmpresaAPI.empresa_id == empresa.id,
+                EmpresaAPI.api_name == 'google_calendar'
+            ).first()
+            
+            if empresa_api:
+                # Atualizar configuração existente
+                empresa_api.config = {
+                    **empresa_api.config,
+                    'client_id': client_id,
+                    'client_secret': client_secret,
+                    'refresh_token': refresh_token,
+                    'access_token': access_token
+                }
+            else:
+                # Criar nova configuração
+                empresa_api = EmpresaAPI(
+                    empresa_id=empresa.id,
+                    api_name='google_calendar',
+                    config={
+                        'client_id': client_id,
+                        'client_secret': client_secret,
+                        'refresh_token': refresh_token,
+                        'access_token': access_token
+                    }
+                )
+                session.add(empresa_api)
+            
+            session.commit()
+            
+            return JSONResponse(
+                content={
+                    "success": True,
+                    "message": "Refresh Token gerado e salvo com sucesso",
+                    "refresh_token": refresh_token
+                }
+            )
+            
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Erro ao salvar no banco: {e}")
+            return JSONResponse(
+                status_code=500,
+                content={"success": False, "message": f"Erro ao salvar no banco: {str(e)}"}
+            )
+        finally:
+            session.close()
+            
+    except Exception as e:
+        logger.error(f"Erro ao gerar token: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "message": f"Erro interno: {str(e)}"}
+        )
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000) 
