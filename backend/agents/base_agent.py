@@ -242,94 +242,105 @@ class BaseAgent:
         )
     
     async def process_message(self, message: str, context: Dict[str, Any]) -> str:
-        """Processa mensagem usando tool-calling nativo (fallback para legado em erro)"""
+        """Processa uma mensagem usando o agent"""
         try:
-            # Guardar contexto atual para wrappers
-            self.current_context = context or {}
+            # Adicionar data atual ao contexto
+            from datetime import datetime
+            current_date = datetime.now().strftime('%Y-%m-%d')
+            current_time = datetime.now().strftime('%H:%M')
             
-            # Construir prompt com contexto da empresa
+            # Atualizar contexto com informações de data/hora
+            context.update({
+                'current_date': current_date,
+                'current_time': current_time,
+                'current_datetime': datetime.now().isoformat()
+            })
+            
+            # Atualizar contexto atual
+            self.current_context = context
+            
+            # Construir prompt do sistema
             system_prompt = self._build_system_prompt(context)
-            logger.info(f"System prompt: {system_prompt}")
             
-            # Montar conversa para tool-calling
+            # Criar mensagens para o chat
             messages = [
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=message)
             ]
             
-            llm_with_tools = self.chat_llm.bind_tools(self.structured_tools)
+            # Adicionar histórico de conversa
+            if hasattr(self.memory, 'chat_memory') and self.memory.chat_memory.messages:
+                # Adicionar mensagens do histórico (exceto a última que é a atual)
+                messages[1:1] = self.memory.chat_memory.messages[:-1]
             
-            # Loop de execução de tools (até 3 chamadas)
-            for _ in range(3):
-                ai_msg: AIMessage = await llm_with_tools.ainvoke(messages)
-                messages.append(ai_msg)
-                
-                if not ai_msg.tool_calls:
-                    # Sem tool calls → resposta final
-                    return (ai_msg.content or "").strip() or "Tudo certo! Como posso ajudar?"
-                
-                # Executar cada tool call
-                for call in ai_msg.tool_calls:
-                    name = call["name"] if isinstance(call, dict) else call.name
-                    args = call["args"] if isinstance(call, dict) else call.args
-                    try:
-                        tool_map = {t.name: t for t in self.structured_tools}
-                        if name in tool_map:
-                            result = tool_map[name].invoke(args)
-                        else:
-                            result = f"Tool desconhecida: {name}"
-                    except Exception as e:
-                        result = f"Erro na tool {name}: {e}"
-                    messages.append(ToolMessage(content=str(result), tool_call_id=(call.get("id") if isinstance(call, dict) else call.id)))
+            # Processar com o LLM
+            response = await self.chat_llm.ainvoke(messages)
             
-            # Se exceder chamadas, retornar última resposta do modelo
-            return "Para continuar, preciso de mais detalhes (data/hora/cliente)."
-        
+            # Salvar na memória
+            self.memory.save_context(
+                {"input": message},
+                {"output": response.content}
+            )
+            
+            return response.content
+            
         except Exception as e:
-            logger.error(f"Erro no tool-calling, usando modo legado: {e}")
-            # Fallback: modo legado
-            try:
-                agent_input = (
-                    f"{system_prompt}\n\nMensagem do cliente: {message}\n\n"
-                    "Quando decidir usar uma ferramenta, SEMPRE forneça Action Input como um JSON válido."
-                )
-                response = await self.agent.ainvoke({"input": agent_input})
-                return response["output"].strip()
-            except Exception:
-                return "Desculpe, tive um problema técnico. Como posso ajudar?"
+            logger.error(f"Erro ao processar mensagem: {e}")
+            return f"Desculpe, tive um problema técnico: {str(e)}"
     
     def _build_system_prompt(self, context: Dict[str, Any]) -> str:
-        """Constrói prompt do sistema baseado na configuração da empresa"""
-        base_prompt = self.empresa_config.get('prompt', 'Você é um assistente virtual.')
+        """Constrói o prompt do sistema com contexto da empresa"""
+        empresa_config = self.empresa_config
         
-        # Adicionar informações do cliente se disponível
-        cliente_info = context.get('cliente_info', {})
-        if cliente_info:
-            base_prompt += f"\n\nCliente: {cliente_info.get('nome', 'Cliente')}"
-            base_prompt += f"\nÚltima interação: {cliente_info.get('ultima_atividade', 'N/A')}"
+        # Informações da empresa
+        empresa_nome = empresa_config.get('nome', 'Empresa')
+        empresa_slug = empresa_config.get('slug', 'empresa')
+        prompt_empresa = empresa_config.get('prompt', '')
         
-        # Adicionar instruções específicas sobre ferramentas
-        base_prompt += """
+        # Informações do cliente
+        cliente_id = context.get('cliente_id', 'Cliente')
+        cliente_name = context.get('cliente_name', 'Cliente')
+        cliente_info = context.get('cliente_info', {}).get('info', '')
         
-IMPORTANTE - REGRAS DE USO:
-1. SEMPRE use as ferramentas disponíveis para verificar informações reais
-2. NUNCA invente horários, datas ou informações de calendário
-3. Para agendamentos, use a ferramenta 'verificar_calendario' primeiro
-4. Para fazer reservas, use a ferramenta 'fazer_reserva' com dados reais
-5. Se não tiver acesso às ferramentas, diga que não pode fazer a operação
-6. Seja honesto sobre limitações - não invente funcionalidades
-7. Sempre confirme informações antes de agendar
-8. Ao chamar uma ferramenta, o Action Input deve ser JSON válido com os campos esperados.
+        # Informações de data/hora
+        current_date = context.get('current_date', 'Data atual não disponível')
+        current_time = context.get('current_time', 'Hora atual não disponível')
+        
+        # Verificar se Google Calendar está configurado
+        google_calendar_enabled = empresa_config.get('google_calendar_enabled', False)
+        google_calendar_client_id = empresa_config.get('google_calendar_client_id')
+        google_calendar_refresh_token = empresa_config.get('google_calendar_refresh_token')
+        
+        calendar_status = "✅ Google Calendar configurado e funcionando" if (google_calendar_enabled and google_calendar_client_id and google_calendar_refresh_token) else "❌ Google Calendar não configurado"
+        
+        system_prompt = f"""Você é um assistente virtual da {empresa_nome}.
 
-FORMATOS DE ACTION INPUT:
-- buscar_cliente: {"cliente_id": "..."}
-- verificar_calendario: {"data": "YYYY-MM-DD"}
-- fazer_reserva: {"data": "YYYY-MM-DD", "hora": "HH:MM", "cliente": "Nome"}
-- enviar_mensagem: {"mensagem": "...", "cliente_id": "..."}
-"""
+INFORMAÇÕES ATUAIS:
+- Data atual: {current_date}
+- Hora atual: {current_time}
+- Cliente: {cliente_name} (ID: {cliente_id})
+- Status do calendário: {calendar_status}
+
+INFORMAÇÕES DO CLIENTE:
+{cliente_info}
+
+FERRAMENTAS DISPONÍVEIS:
+1. buscar_cliente - Busca informações do cliente
+2. verificar_calendario - Verifica disponibilidade real no Google Calendar
+3. fazer_reserva - Faz reserva real na agenda
+4. enviar_mensagem - Envia mensagem
+
+INSTRUÇÕES IMPORTANTES:
+- SEMPRE use a data atual ({current_date}) como referência quando o cliente não especificar data
+- Para verificar disponibilidade, use a ferramenta verificar_calendario com a data no formato YYYY-MM-DD
+- Para fazer reservas, use a ferramenta fazer_reserva com data, hora e nome do cliente
+- Quando o cliente perguntar sobre horários disponíveis, SEMPRE verifique o calendário real primeiro
+- Se o cliente mencionar "hoje", use {current_date}
+- Se o cliente mencionar "amanhã", calcule a data de amanhã
+
+PROMPT ESPECÍFICO DA EMPRESA:
+{prompt_empresa}
+
+Lembre-se: Sempre seja útil, profissional e use as ferramentas disponíveis para fornecer informações precisas sobre disponibilidade e fazer reservas."""
         
-        # Adicionar instruções específicas
-        if self.empresa_config.get('mensagem_quebrada'):
-            base_prompt += "\n\nIMPORTANTE: Quebre respostas longas em até 3 mensagens curtas."
-        
-        return base_prompt 
+        return system_prompt 
