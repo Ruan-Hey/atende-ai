@@ -25,6 +25,7 @@ class GoogleCalendarService:
         self.SCOPES = ['https://www.googleapis.com/auth/calendar']  # Escopo único e válido
         self.creds = None
         self.service = None
+        self._calendar_id: Optional[str] = None
         
         # Timezone padrão Brasil; pode ser sobrescrito por config
         tz_name = self.config.get('google_calendar_timezone', 'America/Sao_Paulo')
@@ -153,6 +154,49 @@ class GoogleCalendarService:
             logger.warning(f"Google Calendar não configurado ou erro na autenticação: {e}")
             # Não falhar, apenas continuar sem autenticação
             self.service = None
+
+    # -------------------------------
+    # Seleção automática de calendário
+    # -------------------------------
+    def _resolve_calendar_id(self) -> str:
+        """Retorna o calendarId configurado ou detecta automaticamente o primeiro acessível.
+        Preferência: primary > owner > writer > primeiro da lista.
+        """
+        if self._calendar_id:
+            return self._calendar_id
+        configured = self.config.get('google_calendar_calendar_id')
+        if configured:
+            self._calendar_id = configured
+            return self._calendar_id
+        # Sem id configurado: tentar descobrir
+        try:
+            if not self.service:
+                return 'primary'
+            calendars_resp = self.service.calendarList().list().execute()
+            items = calendars_resp.get('items', [])
+            # primary
+            primary = next((c.get('id') for c in items if c.get('primary')), None)
+            if primary:
+                self._calendar_id = primary
+                return self._calendar_id
+            # owner
+            owner = next((c.get('id') for c in items if c.get('accessRole') == 'owner'), None)
+            if owner:
+                self._calendar_id = owner
+                return self._calendar_id
+            # writer ou primeiro
+            writer = next((c.get('id') for c in items if c.get('accessRole') in ['owner', 'writer']), None)
+            if writer:
+                self._calendar_id = writer
+                return self._calendar_id
+            if items:
+                self._calendar_id = items[0].get('id', 'primary')
+                return self._calendar_id
+        except Exception as e:
+            logger.warning(f"Falha ao detectar calendarId automaticamente: {e}")
+        # Fallback final
+        self._calendar_id = 'primary'
+        return self._calendar_id
     
     def get_available_slots(self, date: Optional[str] = None, days_ahead: int = 7) -> List[Dict[str, str]]:
         """
@@ -177,8 +221,8 @@ class GoogleCalendarService:
             
             end_date = start_date + timedelta(days=days_ahead)
             
-            # Calendar a consultar (padrão primary)
-            calendar_id = self.config.get('google_calendar_calendar_id', 'primary')
+            # Calendar a consultar
+            calendar_id = self._resolve_calendar_id()
             
             # Busca eventos no calendário (informando timezone)
             events_result = self.service.events().list(
@@ -301,6 +345,7 @@ class GoogleCalendarService:
             return {'success': False, 'message': 'Calendário não configurado'}
         
         try:
+            calendar_id = self._resolve_calendar_id()
             # Converte string para datetime
             meeting_time = datetime.fromisoformat(date_time.replace('Z', '+00:00'))
             end_time = meeting_time + timedelta(minutes=duration_minutes)
@@ -325,16 +370,15 @@ class GoogleCalendarService:
                 },
             }
             
-            event = self.service.events().insert(calendarId='primary', body=event).execute()
+            event = self.service.events().insert(calendarId=calendar_id, body=event).execute()
             
             logger.info(f'Reunião agendada: {event.get("htmlLink")}')
             return {
                 'success': True,
                 'event_id': event.get('id'),
                 'link': event.get('htmlLink'),
-                'message': f'Reunião agendada para {meeting_time.strftime("%d/%m às %Hh")}'
-            }
-            
+                'message': f'Reunião agendada para {meeting_time.strftime("%d/%m às %Hh")}'}
+        
         except Exception as e:
             logger.error(f"Erro ao agendar reunião: {e}")
             return {'success': False, 'message': f'Erro ao agendar: {str(e)}'}
@@ -353,9 +397,10 @@ class GoogleCalendarService:
         try:
             start_dt = datetime.strptime(start_date, '%Y-%m-%d')
             end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            calendar_id = self._resolve_calendar_id()
             
             events_result = self.service.events().list(
-                calendarId='primary',
+                calendarId=calendar_id,
                 timeMin=start_dt.isoformat() + 'Z',
                 timeMax=end_dt.isoformat() + 'Z',
                 singleEvents=True,
@@ -379,7 +424,8 @@ class GoogleCalendarService:
             return {'success': False, 'message': 'Calendário não configurado'}
         
         try:
-            event = self.service.events().insert(calendarId='primary', body=event_data).execute()
+            calendar_id = self._resolve_calendar_id()
+            event = self.service.events().insert(calendarId=calendar_id, body=event_data).execute()
             
             logger.info(f'Evento criado: {event.get("id")}')
             return {
@@ -391,4 +437,18 @@ class GoogleCalendarService:
             
         except Exception as e:
             logger.error(f"Erro ao criar evento: {e}")
-            return {'success': False, 'message': f'Erro ao criar evento: {str(e)}'} 
+            return {'success': False, 'message': f'Erro ao criar evento: {str(e)}'}
+    
+    def delete_event(self, event_id: str) -> bool:
+        """Remove um evento pelo ID no calendário configurado."""
+        if not self.service:
+            logger.warning("Google Calendar não autenticado")
+            return False
+        try:
+            calendar_id = self._resolve_calendar_id()
+            self.service.events().delete(calendarId=calendar_id, eventId=event_id).execute()
+            logger.info(f"Evento removido: {event_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Erro ao remover evento: {e}")
+            return False 

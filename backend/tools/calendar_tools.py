@@ -26,14 +26,17 @@ class CalendarTools:
                 'google_calendar_service_account': empresa_config.get('google_calendar_service_account'),
                 'google_calendar_project_id': empresa_config.get('google_calendar_project_id'),
                 'google_calendar_client_email': empresa_config.get('google_calendar_client_email'),
+                'google_calendar_calendar_id': empresa_config.get('google_calendar_calendar_id', 'primary'),
                 'google_sheets_id': empresa_config.get('google_sheets_id')
             }
             
             self.calendar_service = GoogleCalendarService(calendar_config)
         return self.calendar_service
     
-    def _get_sheets_service(self, empresa_config: Dict[str, Any]) -> GoogleSheetsService:
-        """Inicializa serviço do Google Sheets"""
+    def _get_sheets_service(self, empresa_config: Dict[str, Any]) -> GoogleSheetsService | None:
+        """Inicializa serviço do Google Sheets somente se houver ID configurado"""
+        if not empresa_config.get('google_sheets_id'):
+            return None
         if not self.sheets_service:
             # Criar configuração para o Google Sheets Service
             sheets_config = {
@@ -43,7 +46,11 @@ class CalendarTools:
                 'google_calendar_refresh_token': empresa_config.get('google_calendar_refresh_token')
             }
             
-            self.sheets_service = GoogleSheetsService(sheets_config)
+            try:
+                self.sheets_service = GoogleSheetsService(sheets_config)
+            except Exception as e:
+                logger.warning(f"Sheets desabilitado ou não configurado corretamente: {e}")
+                self.sheets_service = None
         return self.sheets_service
     
     def _find_calendar_api(self, empresa_config: Dict[str, Any]) -> tuple[str, dict]:
@@ -236,12 +243,13 @@ class CalendarTools:
             
             # 2. Registrar no Google Sheets (se configurado)
             try:
-                sheets_service.add_reservation(
-                    data=data,
-                    hora=hora,
-                    cliente=cliente,
-                    empresa=empresa_config.get('nome', 'Empresa')
-                )
+                if sheets_service:
+                    sheets_service.add_reservation(
+                        data=data,
+                        hora=hora,
+                        cliente=cliente,
+                        empresa=empresa_config.get('nome', 'Empresa')
+                    )
             except Exception as e:
                 logger.warning(f"Erro ao registrar no Google Sheets: {e}")
             
