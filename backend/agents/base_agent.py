@@ -311,6 +311,13 @@ class BaseAgent:
                 HumanMessage(content=message)
             ]
             
+            # Adicionar histórico de conversa da memória
+            if hasattr(self.memory, 'chat_memory') and self.memory.chat_memory.messages:
+                # Inserir mensagens do histórico entre SystemMessage e HumanMessage atual
+                # Pegar as últimas 10 mensagens para manter contexto sem sobrecarregar
+                history_messages = self.memory.chat_memory.messages[-10:]
+                messages[1:1] = history_messages
+            
             # Chat com ferramentas (tool calling nativo)
             llm_with_tools = self.chat_llm.bind_tools(self.structured_tools)
             

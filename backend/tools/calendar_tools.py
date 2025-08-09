@@ -111,7 +111,7 @@ class CalendarTools:
             if not slots:
                 return f"Não há horários disponíveis para {data}. Tente outra data."
             
-            slots_info = "\n".join([f"- {slot}" for slot in slots[:5]])
+            slots_info = "\n".join([f"- {slot}" for slot in slots[:10]])
             return f"Horários disponíveis no Google Calendar para {data}:\n{slots_info}"
             
         except Exception as e:

@@ -81,6 +81,32 @@ def test_agent_calendar():
         print(f"   - google_calendar_refresh_token: {empresa_config.get('google_calendar_refresh_token')[:20] if empresa_config.get('google_calendar_refresh_token') else 'N/A'}...")
         print(f"   - openai_key: {empresa_config.get('openai_key')[:10] if empresa_config.get('openai_key') else 'N/A'}...")
         
+        # Teste direto do Google Calendar
+        print("\n📅 Testando Google Calendar diretamente...")
+        from integrations.google_calendar_service import GoogleCalendarService
+        
+        calendar_config = {
+            'google_calendar_enabled': True,
+            'google_calendar_client_id': empresa_config.get('google_calendar_client_id'),
+            'google_calendar_client_secret': empresa_config.get('google_calendar_client_secret'),
+            'google_calendar_refresh_token': empresa_config.get('google_calendar_refresh_token'),
+            'google_calendar_service_account': empresa_config.get('google_calendar_service_account'),
+            'google_calendar_project_id': empresa_config.get('google_calendar_project_id'),
+            'google_calendar_client_email': empresa_config.get('google_calendar_client_email')
+        }
+        
+        calendar_service = GoogleCalendarService(calendar_config)
+        
+        # Verificar slots disponíveis para 11 de agosto
+        slots = calendar_service.get_available_slots("2025-08-11")
+        print(f"📋 Slots disponíveis para 11/08: {slots}")
+        
+        # Verificar eventos existentes
+        events = calendar_service.list_events("2025-08-11", "2025-08-11")
+        print(f"📅 Eventos existentes em 11/08: {len(events)} eventos")
+        for event in events:
+            print(f"   - {event.get('summary', 'Sem título')}: {event.get('start', {}).get('dateTime', 'Sem hora')}")
+        
         # Criar agente
         print("\n🤖 Criando agente...")
         whatsapp_agent = WhatsAppAgent(empresa_config)
@@ -94,6 +120,10 @@ def test_agent_calendar():
         
         print(f"\n🧪 Testando agente com mensagem: '{webhook_data['Body']}'")
         
+        # Adicionar logging para debug
+        import logging
+        logging.basicConfig(level=logging.DEBUG)
+        
         # Processar mensagem
         import asyncio
         result = asyncio.run(whatsapp_agent.process_whatsapp_message(webhook_data, empresa_config))
@@ -106,6 +136,29 @@ def test_agent_calendar():
             print("✅ Agente funcionando corretamente!")
         else:
             print(f"❌ Erro no agente: {result.get('error')}")
+        
+        # Teste de conversa com contexto
+        print("\n🧪 Testando conversa com contexto...")
+        
+        # Primeira mensagem
+        webhook_data1 = {
+            'WaId': '5511999999999',
+            'Body': 'Quero agendar para dia 11 de agosto',
+            'ProfileName': 'Cliente Teste'
+        }
+        
+        result1 = asyncio.run(whatsapp_agent.process_whatsapp_message(webhook_data1, empresa_config))
+        print(f"📤 Resposta 1: {result1.get('message')[:100]}...")
+        
+        # Segunda mensagem (deveria manter contexto do dia 11)
+        webhook_data2 = {
+            'WaId': '5511999999999', 
+            'Body': 'E às 14 horas você tem?',
+            'ProfileName': 'Cliente Teste'
+        }
+        
+        result2 = asyncio.run(whatsapp_agent.process_whatsapp_message(webhook_data2, empresa_config))
+        print(f"📤 Resposta 2: {result2.get('message')[:100]}...")
         
         session.close()
         
