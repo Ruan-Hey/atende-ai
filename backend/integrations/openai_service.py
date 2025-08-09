@@ -1,7 +1,19 @@
 import openai
 import logging
+import sys
+import os
+from pathlib import Path
 from typing import Dict, Any, Optional
-from .config import Config
+
+# Adicionar o diretório backend ao path
+backend_dir = Path(__file__).parent.parent
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
+
+try:
+    from config import Config
+except ImportError:
+    from ..config import Config
 
 logger = logging.getLogger(__name__)
 

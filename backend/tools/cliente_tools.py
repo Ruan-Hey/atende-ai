@@ -1,9 +1,23 @@
-from typing import Dict, Any
+import logging
+import json
+from typing import Dict, Any, Optional
+import sys
+import os
+from pathlib import Path
+
+# Adicionar o diretório backend ao path
+backend_dir = Path(__file__).parent.parent
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
+
+try:
+    from config import Config
+except ImportError:
+    from ..config import Config
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from models import Cliente, Mensagem
-from .config import Config
-import logging
 
 logger = logging.getLogger(__name__)
 

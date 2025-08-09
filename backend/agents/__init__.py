@@ -1,5 +1,19 @@
-from .base_agent import BaseAgent
-from .whatsapp_agent import WhatsAppAgent
-from .instagram_agent import InstagramAgent
+import sys
+import os
+from pathlib import Path
+
+# Adicionar o diretório backend ao path
+backend_dir = Path(__file__).parent.parent
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
+
+try:
+    from .base_agent import BaseAgent
+    from .whatsapp_agent import WhatsAppAgent
+    from .instagram_agent import InstagramAgent
+except ImportError:
+    from base_agent import BaseAgent
+    from whatsapp_agent import WhatsAppAgent
+    from instagram_agent import InstagramAgent
 
 __all__ = ['BaseAgent', 'WhatsAppAgent', 'InstagramAgent'] 

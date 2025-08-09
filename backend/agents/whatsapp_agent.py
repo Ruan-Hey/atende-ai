@@ -1,4 +1,22 @@
-from .base_agent import BaseAgent
+import sys
+import os
+from pathlib import Path
+
+# Adicionar o diretório backend ao path
+backend_dir = Path(__file__).parent.parent
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
+
+try:
+    from .base_agent import BaseAgent
+except ImportError:
+    from base_agent import BaseAgent
+
+try:
+    from config import Config
+except ImportError:
+    from ..config import Config
+
 from typing import Dict, Any
 import logging
 
@@ -26,7 +44,6 @@ class WhatsAppAgent(BaseAgent):
             from sqlalchemy import create_engine
             from sqlalchemy.orm import sessionmaker
             from models import Empresa
-            from .config import Config
             
             engine = create_engine(Config.POSTGRES_URL)
             SessionLocal = sessionmaker(bind=engine)
