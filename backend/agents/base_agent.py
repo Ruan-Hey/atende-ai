@@ -145,6 +145,7 @@ class BaseAgent:
     def _setup_structured_tools(self):
         """Cria StructuredTools com assinaturas tipadas para tool-calling nativo"""
         from typing import Optional
+        import json
         structured = []
         
         @lc_tool("buscar_cliente")
@@ -170,6 +171,48 @@ class BaseAgent:
             """Envia uma mensagem para o cliente especificado."""
             return self._wrappers["enviar_mensagem"](mensagem=mensagem, cliente_id=cliente_id)
         structured.append(t_enviar_mensagem)
+        
+        # Adicionar StructuredTools dinâmicos para APIs conectadas
+        from tools.api_tools import APITools
+        for key, value in self.empresa_config.items():
+            if key.endswith('_enabled') and value is True:
+                api_name = key.replace('_enabled', '').replace('_', ' ').title()
+                config_key = f"{key.replace('_enabled', '')}_config"
+                api_config = self.empresa_config.get(config_key, {})
+                if not api_config:
+                    continue
+                tool_name = f"{api_name.lower().replace(' ', '_')}_api_call"
+                
+                # Criar wrapper e registrar em _wrappers para o loop de execução
+                def _make_dyn_wrapper(api_name_local: str, api_config_local: dict):
+                    def wrapper(endpoint_path: str, method: str = "GET", params_json: str = "") -> str:
+                        try:
+                            api_tools = APITools()
+                            extra = {}
+                            if params_json:
+                                try:
+                                    extra = json.loads(params_json)
+                                except Exception:
+                                    # Se não foi um JSON válido, ignore e não quebre a execução
+                                    extra = {}
+                            return api_tools.call_api(
+                                api_name=api_name_local,
+                                endpoint_path=endpoint_path,
+                                method=method,
+                                config=api_config_local,
+                                **extra
+                            )
+                        except Exception as e:
+                            return f"Erro ao chamar API {api_name_local}: {str(e)}"
+                    return wrapper
+                dyn_wrapper = _make_dyn_wrapper(api_name, api_config)
+                self._wrappers[tool_name] = dyn_wrapper
+                
+                @lc_tool(tool_name)
+                def t_dynamic_api_call(endpoint_path: str, method: str = "GET", params_json: str = "") -> str:  # type: ignore
+                    """Chama endpoints da API conectada. Passe endpoint_path (ex: /slots), method (GET/POST/...) e params_json com JSON de parâmetros."""
+                    return self._wrappers[tool_name](endpoint_path=endpoint_path, method=method, params_json=params_json)
+                structured.append(t_dynamic_api_call)
         
         return structured
     
@@ -242,10 +285,10 @@ class BaseAgent:
         )
     
     async def process_message(self, message: str, context: Dict[str, Any]) -> str:
-        """Processa uma mensagem usando o agent"""
+        """Processa uma mensagem usando tool-calling: executa tools antes de responder"""
         try:
             # Adicionar data atual ao contexto
-            from datetime import datetime
+            from datetime import datetime, timedelta
             current_date = datetime.now().strftime('%Y-%m-%d')
             current_time = datetime.now().strftime('%H:%M')
             
@@ -259,30 +302,57 @@ class BaseAgent:
             # Atualizar contexto atual
             self.current_context = context
             
-            # Construir prompt do sistema
+            # Construir prompt do sistema (reforça usar tools antes de responder)
             system_prompt = self._build_system_prompt(context)
             
-            # Criar mensagens para o chat
+            # Mensagens iniciais
             messages = [
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=message)
             ]
             
-            # Adicionar histórico de conversa
-            if hasattr(self.memory, 'chat_memory') and self.memory.chat_memory.messages:
-                # Adicionar mensagens do histórico (exceto a última que é a atual)
-                messages[1:1] = self.memory.chat_memory.messages[:-1]
+            # Chat com ferramentas (tool calling nativo)
+            llm_with_tools = self.chat_llm.bind_tools(self.structured_tools)
             
-            # Processar com o LLM
-            response = await self.chat_llm.ainvoke(messages)
+            # Loop de execução de tools até chegar na resposta final
+            safety_counter = 0
+            ai_response: AIMessage = await llm_with_tools.ainvoke(messages)
+            
+            while isinstance(ai_response, AIMessage) and getattr(ai_response, 'tool_calls', None):
+                safety_counter += 1
+                if safety_counter > 6:
+                    logger.warning("Limite de tool-calls atingido; encerrando com última resposta do modelo")
+                    break
+                
+                # Acrescenta a própria mensagem do modelo que solicitou ferramentas
+                messages.append(ai_response)
+                
+                # Executa cada tool solicitada e anexa ToolMessage com o resultado
+                for tool_call in ai_response.tool_calls:
+                    tool_name = tool_call.get('name')
+                    tool_args = tool_call.get('args', {}) or {}
+                    tool_call_id = tool_call.get('id')
+                    try:
+                        if tool_name in self._wrappers:
+                            tool_result = self._wrappers[tool_name](**tool_args)
+                        else:
+                            tool_result = f"Tool {tool_name} não encontrada"
+                    except Exception as e:
+                        tool_result = f"Erro ao executar tool {tool_name}: {str(e)}"
+                    messages.append(ToolMessage(content=str(tool_result), tool_call_id=tool_call_id))
+                
+                # Após fornecer resultados das tools, o modelo deve formular a resposta final
+                ai_response = await llm_with_tools.ainvoke(messages)
+            
+            final_text = ai_response.content if isinstance(ai_response, AIMessage) else str(ai_response)
             
             # Salvar na memória
             self.memory.save_context(
                 {"input": message},
-                {"output": response.content}
+                {"output": final_text}
             )
             
-            return response.content
+            return final_text
             
         except Exception as e:
             logger.error(f"Erro ao processar mensagem: {e}")
@@ -313,6 +383,15 @@ class BaseAgent:
         
         calendar_status = "✅ Google Calendar configurado e funcionando" if (google_calendar_enabled and google_calendar_client_id and google_calendar_refresh_token) else "❌ Google Calendar não configurado"
         
+        # Listar APIs dinâmicas conectadas
+        dynamic_api_list = []
+        for key, value in empresa_config.items():
+            if key.endswith('_enabled') and value is True:
+                api_name = key.replace('_enabled', '').replace('_', ' ').title()
+                if api_name not in ["Google Calendar", "Openai", "Google Sheets"]:
+                    dynamic_api_list.append(api_name)
+        dynamic_tools_info = "\n".join([f"- {api}: use a tool {api.lower().replace(' ', '_')}_api_call" for api in dynamic_api_list]) or "(nenhuma)"
+        
         system_prompt = f"""Você é um assistente virtual da {empresa_nome}.
 
 INFORMAÇÕES ATUAIS:
@@ -329,18 +408,20 @@ FERRAMENTAS DISPONÍVEIS:
 2. verificar_calendario - Verifica disponibilidade real no Google Calendar
 3. fazer_reserva - Faz reserva real na agenda
 4. enviar_mensagem - Envia mensagem
+APIs dinâmicas conectadas (tool genérica):
+{dynamic_tools_info}
 
 INSTRUÇÕES IMPORTANTES:
 - SEMPRE use a data atual ({current_date}) como referência quando o cliente não especificar data
 - Para verificar disponibilidade, use a ferramenta verificar_calendario com a data no formato YYYY-MM-DD
 - Para fazer reservas, use a ferramenta fazer_reserva com data, hora e nome do cliente
-- Quando o cliente perguntar sobre horários disponíveis, SEMPRE verifique o calendário real primeiro
-- Se o cliente mencionar "hoje", use {current_date}
-- Se o cliente mencionar "amanhã", calcule a data de amanhã
+- Quando o cliente perguntar sobre horários disponíveis ou solicitar agendamento, PRIMEIRO chame a ferramenta apropriada e SÓ DEPOIS responda ao cliente com o resultado. Não prometa disponibilidade sem verificar.
+- Se o cliente mencionar "hoje", use {current_date}; se mencionar dias da semana (ex.: segunda-feira), calcule a próxima ocorrência a partir da data atual.
+- Para qualquer API conectada (ex.: clínicas), utilize a tool específica {"{api}_api_call"} correspondente, informando endpoint_path/method/params_json.
 
 PROMPT ESPECÍFICO DA EMPRESA:
 {prompt_empresa}
 
-Lembre-se: Sempre seja útil, profissional e use as ferramentas disponíveis para fornecer informações precisas sobre disponibilidade e fazer reservas."""
+Lembre-se: Seja útil e profissional. Use as ferramentas para fornecer informações precisas e não responda conclusões sem executar as ferramentas necessárias."""
         
         return system_prompt 
