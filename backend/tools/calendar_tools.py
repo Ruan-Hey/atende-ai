@@ -108,6 +108,13 @@ class CalendarTools:
             calendar_service = self._get_calendar_service(empresa_config)
             slots = calendar_service.get_available_slots(data)
             
+            # Logar slots para diagnóstico
+            try:
+                import logging
+                logging.getLogger(__name__).info(f"Calendar slots for {data}: {slots}")
+            except Exception:
+                pass
+            
             if not slots:
                 return f"Não há horários disponíveis para {data}. Tente outra data."
             

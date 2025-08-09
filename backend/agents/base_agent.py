@@ -393,18 +393,26 @@ class BaseAgent:
                     tool_args = tool_call.get('args', {}) or {}
                     tool_call_id = tool_call.get('id')
                     try:
+                        logger.info(f"Tool requested: {tool_name} args={tool_args}")
                         if tool_name in self._wrappers:
                             tool_result = self._wrappers[tool_name](**tool_args)
                         else:
                             tool_result = f"Tool {tool_name} não encontrada"
+                        # Logar resultado (limitado)
+                        result_preview = str(tool_result)
+                        if len(result_preview) > 800:
+                            result_preview = result_preview[:800] + "... [truncated]"
+                        logger.info(f"Tool result ({tool_name}): {result_preview}")
                     except Exception as e:
                         tool_result = f"Erro ao executar tool {tool_name}: {str(e)}"
+                        logger.error(tool_result)
                     messages.append(ToolMessage(content=str(tool_result), tool_call_id=tool_call_id))
                 
                 # Após fornecer resultados das tools, o modelo deve formular a resposta final
                 ai_response = await llm_with_tools.ainvoke(messages)
             
             final_text = ai_response.content if isinstance(ai_response, AIMessage) else str(ai_response)
+            logger.info(f"Final response: {final_text}")
             
             # Salvar na memória
             self.memory.save_context(
