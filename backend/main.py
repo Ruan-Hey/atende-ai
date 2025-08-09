@@ -477,7 +477,7 @@ async def webhook_handler(empresa_slug: str, request: Request):
         
         # Processar mensagem com LangChain Agent
         try:
-            from agents.whatsapp_agent import WhatsAppAgent
+            from .agents.whatsapp_agent import WhatsAppAgent
             
             # Criar agent para WhatsApp
             whatsapp_agent = WhatsAppAgent(empresa_config)
