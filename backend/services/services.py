@@ -5,6 +5,7 @@ from typing import List, Dict, Any, Optional
 import sqlalchemy
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine, text, func
+from sqlalchemy.orm import sessionmaker
 import os
 import sys
 from pathlib import Path
@@ -32,7 +33,7 @@ class DatabaseService:
     
     def __init__(self):
         self.engine = create_engine(Config.POSTGRES_URL)
-        self.SessionLocal = Session(bind=self.engine)
+        self.SessionLocal = sessionmaker(bind=self.engine)
     
     def save_message(self, empresa_id: int, cliente_id: str, text: str, is_bot: bool = False, cliente_nome: str = None):
         """Salva mensagem no banco de dados e atualiza informações do cliente"""
