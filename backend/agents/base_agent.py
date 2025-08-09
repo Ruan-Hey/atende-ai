@@ -118,85 +118,77 @@ class BaseAgent:
             empresa_id = self.empresa_config.get('empresa_id')
             if not cliente_id or not empresa_id:
                 return "Parâmetros ausentes: forneça {'cliente_id': '...'}; empresa_id vem do contexto."
-            return cliente_tools.buscar_cliente_info(cliente_id, int(empresa_id))
+            
+            try:
+                return cliente_tools.get_conversation_history(cliente_id=cliente_id, empresa_id=empresa_id)
+            except Exception as e:
+                logger.error(f"Erro ao buscar cliente: {e}")
+                return ""
         
         def verificar_calendario_wrapper(tool_input: str = None, **kwargs) -> str:
-            # Aceitar tanto tool_input quanto kwargs
-            if tool_input:
-                data = _parse_json(tool_input)
-            else:
-                data = kwargs
-            
-            data_str = data.get('data') or data.get('date')
-            if not data_str:
-                return "Parâmetros ausentes: forneça {'data': 'YYYY-MM-DD'}"
-            return calendar_tools.verificar_disponibilidade(data_str, self.empresa_config)
+            data = _parse_json(tool_input) if tool_input else kwargs
+            try:
+                return calendar_tools.listar_horarios_disponiveis(data.get('data'), self.empresa_config)
+            except Exception as e:
+                logger.error(f"Erro ao verificar calendário: {e}")
+                return ""
         
         def fazer_reserva_wrapper(tool_input: str = None, **kwargs) -> str:
-            # Aceitar tanto tool_input quanto kwargs
-            if tool_input:
-                data = _parse_json(tool_input)
-            else:
-                data = kwargs
-            
-            data_str = data.get('data') or data.get('date')
-            hora = data.get('hora') or data.get('time')
-            email = data.get('email') or data.get('cliente_email')
-            cliente = data.get('cliente') or data.get('customer') or self.current_context.get('cliente_name') or 'Cliente'
-            if not data_str or not hora:
-                return "Parâmetros ausentes: forneça {'data': 'YYYY-MM-DD', 'hora': 'HH:MM', 'cliente': 'Nome', 'email': 'email@cliente'}"
-            return calendar_tools.fazer_reserva(data_str, hora, cliente, self.empresa_config, email=email)
+            data = _parse_json(tool_input) if tool_input else kwargs
+            try:
+                return calendar_tools.fazer_reserva(
+                    data.get('data'), data.get('hora'), data.get('nome'), data.get('email'), self.empresa_config
+                )
+            except Exception as e:
+                logger.error(f"Erro ao fazer reserva: {e}")
+                return ""
         
         def enviar_mensagem_wrapper(tool_input: str = None, **kwargs) -> str:
-            # Aceitar tanto tool_input quanto kwargs
-            if tool_input:
-                data = _parse_json(tool_input)
-            else:
-                data = kwargs
-            
-            mensagem = data.get('mensagem') or data.get('message') or (tool_input if isinstance(tool_input, str) else None)
-            cliente_id = data.get('cliente_id') or self.current_context.get('cliente_id')
-            if not mensagem or not cliente_id:
-                return "Parâmetros ausentes: forneça {'mensagem': '...', 'cliente_id': '...'}"
-            return message_tools.enviar_resposta(mensagem, cliente_id, self.empresa_config, canal=self.current_context.get('channel', 'whatsapp'))
-        
-        def get_business_knowledge_wrapper(tool_input: str = None, **kwargs) -> str:
-            # Aceitar tanto tool_input quanto kwargs
             data = _parse_json(tool_input) if tool_input else kwargs
-            key = data.get('key') or data.get('titulo') or data.get('title')
-            return self._wrappers["get_business_knowledge"](key)
+            mensagem = data.get('mensagem')
+            cliente_id = data.get('cliente_id') or self.current_context.get('cliente_id')
+            try:
+                return message_tools.enviar_resposta(mensagem, cliente_id, self.empresa_config, canal=self.current_context.get('channel', 'whatsapp'))
+            except Exception as e:
+                logger.error(f"Erro ao enviar mensagem: {e}")
+                return ""
         
-        # Tools básicas (modo compatibilidade com AgentExecutor)
+        # Adicionar Tools básicas
         tools = [
             Tool(
                 name="buscar_cliente",
                 func=buscar_cliente_wrapper,
-                description="Busca informações do cliente no banco de dados. Use quando precisar de dados do cliente. Entrada: JSON {'cliente_id': '...'}"
+                description="Busca histórico e informações do cliente. Entrada: JSON {'cliente_id': '...'}"
             ),
             Tool(
                 name="verificar_calendario",
                 func=verificar_calendario_wrapper,
-                description="Verifica disponibilidade real no Google Calendar/Trinks/outros. Entrada: JSON {'data': 'YYYY-MM-DD'}"
+                description="Lista horários disponíveis reais em YYYY-MM-DD. Entrada: JSON {'data': '...'}"
             ),
             Tool(
                 name="fazer_reserva",
                 func=fazer_reserva_wrapper,
-                description="Faz reserva real na agenda disponível e envia convite se 'email' for informado. Entrada: JSON {'data': 'YYYY-MM-DD', 'hora': 'HH:MM', 'cliente': 'Nome', 'email': 'email@cliente'}"
+                description="Faz reserva real (precisa de data, hora, nome e email). Entrada: JSON {'data','hora','nome','email'}"
             ),
             Tool(
                 name="enviar_mensagem",
                 func=enviar_mensagem_wrapper,
                 description="Envia mensagem pelo canal apropriado. Entrada: JSON {'mensagem': '...', 'cliente_id': '...'}"
             ),
+        ]
+        
+        # Tool de conhecimento simples
+        def get_business_knowledge_wrapper(tool_input: str = None, **kwargs) -> str:
+            data = _parse_json(tool_input) if tool_input else kwargs
+            key = data.get('key') or data.get('titulo') or data.get('title')
+            return self._wrappers["get_business_knowledge"](key)
+        tools.append(
             Tool(
                 name="get_business_knowledge",
                 func=get_business_knowledge_wrapper,
                 description="Retorna um texto curto a partir do conhecimento da empresa. Entrada: JSON {'key': 'slug ou título'}"
             )
-        ]
-        
-        # Adicionar Tools das APIs conectadas
-        tools.extend(self._get_api_tools())
+        )
         
         return tools
     
@@ -253,33 +245,11 @@ class BaseAgent:
             return message_tools.enviar_resposta(mensagem_str, cliente_id_str, self.empresa_config, canal=self.current_context.get('channel', 'whatsapp'))
         return wrapper
     
-    def _setup_structured_tools(self):
-        """Cria StructuredTools com assinaturas tipadas para tool-calling nativo"""
-        from typing import Optional
-        import json
+    def _setup_structured_tools(self) -> List:
         structured = []
-        
-        @lc_tool("buscar_cliente")
-        def t_buscar_cliente(cliente_id: str) -> str:
-            """Busca informações do cliente no banco de dados usando o ID fornecido."""
-            return self._wrappers["buscar_cliente"](cliente_id=cliente_id)
-        structured.append(t_buscar_cliente)
-        
-        @lc_tool("verificar_calendario")
-        def t_verificar_calendario(data: str) -> str:
-            """Verifica disponibilidade no calendário para a data especificada (formato YYYY-MM-DD)."""
-            return self._wrappers["verificar_calendario"](data=data)
-        structured.append(t_verificar_calendario)
-        
-        @lc_tool("fazer_reserva")
-        def t_fazer_reserva(data: str, hora: str, cliente: str, email: str = "") -> str:
-            """Faz uma reserva no calendário (envia convite se email for informado)."""
-            return self._wrappers["fazer_reserva"](data=data, hora=hora, cliente=cliente, email=email)
-        structured.append(t_fazer_reserva)
         
         @lc_tool("enviar_mensagem")
         def t_enviar_mensagem(mensagem: str, cliente_id: str) -> str:
-            """Envia uma mensagem para o cliente especificado."""
             return self._wrappers["enviar_mensagem"](mensagem=mensagem, cliente_id=cliente_id)
         structured.append(t_enviar_mensagem)
         
@@ -291,44 +261,9 @@ class BaseAgent:
         
         # Adicionar StructuredTools dinâmicos para APIs conectadas
         from tools.api_tools import APITools
-        for key, value in self.empresa_config.items():
-            if key.endswith('_enabled') and value is True:
-                api_name = key.replace('_enabled', '').replace('_', ' ').title()
-                config_key = f"{key.replace('_enabled', '')}_config"
-                api_config = self.empresa_config.get(config_key, {})
-                if not api_config:
-                    continue
-                tool_name = f"{api_name.lower().replace(' ', '_')}_api_call"
-                
-                # Criar wrapper e registrar em _wrappers para o loop de execução
-                def _make_dyn_wrapper(api_name_local: str, api_config_local: dict):
-                    def wrapper(endpoint_path: str, method: str = "GET", params_json: str = "") -> str:
-                        try:
-                            api_tools = APITools()
-                            extra = {}
-                            if params_json:
-                                try:
-                                    extra = json.loads(params_json)
-                                except Exception:
-                                    # Se não foi um JSON válido, ignore e não quebre a execução
-                                    extra = {}
-                            return api_tools.call_api(
-                                api_name=api_name_local,
-                                endpoint_path=endpoint_path,
-                                method=method,
-                                config=api_config_local,
-                                **extra
-                            )
-                        except Exception as e:
-                            return f"Erro ao chamar API {api_name_local}: {str(e)}"
-                    return wrapper
-                self._wrappers[tool_name] = _make_dyn_wrapper(api_name, api_config)
-                
-                @lc_tool(tool_name)
-                def t_dynamic_api_call(endpoint_path: str, method: str = "GET", params_json: str = "") -> str:  # type: ignore
-                    """Chama dinamicamente um endpoint da API conectada à empresa."""
-                    return self._wrappers[tool_name](endpoint_path=endpoint_path, method=method, params_json=params_json)
-                structured.append(t_dynamic_api_call)
+        api_tools = APITools()
+        dynamic_tools = api_tools.generate_structured_tools(self.empresa_config)
+        structured.extend(dynamic_tools)
         
         return structured
     
@@ -433,10 +368,22 @@ class BaseAgent:
             
             # Adicionar histórico de conversa da memória
             if hasattr(self.memory, 'chat_memory') and self.memory.chat_memory.messages:
-                # Inserir mensagens do histórico entre SystemMessage e HumanMessage atual
-                # Pegar as últimas 10 mensagens para manter contexto sem sobrecarregar
                 history_messages = self.memory.chat_memory.messages[-10:]
                 messages[1:1] = history_messages
+            
+            # Heurística: se o usuário perguntar sobre horário/funcionamento, injeta conhecimento curto
+            try:
+                lower_msg = (message or "").lower()
+                horario_terms = ["horario", "horário", "funciona", "abre", "fech", "atende", "abrem", "fecham"]
+                if any(term in lower_msg for term in horario_terms):
+                    desc = self._wrappers["get_business_knowledge"]("horário de funcionamento")
+                    if not desc:
+                        # fallback por slug comum
+                        desc = self._wrappers["get_business_knowledge"]("horario-de-funcionamento")
+                    if desc:
+                        messages.insert(1, SystemMessage(content=f"Conhecimento da empresa (horário de funcionamento): {desc}. Responda conforme essas regras."))
+            except Exception as _:
+                pass
             
             # Chat com ferramentas (tool calling nativo)
             llm_with_tools = self.chat_llm.bind_tools(self.structured_tools)
