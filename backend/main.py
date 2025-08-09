@@ -1,4 +1,11 @@
 import os
+import sys
+from pathlib import Path
+
+# Adicionar o diretório backend ao path
+backend_dir = Path(__file__).parent
+sys.path.insert(0, str(backend_dir))
+
 from fastapi import FastAPI, HTTPException, Request, Query, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -11,9 +18,17 @@ import random
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from .config import Config
-from .models import WebhookData, MessageResponse, AdminMetrics, EmpresaMetrics, HealthCheck, Base, Empresa, Mensagem, Log, Usuario, gerar_hash_senha, Atendimento, Cliente, Atividade, API, EmpresaAPI
-from .services import MetricsService
+# Imports absolutos
+try:
+    from config import Config
+    from models import WebhookData, MessageResponse, AdminMetrics, EmpresaMetrics, HealthCheck, Base, Empresa, Mensagem, Log, Usuario, gerar_hash_senha, Atendimento, Cliente, Atividade, API, EmpresaAPI
+    from services import MetricsService
+except ImportError:
+    # Fallback para imports relativos (desenvolvimento)
+    from .config import Config
+    from .models import WebhookData, MessageResponse, AdminMetrics, EmpresaMetrics, HealthCheck, Base, Empresa, Mensagem, Log, Usuario, gerar_hash_senha, Atendimento, Cliente, Atividade, API, EmpresaAPI
+    from .services import MetricsService
+
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from jose import jwt, JWTError
@@ -359,6 +374,7 @@ async def webhook_handler(empresa_slug: str, request: Request):
                 raise HTTPException(status_code=404, detail="Empresa não encontrada")
             
             # Buscar APIs conectadas da empresa
+            API, EmpresaAPI = _import_models()
             empresa_apis = session.query(EmpresaAPI).filter(
                 EmpresaAPI.empresa_id == empresa_db.id,
                 EmpresaAPI.ativo == True
@@ -601,7 +617,7 @@ def get_available_slots(date: str = None):
                 raise HTTPException(status_code=404, detail="Empresa TinyTeams não encontrada")
             
             # Buscar configurações da API Google Calendar
-            from .models import API, EmpresaAPI
+            API, EmpresaAPI = _import_models()
             api = session.query(API).filter(API.nome == 'Google Calendar').first()
             if not api:
                 raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
@@ -661,7 +677,7 @@ def get_conversation_history(
             raise HTTPException(status_code=403, detail="Acesso negado a esta empresa")
         
         # Buscar histórico do banco de dados
-        from services.services import DatabaseService
+        DatabaseService = _import_services()
         db_service = DatabaseService()
         all_messages = db_service.get_conversation_history(empresa_obj.id, cliente_id, limit=100)
         
@@ -702,7 +718,7 @@ def schedule_meeting(email: str, name: str, company: str, date_time: str):
                 raise HTTPException(status_code=404, detail="Empresa TinyTeams não encontrada")
             
             # Buscar configurações da API Google Calendar
-            from .models import API, EmpresaAPI
+            API, EmpresaAPI = _import_models()
             api = session.query(API).filter(API.nome == 'Google Calendar').first()
             if not api:
                 raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
@@ -969,7 +985,7 @@ def get_empresa_configuracoes(
                 raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
         # Buscar APIs conectadas da empresa
-        from .models import EmpresaAPI, API
+        API, EmpresaAPI = _import_models()
         
         empresa_apis = session.query(EmpresaAPI).filter(
             EmpresaAPI.empresa_id == empresa.id,
@@ -1102,7 +1118,7 @@ def update_empresa_configuracoes(
         
         # Processar configurações de APIs dinamicamente
         # Buscar todas as APIs disponíveis
-        from .models import API, EmpresaAPI
+        API, EmpresaAPI = _import_models()
         
         # Processar campos que começam com 'api_' (formato dinâmico)
         api_configs = {}
@@ -1626,7 +1642,7 @@ async def upload_google_service_account(
         logger.info("Validação dos campos concluída")
         
         # Buscar API Google Calendar
-        from .models import API, EmpresaAPI
+        API, EmpresaAPI = _import_models()
         api = session.query(API).filter(API.nome == 'Google Calendar').first()
         if not api:
             logger.error("API Google Calendar não encontrada")
@@ -1747,7 +1763,7 @@ async def get_google_oauth_url(
                 raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
         # Buscar configuração OAuth2 da empresa
-        from .models import EmpresaAPI, API
+        API, EmpresaAPI = _import_models()
         api = session.query(API).filter(API.nome == 'Google Calendar').first()
         if not api:
             raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
@@ -1835,7 +1851,7 @@ async def google_oauth_callback(
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
         # Buscar configuração da API
-        from .models import EmpresaAPI, API
+        API, EmpresaAPI = _import_models()
         api = session.query(API).filter(API.nome == 'Google Calendar').first()
         if not api:
             raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
@@ -1917,7 +1933,7 @@ async def test_google_oauth_simulation():
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
         # Buscar configuração da API
-        from .models import EmpresaAPI, API
+        API, EmpresaAPI = _import_models()
         api = session.query(API).filter(API.nome == 'Google Calendar').first()
         if not api:
             raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
@@ -1968,7 +1984,7 @@ async def test_google_oauth_config():
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
         # Buscar configuração da API
-        from .models import EmpresaAPI, API
+        API, EmpresaAPI = _import_models()
         api = session.query(API).filter(API.nome == 'Google Calendar').first()
         if not api:
             raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
@@ -2016,7 +2032,7 @@ async def setup_default_service_account():
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
         # Buscar configuração da API
-        from .models import EmpresaAPI, API
+        API, EmpresaAPI = _import_models()
         api = session.query(API).filter(API.nome == 'Google Calendar').first()
         if not api:
             raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
@@ -2085,7 +2101,7 @@ async def test_service_account_status():
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
         # Buscar configuração da API
-        from .models import EmpresaAPI, API
+        API, EmpresaAPI = _import_models()
         api = session.query(API).filter(API.nome == 'Google Calendar').first()
         if not api:
             raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
@@ -2372,6 +2388,46 @@ async def generate_oauth_token_get(
             status_code=500,
             content={"success": False, "message": f"Erro interno: {str(e)}"}
         )
+
+# Substituir todos os imports relativos por imports absolutos
+def _import_models():
+    """Função auxiliar para importar models"""
+    try:
+        from models import API, EmpresaAPI
+        return API, EmpresaAPI
+    except ImportError:
+        try:
+            from .models import API, EmpresaAPI
+            return API, EmpresaAPI
+        except ImportError:
+            # Fallback final - importar do módulo atual
+            import sys
+            from pathlib import Path
+            backend_dir = Path(__file__).parent
+            if str(backend_dir) not in sys.path:
+                sys.path.insert(0, str(backend_dir))
+            from models import API, EmpresaAPI
+            return API, EmpresaAPI
+
+# Função auxiliar para importar services
+def _import_services():
+    """Função auxiliar para importar services"""
+    try:
+        from services.services import DatabaseService
+        return DatabaseService
+    except ImportError:
+        try:
+            from .services.services import DatabaseService
+            return DatabaseService
+        except ImportError:
+            # Fallback final - importar do módulo atual
+            import sys
+            from pathlib import Path
+            backend_dir = Path(__file__).parent
+            if str(backend_dir) not in sys.path:
+                sys.path.insert(0, str(backend_dir))
+            from services.services import DatabaseService
+            return DatabaseService
 
 if __name__ == "__main__":
     import uvicorn
