@@ -475,6 +475,34 @@ async def webhook_handler(empresa_slug: str, request: Request):
             # Atualizar o webhook_data com o texto descritivo
             webhook_data['Body'] = body
         
+        # Se houver áudio, tentar transcrever antes de processar
+        try:
+            media_url = webhook_data.get('MediaUrl0')
+            media_type = webhook_data.get('MediaContentType0', '')
+            is_audio_media = False
+            try:
+                is_audio_media = (message_type == 'audio') or (int(num_media) > 0 and str(media_type).startswith('audio'))
+            except Exception:
+                is_audio_media = (message_type == 'audio')
+
+            if is_audio_media and media_url and empresa_config.get('openai_key'):
+                try:
+                    logger.info("Transcrevendo áudio recebido via WhatsApp...")
+                    from .integrations.openai_service import OpenAIService
+                    oai = OpenAIService(empresa_config.get('openai_key'))
+                    transcript = oai.transcribe_audio(media_url, empresa_config.get('twilio_sid'), empresa_config.get('twilio_token'))
+                    if transcript:
+                        body = transcript
+                        webhook_data['Body'] = transcript
+                        webhook_data['MessageType'] = 'text'
+                        logger.info("Transcrição de áudio concluída com sucesso")
+                    else:
+                        logger.warning("Falha ao transcrever áudio ou transcrição vazia")
+                except Exception as te:
+                    logger.error(f"Erro ao transcrever áudio: {te}")
+        except Exception:
+            pass
+
         # Processar mensagem com LangChain Agent
         try:
             from .agents.whatsapp_agent import WhatsAppAgent
