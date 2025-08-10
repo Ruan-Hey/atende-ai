@@ -221,63 +221,6 @@ class BaseAgent:
         
         return structured
     
-    def _get_api_tools(self) -> List[Tool]:
-        """Gera Tools automaticamente das APIs conectadas usando empresa_config"""
-        from ..tools.api_tools import APITools
-        
-        tools = []
-        
-        try:
-            # Buscar todas as APIs ativas no empresa_config
-            for key, value in self.empresa_config.items():
-                if key.endswith('_enabled') and value is True:
-                    # Extrair nome da API do prefixo
-                    api_name = key.replace('_enabled', '').replace('_', ' ').title()
-                    
-                    # Buscar configuração da API
-                    config_key = f"{key.replace('_enabled', '')}_config"
-                    api_config = self.empresa_config.get(config_key, {})
-                    
-                    if api_config:
-                        # Criar Tool genérica para a API
-                        tool = self._create_generic_api_tool(api_name, api_config)
-                        if tool:
-                            tools.append(tool)
-        
-        except Exception as e:
-            logger.error(f"Erro ao gerar Tools das APIs: {e}")
-        
-        return tools
-    
-    def _create_generic_api_tool(self, api_name: str, config: dict) -> Tool:
-        """Cria uma Tool genérica para uma API"""
-        try:
-            from ..tools.api_tools import APITools
-            
-            # Criar função dinâmica
-            def api_call(endpoint_path: str, method: str = "GET", **kwargs):
-                api_tools = APITools()
-                return api_tools.call_api(
-                    api_name=api_name,
-                    endpoint_path=endpoint_path,
-                    method=method,
-                    config=config,
-                    **kwargs
-                )
-            
-            # Gerar descrição
-            description = f"Chama endpoints da API {api_name}. Use endpoint_path para especificar o caminho e method para o método HTTP (GET, POST, PUT, DELETE)."
-            
-            return Tool(
-                name=f"{api_name.lower().replace(' ', '_')}_api_call",
-                func=api_call,
-                description=description
-            )
-            
-        except Exception as e:
-            logger.error(f"Erro ao criar Tool genérica para {api_name}: {e}")
-            return None
-    
     async def process_message(self, message: str, context: Dict[str, Any]) -> str:
         """Processa uma mensagem usando tool-calling: executa tools antes de responder"""
         try:
