@@ -487,7 +487,7 @@ async def webhook_handler(empresa_slug: str, request: Request):
             
             # Enviar resposta via Twilio
             if result.get('success'):
-                from integrations.twilio_service import TwilioService
+                from .integrations.twilio_service import TwilioService
                 twilio_service = TwilioService(
                     empresa_config.get('twilio_sid'),
                     empresa_config.get('twilio_token'),
@@ -626,7 +626,7 @@ def get_available_slots(date: str = None):
             }
             
             # Usar Google Calendar Service
-            from integrations.google_calendar_service import GoogleCalendarService
+            from .integrations.google_calendar_service import GoogleCalendarService
             calendar_service = GoogleCalendarService(calendar_config)
             
             # Buscar slots disponíveis
@@ -727,7 +727,7 @@ def schedule_meeting(email: str, name: str, company: str, date_time: str):
             }
             
             # Usar Google Calendar Service
-            from integrations.google_calendar_service import GoogleCalendarService
+            from .integrations.google_calendar_service import GoogleCalendarService
             calendar_service = GoogleCalendarService(calendar_config)
             
             # Agendar reunião
