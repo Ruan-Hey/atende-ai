@@ -11,7 +11,7 @@ const ConfiguracoesEmpresa = () => {
   const [saving, setSaving] = useState(false)
   const [empresas, setEmpresas] = useState([])
   const [selectedEmpresa, setSelectedEmpresa] = useState(empresa || '')
-  const [activeSection, setActiveSection] = useState('dados-empresa')
+  const [activeSection, setActiveSection] = useState('empresa')
   const [configuracoes, setConfiguracoes] = useState({
     nome: '',
     whatsapp_number: '',
@@ -27,7 +27,8 @@ const ConfiguracoesEmpresa = () => {
     sheets_expanded: false,
     openai_expanded: false,
     trinks_expanded: false,
-    knowledge_json: { items: [] }
+    knowledge_json: { items: [] },
+    labels_json: { labels: [], min_confidence: 0.6 }
   })
   
   // Estado separado para controlar accordions
@@ -147,9 +148,6 @@ const ConfiguracoesEmpresa = () => {
       setLoading(true)
       const response = await apiService.getEmpresaConfiguracoes(selectedEmpresa)
       
-      console.log('Resposta da API:', response)
-      console.log('📖 Knowledge JSON recebido:', response.knowledge_json)
-      
       // Mapear os dados da API para o formato do formulário
       const configData = {
         nome: response.nome || '',
@@ -165,14 +163,10 @@ const ConfiguracoesEmpresa = () => {
         calendar_expanded: response.calendar_expanded || false,
         sheets_expanded: response.sheets_expanded || false,
         openai_expanded: response.openai_expanded || false,
-        knowledge_json: response.knowledge_json || { items: [] }
+        knowledge_json: response.knowledge_json || { items: [] },
+        labels_json: response.labels_json || { labels: [], min_confidence: 0.6 }
       }
-      
-      console.log('Configurações mapeadas:', configData)
-      console.log('📝 Knowledge JSON no estado:', configData.knowledge_json)
-      
       setConfiguracoes(configData)
-
       // Carregar dicas de tokens
       carregarTokenHints()
     } catch (error) {
@@ -603,13 +597,19 @@ const ConfiguracoesEmpresa = () => {
 
   const sections = [
     {
-      id: 'dados-empresa',
-      title: 'Dados da Empresa',
+      id: 'empresa',
+      title: 'Empresa',
       icon: '🏢',
       fields: [
         { name: 'nome', label: 'Nome da Empresa', type: 'text', required: true, placeholder: 'Ex: TinyTeams' },
         { name: 'whatsapp_number', label: 'Número do WhatsApp', type: 'text', placeholder: '+5511999999999' }
       ]
+    },
+    {
+      id: 'dados',
+      title: 'Dados',
+      icon: '🧩',
+      fields: []
     },
     {
       id: 'dados-entrada',
@@ -720,6 +720,81 @@ const ConfiguracoesEmpresa = () => {
           {...commonProps}
           className="form-input"
         />
+      </div>
+    )
+  }
+
+  // Renderização especial para a aba 'dados' (labels_json)
+  const renderDadosLabels = () => {
+    const labelsJson = configuracoes.labels_json || { labels: [], min_confidence: 0.6 }
+    const labels = labelsJson.labels || []
+
+    const updateLabelsJson = (next) => {
+      setConfiguracoes(prev => ({ ...prev, labels_json: next }))
+    }
+
+    const addLabel = () => {
+      const next = { ...labelsJson, labels: [...labels, { slug: '', title: '', description: '', positive_examples: [], negative_examples: [], observations_instructions: '', active: true }] }
+      updateLabelsJson(next)
+    }
+
+    const removeLabel = (idx) => {
+      const next = { ...labelsJson, labels: labels.filter((_, i) => i !== idx) }
+      updateLabelsJson(next)
+    }
+
+    const updateLabelField = (idx, field, value) => {
+      const next = { ...labelsJson, labels: labels.map((l, i) => i === idx ? { ...l, [field]: value } : l) }
+      updateLabelsJson(next)
+    }
+
+    return (
+      <div className="labels-editor">
+        <div className="field-group">
+          <label>Limiar de Confiança (0.0 - 1.0)</label>
+          <input type="number" step="0.05" min="0" max="1" className="form-input" value={labelsJson.min_confidence ?? 0.6} onChange={(e) => updateLabelsJson({ ...labelsJson, min_confidence: parseFloat(e.target.value || '0.6') })} />
+        </div>
+        <div style={{ margin: '1rem 0' }}>
+          <button type="button" className="add-btn" onClick={addLabel}>+ Adicionar Label</button>
+        </div>
+        {labels.length === 0 && <div style={{ color: '#666' }}>Nenhuma label criada ainda.</div>}
+        {labels.map((lb, idx) => (
+          <div key={idx} className="label-card">
+            <div className="field-row">
+              <div className="field-group" style={{ flex: 1 }}>
+                <label>Slug</label>
+                <input type="text" className="form-input" value={lb.slug || ''} onChange={(e) => updateLabelField(idx, 'slug', e.target.value)} placeholder="ex.: reserva" />
+              </div>
+              <div className="field-group" style={{ flex: 2 }}>
+                <label>Nome</label>
+                <input type="text" className="form-input" value={lb.title || ''} onChange={(e) => updateLabelField(idx, 'title', e.target.value)} placeholder="Ex.: Reserva" />
+              </div>
+              <div className="field-group" style={{ width: 120 }}>
+                <label>Ativa</label>
+                <input type="checkbox" checked={lb.active !== false} onChange={(e) => updateLabelField(idx, 'active', e.target.checked)} />
+              </div>
+            </div>
+            <div className="field-group">
+              <label>Descrição</label>
+              <textarea rows={3} className="form-textarea" value={lb.description || ''} onChange={(e) => updateLabelField(idx, 'description', e.target.value)} placeholder="Explique quando essa label deve ser aplicada" />
+            </div>
+            <div className="field-group">
+              <label>Exemplos Positivos (um por linha)</label>
+              <textarea rows={3} className="form-textarea" value={(lb.positive_examples || []).join('\n')} onChange={(e) => updateLabelField(idx, 'positive_examples', e.target.value.split('\n').filter(Boolean))} />
+            </div>
+            <div className="field-group">
+              <label>Exemplos Negativos (opcional, um por linha)</label>
+              <textarea rows={3} className="form-textarea" value={(lb.negative_examples || []).join('\n')} onChange={(e) => updateLabelField(idx, 'negative_examples', e.target.value.split('\n').filter(Boolean))} />
+            </div>
+            <div className="field-group">
+              <label>Instruções de Observações (o que extrair)</label>
+              <textarea rows={2} className="form-textarea" value={lb.observations_instructions || ''} onChange={(e) => updateLabelField(idx, 'observations_instructions', e.target.value)} placeholder="Ex.: Se identificar reserva, extrair nome, data e horário" />
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <button type="button" className="remove-btn" onClick={() => removeLabel(idx)}>Remover</button>
+            </div>
+          </div>
+        ))}
       </div>
     )
   }
@@ -1004,55 +1079,56 @@ const ConfiguracoesEmpresa = () => {
                           )
                         })}
                       </div>
-                    ) : (
-                      /* Campos normais para outras abas */
+                    ) : section.id === 'dados' ? (
+                      renderDadosLabels()
+                    ) : section.id === 'empresa' ? (
                       <>
-                        {section.fields.map(renderField)}
-                        {section.id === 'dados-empresa' && (
-                          <div className="knowledge-section">
-                            <h3 style={{ marginTop: '1rem' }}>Conhecimento da Empresa</h3>
-                            <p className="field-hint">Adicione linhas com Título (esquerda) e Descrição (direita). O sistema gera uma "key" automaticamente a partir do título.</p>
-                            {(configuracoes.knowledge_json?.items || []).map((item, idx) => (
-                              <div key={idx} className="knowledge-row">
-                                <div className="field-group">
-                                  <label>Título</label>
-                                  <input
-                                    type="text"
-                                    className="form-input"
-                                    value={item.title || ''}
-                                    onChange={(e) => handleKnowledgeChange(idx, 'title', e.target.value)}
-                                    onBlur={() => ensureKeyForItem(idx)}
-                                    placeholder="Ex: Horário de funcionamento"
-                                  />
-                                </div>
-                                <div className="field-group">
-                                  <label>Descrição</label>
-                                  <textarea
-                                    className="form-textarea"
-                                    rows={3}
-                                    value={item.description || ''}
-                                    onChange={(e) => handleKnowledgeChange(idx, 'description', e.target.value)}
-                                    onKeyDown={(e) => handleKnowledgeTextareaKeyDown(e, idx, 'description')}
-                                    placeholder="Ex: Seg-Sex 9h–18h, Sáb 10h–14h"
-                                  />
-                                </div>
-                                <div className="actions">
-                                  <div className="field-group" style={{ width: '130px' }}>
-                                    <label>Ativo</label>
-                                    <input
-                                      type="checkbox"
-                                      checked={item.active !== false}
-                                      onChange={(e) => handleKnowledgeChange(idx, 'active', e.target.checked)}
-                                    />
-                                  </div>
-                                  <button type="button" className="remove-btn" onClick={() => handleRemoveKnowledgeItem(idx)}>Remover</button>
-                                </div>
+                        {section.fields.map(field => renderField(field))}
+                        <div className="knowledge-section">
+                          <h3 style={{ marginTop: '1rem' }}>Conhecimento da Empresa</h3>
+                          <p className="field-hint">Adicione linhas com Título (esquerda) e Descrição (direita). A chave (key) é gerada automaticamente a partir do título.</p>
+                          {(configuracoes.knowledge_json?.items || []).map((item, idx) => (
+                            <div key={idx} className="knowledge-row">
+                              <div className="field-group">
+                                <label>Título</label>
+                                <input
+                                  type="text"
+                                  className="form-input"
+                                  value={item.title || ''}
+                                  onChange={(e) => handleKnowledgeChange(idx, 'title', e.target.value)}
+                                  onBlur={() => ensureKeyForItem(idx)}
+                                  placeholder="Ex: Horário de funcionamento"
+                                />
                               </div>
-                            ))}
-                            <button type="button" className="add-btn" onClick={handleAddKnowledgeItem}>+ Adicionar Linha</button>
-                          </div>
-                        )}
+                              <div className="field-group">
+                                <label>Descrição</label>
+                                <textarea
+                                  className="form-textarea"
+                                  rows={3}
+                                  value={item.description || ''}
+                                  onChange={(e) => handleKnowledgeChange(idx, 'description', e.target.value)}
+                                  onKeyDown={(e) => handleKnowledgeTextareaKeyDown(e, idx, 'description')}
+                                  placeholder="Ex: Seg-Sex 9h–18h, Sáb 10h–14h"
+                                />
+                              </div>
+                              <div className="actions">
+                                <div className="field-group" style={{ width: '130px' }}>
+                                  <label>Ativo</label>
+                                  <input
+                                    type="checkbox"
+                                    checked={item.active !== false}
+                                    onChange={(e) => handleKnowledgeChange(idx, 'active', e.target.checked)}
+                                  />
+                                </div>
+                                <button type="button" className="remove-btn" onClick={() => handleRemoveKnowledgeItem(idx)}>Remover</button>
+                              </div>
+                            </div>
+                          ))}
+                          <button type="button" className="add-btn" onClick={handleAddKnowledgeItem}>+ Adicionar Linha</button>
+                        </div>
                       </>
+                    ) : (
+                      section.fields.map(field => renderField(field))
                     )}
                   </div>
 
