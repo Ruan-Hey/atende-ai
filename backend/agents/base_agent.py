@@ -6,6 +6,8 @@ from langchain_core.tools import tool as lc_tool
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, AIMessage
 from typing import Dict, Any, List
 import logging
+import re
+import unicodedata
 from ..models import API
 
 logger = logging.getLogger(__name__)
@@ -45,6 +47,14 @@ class BaseAgent:
         
         # Adicionar wrapper de conhecimento de negócios
         def _get_business_knowledge_wrapper():
+            def _normalize(text: str) -> str:
+                if not isinstance(text, str):
+                    return ""
+                # remove acentos, baixa caixa e trim
+                text_nfkd = unicodedata.normalize('NFKD', text)
+                text_ascii = ''.join(c for c in text_nfkd if not unicodedata.combining(c))
+                return re.sub(r"\s+", " ", text_ascii).strip().lower()
+
             def wrapper(key: str) -> str:
                 try:
                     if not key:
@@ -52,31 +62,68 @@ class BaseAgent:
                     cache_key = f"{self.empresa_config.get('empresa_id')}::knowledge::{key}"
                     if cache_key in self._knowledge_cache:
                         return self._knowledge_cache[cache_key]
+
                     knowledge = self.empresa_config.get('knowledge_json') or {}
                     items = knowledge.get('items') if isinstance(knowledge, dict) else []
                     if not isinstance(items, list):
                         items = []
-                    # Matching por key exata; fallback por title case-insensitive
+
+                    key_norm = _normalize(key)
+
+                    # 1) match por key exata (normalizada)
                     found = None
                     for it in items:
-                        if isinstance(it, dict) and it.get('key') == key:
+                        if not isinstance(it, dict):
+                            continue
+                        if _normalize(it.get('key', '')) == key_norm:
                             found = it
                             break
+
+                    # 2) match por título exato (normalizado)
                     if not found:
                         for it in items:
-                            if isinstance(it, dict) and it.get('title', '').strip().lower() == key.strip().lower():
+                            if not isinstance(it, dict):
+                                continue
+                            if _normalize(it.get('title', '')) == key_norm:
                                 found = it
                                 break
-                    if not found and isinstance(key, str):
-                        # aliases opcionais
+
+                    # 3) match por alias exato (normalizado)
+                    if not found:
                         for it in items:
+                            if not isinstance(it, dict):
+                                continue
                             aliases = it.get('aliases', []) if isinstance(it, dict) else []
-                            if isinstance(aliases, list) and any(a.strip().lower() == key.strip().lower() for a in aliases if isinstance(a, str)):
+                            aliases_norm = [_normalize(a) for a in aliases if isinstance(a, str)]
+                            if key_norm in aliases_norm:
                                 found = it
                                 break
+
+                    # 4) match parcial: se a key contiver palavras de 'horario de funcionamento', etc.
+                    if not found:
+                        # termos comuns para horário
+                        horario_norms = {_normalize(t) for t in [
+                            'horario de atendimento', 'horario de funcionamento', 'funcionamento', 'horarios', 'expediente',
+                            'horario', 'horário de atendimento', 'horário de funcionamento'
+                        ]}
+                        if any(term in key_norm for term in horario_norms):
+                            # preferir item cuja key/title/aliases contenham 'horario'
+                            for it in items:
+                                if not isinstance(it, dict):
+                                    continue
+                                blob = ' '.join([
+                                    _normalize(it.get('key', '')),
+                                    _normalize(it.get('title', '')),
+                                    ' '.join([_normalize(a) for a in (it.get('aliases') or []) if isinstance(a, str)])
+                                ])
+                                if 'horario' in blob or 'funcionamento' in blob:
+                                    found = it
+                                    break
+
                     if not found:
                         return ""
-                    desc = found.get('description') or ""
+
+                    desc = (found.get('description') or "").strip()
                     self._knowledge_cache[cache_key] = desc
                     return desc
                 except Exception:
