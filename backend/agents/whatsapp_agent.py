@@ -19,7 +19,7 @@ class WhatsAppAgent(BaseAgent):
             profile_name = webhook_data.get('ProfileName', 'Cliente')
             
             # Buscar informações do cliente
-            from tools.cliente_tools import ClienteTools
+            from ..tools.cliente_tools import ClienteTools
             cliente_tools = ClienteTools()
             
             # Buscar empresa_id

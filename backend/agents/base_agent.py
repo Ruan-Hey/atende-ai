@@ -91,9 +91,9 @@ class BaseAgent:
     
     def _setup_tools(self) -> List[Tool]:
         """Configura as ferramentas disponíveis para o agent"""
-        from tools.cliente_tools import ClienteTools
-        from tools.calendar_tools import CalendarTools
-        from tools.message_tools import MessageTools
+        from ..tools.cliente_tools import ClienteTools
+        from ..tools.calendar_tools import CalendarTools
+        from ..tools.message_tools import MessageTools
         import json
         
         cliente_tools = ClienteTools()
@@ -194,7 +194,7 @@ class BaseAgent:
     
     def _get_buscar_cliente_wrapper(self):
         """Retorna wrapper para buscar_cliente"""
-        from tools.cliente_tools import ClienteTools
+        from ..tools.cliente_tools import ClienteTools
         cliente_tools = ClienteTools()
         
         def wrapper(cliente_id: str = None, **kwargs) -> str:
@@ -207,7 +207,7 @@ class BaseAgent:
     
     def _get_verificar_calendario_wrapper(self):
         """Retorna wrapper para verificar_calendario"""
-        from tools.calendar_tools import CalendarTools
+        from ..tools.calendar_tools import CalendarTools
         calendar_tools = CalendarTools()
         
         def wrapper(data: str = None, **kwargs) -> str:
@@ -219,7 +219,7 @@ class BaseAgent:
     
     def _get_fazer_reserva_wrapper(self):
         """Retorna wrapper para fazer_reserva"""
-        from tools.calendar_tools import CalendarTools
+        from ..tools.calendar_tools import CalendarTools
         calendar_tools = CalendarTools()
         
         def wrapper(data: str = None, hora: str = None, cliente: str = None, email: str = None, **kwargs) -> str:
@@ -234,7 +234,7 @@ class BaseAgent:
     
     def _get_enviar_mensagem_wrapper(self):
         """Retorna wrapper para enviar_mensagem"""
-        from tools.message_tools import MessageTools
+        from ..tools.message_tools import MessageTools
         message_tools = MessageTools()
         
         def wrapper(mensagem: str = None, cliente_id: str = None, **kwargs) -> str:
@@ -260,7 +260,7 @@ class BaseAgent:
         structured.append(t_get_business_knowledge)
         
         # Adicionar StructuredTools dinâmicos para APIs conectadas
-        from tools.api_tools import APITools
+        from ..tools.api_tools import APITools
         api_tools = APITools()
         dynamic_tools = api_tools.generate_structured_tools(self.empresa_config)
         structured.extend(dynamic_tools)
@@ -269,7 +269,7 @@ class BaseAgent:
     
     def _get_api_tools(self) -> List[Tool]:
         """Gera Tools automaticamente das APIs conectadas usando empresa_config"""
-        from tools.api_tools import APITools
+        from ..tools.api_tools import APITools
         
         tools = []
         
@@ -298,7 +298,7 @@ class BaseAgent:
     def _create_generic_api_tool(self, api_name: str, config: dict) -> Tool:
         """Cria uma Tool genérica para uma API"""
         try:
-            from tools.api_tools import APITools
+            from ..tools.api_tools import APITools
             
             # Criar função dinâmica
             def api_call(endpoint_path: str, method: str = "GET", **kwargs):
