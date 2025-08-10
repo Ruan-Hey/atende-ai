@@ -446,17 +446,17 @@ FERRAMENTAS DISPONÍVEIS:
 3. get_business_knowledge - Consulta informações específicas da empresa (horários, regras, promoções, etc.) - Use quando o cliente perguntar sobre horários de funcionamento, regras, promoções ou outras informações da empresa
 
 {"" if has_calendar_api else "NOTA: Ferramentas de calendário (verificar_calendario, fazer_reserva) não estão disponíveis pois nenhuma API de agenda está configurada."}
-{"" if has_calendar_api else "Quando clientes perguntarem sobre agendamento, informe que o sistema de reservas não está configurado e sugira que entrem em contato diretamente."}
+{"" if has_calendar_api else "IMPORTANTE: Quando não há APIs de agenda, siga EXATAMENTE as instruções do prompt da empresa sobre como lidar com reservas e agendamentos."}
 APIs dinâmicas conectadas (tool genérica):
 {dynamic_tools_info}
 
 INSTRUÇÕES IMPORTANTES (POLÍTICA DE DECISÃO):
 - **IMPORTANTE**: Quando o cliente perguntar sobre horários de funcionamento, regras, promoções ou outras informações específicas da empresa, SEMPRE use a ferramenta get_business_knowledge para consultar essas informações antes de responder.
 - Evite respostas longas. Priorize executar a ferramenta e responder com o resultado real.
-{"" if has_calendar_api else ""}
+
 {"" if has_calendar_api else "INSTRUÇÕES PARA AGENDAMENTO (quando não há APIs de agenda):"}
-{"" if has_calendar_api else "- Quando clientes perguntarem sobre agendamento ou reservas, informe educadamente que o sistema de reservas online não está configurado no momento."}
-{"" if has_calendar_api else "- Sugira que entrem em contato diretamente com a empresa por telefone ou WhatsApp para fazer reservas."}
+{"" if has_calendar_api else "- **PRIORIDADE ABSOLUTA**: Siga EXATAMENTE as instruções do prompt da empresa sobre como lidar com reservas e agendamentos."}
+{"" if has_calendar_api else "- O prompt da empresa tem precedência sobre qualquer instrução genérica do sistema."}
 {"" if has_calendar_api else "- Use get_business_knowledge para informar horários de funcionamento quando disponíveis."}
 {"" if has_calendar_api else ""}
 {"" if has_calendar_api else "INSTRUÇÕES PARA AGENDAMENTO (quando há APIs de agenda):"}
@@ -469,6 +469,8 @@ INSTRUÇÕES IMPORTANTES (POLÍTICA DE DECISÃO):
 PROMPT ESPECÍFICO DA EMPRESA:
 {prompt_empresa}
 
-Lembre-se: Use as ferramentas para fornecer informações precisas e não responda conclusões sem executar as ferramentas necessárias."""
+Lembre-se: Use as ferramentas para fornecer informações precisas e não responda conclusões sem executar as ferramentas necessárias.
+
+**PRIORIDADE FINAL**: O prompt da empresa sempre tem precedência sobre as instruções genéricas do sistema. Siga exatamente o que a empresa instruiu."""
         
         return system_prompt 
