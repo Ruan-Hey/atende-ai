@@ -250,6 +250,7 @@ class BaseAgent:
         
         @lc_tool("enviar_mensagem")
         def t_enviar_mensagem(mensagem: str, cliente_id: str) -> str:
+            """Envia uma mensagem para o cliente especificado no canal atual (ex.: WhatsApp)."""
             return self._wrappers["enviar_mensagem"](mensagem=mensagem, cliente_id=cliente_id)
         structured.append(t_enviar_mensagem)
         
@@ -259,11 +260,51 @@ class BaseAgent:
             return self._wrappers["get_business_knowledge"](key)
         structured.append(t_get_business_knowledge)
         
-        # Adicionar StructuredTools dinâmicos para APIs conectadas
+        # Adicionar StructuredTools dinâmicos para APIs conectadas (com docstrings)
         from ..tools.api_tools import APITools
+        import json
         api_tools = APITools()
-        dynamic_tools = api_tools.generate_structured_tools(self.empresa_config)
-        structured.extend(dynamic_tools)
+        for key, value in self.empresa_config.items():
+            if key.endswith('_enabled') and value is True:
+                api_name = key.replace('_enabled', '').replace('_', ' ').title()
+                if api_name in ["Google Calendar", "Openai", "Google Sheets"]:
+                    continue
+                config_key = f"{key.replace('_enabled', '')}_config"
+                api_config = self.empresa_config.get(config_key, {})
+                if not api_config:
+                    continue
+                tool_name = f"{api_name.lower().replace(' ', '_')}_api_call"
+
+                def _make_dyn_wrapper(api_name_local: str, api_config_local: dict):
+                    def wrapper(endpoint_path: str, method: str = "GET", params_json: str = "") -> str:
+                        try:
+                            extra = {}
+                            if params_json:
+                                try:
+                                    extra = json.loads(params_json)
+                                except Exception:
+                                    extra = {}
+                            return api_tools.call_api(
+                                api_name=api_name_local,
+                                endpoint_path=endpoint_path,
+                                method=method,
+                                config=api_config_local,
+                                **extra
+                            )
+                        except Exception as e:
+                            return f"Erro ao chamar API {api_name_local}: {str(e)}"
+                    return wrapper
+                self._wrappers[tool_name] = _make_dyn_wrapper(api_name, api_config)
+
+                @lc_tool(tool_name)
+                def t_dynamic_api_call(endpoint_path: str, method: str = "GET", params_json: str = "") -> str:  # type: ignore
+                    """Chama dinamicamente um endpoint da API conectada à empresa.
+                    - endpoint_path: caminho do endpoint (ex.: /v1/clientes)
+                    - method: método HTTP (GET, POST, PUT, DELETE)
+                    - params_json: JSON com parâmetros adicionais
+                    """
+                    return self._wrappers[tool_name](endpoint_path=endpoint_path, method=method, params_json=params_json)
+                structured.append(t_dynamic_api_call)
         
         return structured
     
