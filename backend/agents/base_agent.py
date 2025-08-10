@@ -196,17 +196,21 @@ class BaseAgent:
             return self._wrappers["buscar_cliente"](cliente_id=cliente_id)
         structured.append(t_buscar_cliente)
         
-        @lc_tool("verificar_calendario")
-        def t_verificar_calendario(data: str) -> str:
-            """Lista horários disponíveis reais para uma data específica no formato YYYY-MM-DD."""
-            return self._wrappers["verificar_calendario"](data=data)
-        structured.append(t_verificar_calendario)
+        # Verificar se há APIs de agenda configuradas antes de disponibilizar ferramentas de calendário
+        has_calendar_api = self._has_calendar_api()
         
-        @lc_tool("fazer_reserva")
-        def t_fazer_reserva(data: str, hora: str, nome: str, email: str) -> str:
-            """Faz reserva real na agenda para uma data, hora, nome e email específicos."""
-            return self._wrappers["fazer_reserva"](data=data, hora=hora, cliente=nome, email=email)
-        structured.append(t_fazer_reserva)
+        if has_calendar_api:
+            @lc_tool("verificar_calendario")
+            def t_verificar_calendario(data: str) -> str:
+                """Lista horários disponíveis reais para uma data específica no formato YYYY-MM-DD."""
+                return self._wrappers["verificar_calendario"](data=data)
+            structured.append(t_verificar_calendario)
+            
+            @lc_tool("fazer_reserva")
+            def t_fazer_reserva(data: str, hora: str, nome: str, email: str) -> str:
+                """Faz reserva real na agenda para uma data, hora, nome e email específicos."""
+                return self._wrappers["fazer_reserva"](data=data, hora=hora, cliente=nome, email=email)
+            structured.append(t_fazer_reserva)
         
         @lc_tool("enviar_mensagem")
         def t_enviar_mensagem(mensagem: str, cliente_id: str) -> str:
@@ -267,6 +271,31 @@ class BaseAgent:
                 structured.append(t_dynamic_api_call)
         
         return structured
+    
+    def _has_calendar_api(self) -> bool:
+        """Verifica se há alguma API de agenda configurada e ativa"""
+        # Verificar Google Calendar
+        if (self.empresa_config.get('google_calendar_client_id') and 
+            self.empresa_config.get('google_calendar_client_secret')):
+            return True
+        
+        # Verificar Trinks
+        if self.empresa_config.get('trinks_enabled') and self.empresa_config.get('trinks_config'):
+            return True
+        
+        # Verificar outras APIs de agenda dinamicamente
+        for key, value in self.empresa_config.items():
+            if key.endswith('_enabled') and value is True:
+                api_name = key.replace('_enabled', '').replace('_', ' ').title()
+                config_key = f"{key.replace('_enabled', '')}_config"
+                config = self.empresa_config.get(config_key, {})
+                
+                # Verificar se é uma API de agenda (por nome ou configuração)
+                if any(word in api_name.lower() for word in ['calendar', 'agenda', 'booking', 'schedule', 'trinks']):
+                    if config:  # Só considerar se tiver configuração
+                        return True
+        
+        return False
     
     async def process_message(self, message: str, context: Dict[str, Any]) -> str:
         """Processa uma mensagem usando tool-calling: executa tools antes de responder"""
@@ -387,12 +416,9 @@ class BaseAgent:
         current_date = context.get('current_date', 'Data atual não disponível')
         current_time = context.get('current_time', 'Hora atual não disponível')
         
-        # Verificar se Google Calendar está configurado
-        google_calendar_enabled = empresa_config.get('google_calendar_enabled', False)
-        google_calendar_client_id = empresa_config.get('google_calendar_client_id')
-        google_calendar_refresh_token = empresa_config.get('google_calendar_refresh_token')
-        
-        calendar_status = "✅ Google Calendar configurado e funcionando" if (google_calendar_enabled and google_calendar_client_id and google_calendar_refresh_token) else "❌ Google Calendar não configurado"
+        # Verificar se há APIs de agenda configuradas
+        has_calendar_api = self._has_calendar_api()
+        calendar_status = "✅ APIs de agenda configuradas e funcionando" if has_calendar_api else "❌ Nenhuma API de agenda configurada"
         
         # Listar APIs dinâmicas conectadas
         dynamic_api_list = []
@@ -416,21 +442,29 @@ INFORMAÇÕES DO CLIENTE:
 
 FERRAMENTAS DISPONÍVEIS:
 1. buscar_cliente - Busca informações do cliente
-2. verificar_calendario - Verifica disponibilidade real no Google Calendar
-3. fazer_reserva - Faz reserva real na agenda (e envia convite ao cliente)
-4. enviar_mensagem - Envia mensagem
-5. get_business_knowledge - Consulta informações específicas da empresa (horários, regras, promoções, etc.) - Use quando o cliente perguntar sobre horários de funcionamento, regras, promoções ou outras informações da empresa
+2. enviar_mensagem - Envia mensagem
+3. get_business_knowledge - Consulta informações específicas da empresa (horários, regras, promoções, etc.) - Use quando o cliente perguntar sobre horários de funcionamento, regras, promoções ou outras informações da empresa
+
+{"" if has_calendar_api else "NOTA: Ferramentas de calendário (verificar_calendario, fazer_reserva) não estão disponíveis pois nenhuma API de agenda está configurada."}
+{"" if has_calendar_api else "Quando clientes perguntarem sobre agendamento, informe que o sistema de reservas não está configurado e sugira que entrem em contato diretamente."}
 APIs dinâmicas conectadas (tool genérica):
 {dynamic_tools_info}
 
 INSTRUÇÕES IMPORTANTES (POLÍTICA DE DECISÃO):
-- Quando o cliente pedir para agendar/confirmar um horário, extraia data e hora do contexto recente e chame a ferramenta apropriada.
-- Se JÁ tivermos data e hora e o cliente confirmar (ex.: "pode agendar às 17h"), peça o email do cliente se ainda não tiver e então chame DIRETAMENTE a ferramenta fazer_reserva com data, hora, nome e email.
-- Se faltar apenas UM dado (data, hora ou email), pergunte somente o que falta. Não repita perguntas já respondidas.
-- Sempre que o cliente mencionar "hoje", use {current_date}. Para dias da semana (ex.: segunda-feira), calcule a próxima ocorrência a partir da data atual.
-- Para verificar disponibilidade, use verificar_calendario (YYYY-MM-DD). Depois que o cliente escolher um horário dessa lista e fornecer o email, chame fazer_reserva.
 - **IMPORTANTE**: Quando o cliente perguntar sobre horários de funcionamento, regras, promoções ou outras informações específicas da empresa, SEMPRE use a ferramenta get_business_knowledge para consultar essas informações antes de responder.
 - Evite respostas longas. Priorize executar a ferramenta e responder com o resultado real.
+{"" if has_calendar_api else ""}
+{"" if has_calendar_api else "INSTRUÇÕES PARA AGENDAMENTO (quando não há APIs de agenda):"}
+{"" if has_calendar_api else "- Quando clientes perguntarem sobre agendamento ou reservas, informe educadamente que o sistema de reservas online não está configurado no momento."}
+{"" if has_calendar_api else "- Sugira que entrem em contato diretamente com a empresa por telefone ou WhatsApp para fazer reservas."}
+{"" if has_calendar_api else "- Use get_business_knowledge para informar horários de funcionamento quando disponíveis."}
+{"" if has_calendar_api else ""}
+{"" if has_calendar_api else "INSTRUÇÕES PARA AGENDAMENTO (quando há APIs de agenda):"}
+{"" if has_calendar_api else "- Quando o cliente pedir para agendar/confirmar um horário, extraia data e hora do contexto recente e chame a ferramenta apropriada."}
+{"" if has_calendar_api else "- Se JÁ tivermos data e hora e o cliente confirmar (ex.: 'pode agendar às 17h'), peça o email do cliente se ainda não tiver e então chame DIRETAMENTE a ferramenta fazer_reserva com data, hora, nome e email."}
+{"" if has_calendar_api else "- Se faltar apenas UM dado (data, hora ou email), pergunte somente o que falta. Não repita perguntas já respondidas."}
+{"" if has_calendar_api else "- Sempre que o cliente mencionar 'hoje', use {current_date}. Para dias da semana (ex.: segunda-feira), calcule a próxima ocorrência a partir da data atual."}
+{"" if has_calendar_api else "- Para verificar disponibilidade, use verificar_calendario (YYYY-MM-DD). Depois que o cliente escolher um horário dessa lista e fornecer o email, chame fazer_reserva."}
 
 PROMPT ESPECÍFICO DA EMPRESA:
 {prompt_empresa}
