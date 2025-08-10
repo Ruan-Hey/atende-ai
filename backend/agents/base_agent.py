@@ -31,7 +31,6 @@ class BaseAgent:
             return_messages=True
         )
         self.current_context: Dict[str, Any] = {}
-        self.tools = self._setup_tools()
         
         # Guardar referências para wrappers ANTES de criar structured_tools
         self._wrappers = {
@@ -87,110 +86,6 @@ class BaseAgent:
         
         # Tools estruturadas para tool-calling nativo
         self.structured_tools = self._setup_structured_tools()
-        self.agent = self._create_agent()
-    
-    def _setup_tools(self) -> List[Tool]:
-        """Configura as ferramentas disponíveis para o agent"""
-        from ..tools.cliente_tools import ClienteTools
-        from ..tools.calendar_tools import CalendarTools
-        from ..tools.message_tools import MessageTools
-        import json
-        
-        cliente_tools = ClienteTools()
-        calendar_tools = CalendarTools()
-        message_tools = MessageTools()
-        
-        # Wrappers que aceitam string (JSON) e usam contexto/empresa_config
-        def _parse_json(tool_input: str) -> Dict[str, Any]:
-            try:
-                return json.loads(tool_input) if isinstance(tool_input, str) else (tool_input or {})
-            except Exception:
-                return {}
-        
-        def buscar_cliente_wrapper(tool_input: str = None, **kwargs) -> str:
-            # Aceitar tanto tool_input quanto kwargs
-            if tool_input:
-                data = _parse_json(tool_input)
-            else:
-                data = kwargs
-            
-            cliente_id = data.get('cliente_id') or self.current_context.get('cliente_id')
-            empresa_id = self.empresa_config.get('empresa_id')
-            if not cliente_id or not empresa_id:
-                return "Parâmetros ausentes: forneça {'cliente_id': '...'}; empresa_id vem do contexto."
-            
-            try:
-                return cliente_tools.get_conversation_history(cliente_id=cliente_id, empresa_id=empresa_id)
-            except Exception as e:
-                logger.error(f"Erro ao buscar cliente: {e}")
-                return ""
-        
-        def verificar_calendario_wrapper(tool_input: str = None, **kwargs) -> str:
-            data = _parse_json(tool_input) if tool_input else kwargs
-            try:
-                return calendar_tools.listar_horarios_disponiveis(data.get('data'), self.empresa_config)
-            except Exception as e:
-                logger.error(f"Erro ao verificar calendário: {e}")
-                return ""
-        
-        def fazer_reserva_wrapper(tool_input: str = None, **kwargs) -> str:
-            data = _parse_json(tool_input) if tool_input else kwargs
-            try:
-                return calendar_tools.fazer_reserva(
-                    data.get('data'), data.get('hora'), data.get('nome'), data.get('email'), self.empresa_config
-                )
-            except Exception as e:
-                logger.error(f"Erro ao fazer reserva: {e}")
-                return ""
-        
-        def enviar_mensagem_wrapper(tool_input: str = None, **kwargs) -> str:
-            data = _parse_json(tool_input) if tool_input else kwargs
-            mensagem = data.get('mensagem')
-            cliente_id = data.get('cliente_id') or self.current_context.get('cliente_id')
-            try:
-                return message_tools.enviar_resposta(mensagem, cliente_id, self.empresa_config, canal=self.current_context.get('channel', 'whatsapp'))
-            except Exception as e:
-                logger.error(f"Erro ao enviar mensagem: {e}")
-                return ""
-        
-        # Adicionar Tools básicas
-        tools = [
-            Tool(
-                name="buscar_cliente",
-                func=buscar_cliente_wrapper,
-                description="Busca histórico e informações do cliente. Entrada: JSON {'cliente_id': '...'}"
-            ),
-            Tool(
-                name="verificar_calendario",
-                func=verificar_calendario_wrapper,
-                description="Lista horários disponíveis reais em YYYY-MM-DD. Entrada: JSON {'data': '...'}"
-            ),
-            Tool(
-                name="fazer_reserva",
-                func=fazer_reserva_wrapper,
-                description="Faz reserva real (precisa de data, hora, nome e email). Entrada: JSON {'data','hora','nome','email'}"
-            ),
-            Tool(
-                name="enviar_mensagem",
-                func=enviar_mensagem_wrapper,
-                description="Envia mensagem pelo canal apropriado. Entrada: JSON {'mensagem': '...', 'cliente_id': '...'}"
-            ),
-        ]
-        
-        # Tool de conhecimento simples
-        def get_business_knowledge_wrapper(tool_input: str = None, **kwargs) -> str:
-            data = _parse_json(tool_input) if tool_input else kwargs
-            key = data.get('key') or data.get('titulo') or data.get('title')
-            return self._wrappers["get_business_knowledge"](key)
-        tools.append(
-            Tool(
-                name="get_business_knowledge",
-                func=get_business_knowledge_wrapper,
-                description="Retorna um texto curto a partir do conhecimento da empresa. Entrada: JSON {'key': 'slug ou título'}"
-            )
-        )
-        
-        return tools
     
     def _get_buscar_cliente_wrapper(self):
         """Retorna wrapper para buscar_cliente"""
@@ -247,6 +142,24 @@ class BaseAgent:
     
     def _setup_structured_tools(self) -> List:
         structured = []
+        
+        @lc_tool("buscar_cliente")
+        def t_buscar_cliente(cliente_id: str) -> str:
+            """Busca histórico e informações do cliente pelo ID."""
+            return self._wrappers["buscar_cliente"](cliente_id=cliente_id)
+        structured.append(t_buscar_cliente)
+        
+        @lc_tool("verificar_calendario")
+        def t_verificar_calendario(data: str) -> str:
+            """Lista horários disponíveis reais para uma data específica no formato YYYY-MM-DD."""
+            return self._wrappers["verificar_calendario"](data=data)
+        structured.append(t_verificar_calendario)
+        
+        @lc_tool("fazer_reserva")
+        def t_fazer_reserva(data: str, hora: str, nome: str, email: str) -> str:
+            """Faz reserva real na agenda para uma data, hora, nome e email específicos."""
+            return self._wrappers["fazer_reserva"](data=data, hora=hora, cliente=nome, email=email)
+        structured.append(t_fazer_reserva)
         
         @lc_tool("enviar_mensagem")
         def t_enviar_mensagem(mensagem: str, cliente_id: str) -> str:
@@ -363,21 +276,6 @@ class BaseAgent:
             
         except Exception as e:
             logger.error(f"Erro ao criar Tool genérica para {api_name}: {e}")
-            return None
-    
-    def _create_agent(self):
-        """Cria o agent com as ferramentas configuradas (modo legado). Protegido por try/except."""
-        try:
-            return initialize_agent(
-                tools=self.tools,
-                llm=self.llm,
-                agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-                memory=self.memory,
-                verbose=True,
-                handle_parsing_errors=True
-            )
-        except Exception as e:
-            logger.warning(f"Falha ao criar agent legado (seguindo apenas com tool-calling nativo): {e}")
             return None
     
     async def process_message(self, message: str, context: Dict[str, Any]) -> str:
