@@ -266,6 +266,14 @@ const ConfiguracoesEmpresa = () => {
               novasConfiguracoes[fieldName] = empApi.config.google_calendar_refresh_token || empApi.config.google_sheets_refresh_token
             }
           }
+          // Adicionar suporte para google_sheets_id
+          if (empApi.config.google_sheets_id) {
+            const fieldName = `api_${apiId}_google_sheets_id`
+            // Só mapear se não existe no estado ou se onlyNew é false
+            if (!onlyNew || !novasConfiguracoes[fieldName]) {
+              novasConfiguracoes[fieldName] = empApi.config.google_sheets_id
+            }
+          }
         }
         
         // Para APIs com API Key (OpenAI, etc.)
@@ -473,11 +481,16 @@ const ConfiguracoesEmpresa = () => {
         ? 'http://localhost:8000/oauth/callback'
         : 'https://api.tinyteams.app/oauth/callback'
       
+      // Ajustar escopos conforme API
+      const scopes = api.nome === 'Google Sheets'
+        ? 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive'
+        : 'https://www.googleapis.com/auth/calendar'
+      
       // Gerar URL de autorização OAuth2
       const authParams = new URLSearchParams({
         client_id: clientId,
         redirect_uri: redirectUri,
-        scope: 'https://www.googleapis.com/auth/calendar',
+        scope: scopes,
         response_type: 'code',
         access_type: 'offline',
         prompt: 'consent'
@@ -959,6 +972,20 @@ const ConfiguracoesEmpresa = () => {
                                           onChange={handleChange}
                                         />
                                       </div>
+                                      {/* Campo opcional: ID da planilha quando a API for Google Sheets */}
+                                      {api.nome === 'Google Sheets' && (
+                                        <div className="field-group">
+                                          <label>Google Sheets ID</label>
+                                          <input
+                                            type="text"
+                                            name={`api_${api.id}_google_sheets_id`}
+                                            placeholder="ID da planilha (ex: 1BxiMVs...Upms)"
+                                            className="form-input"
+                                            value={configuracoes[`api_${api.id}_google_sheets_id`] || ''}
+                                            onChange={handleChange}
+                                          />
+                                        </div>
+                                      )}
                                       <div className="field-group">
                                         <label>Refresh Token</label>
                                         <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>

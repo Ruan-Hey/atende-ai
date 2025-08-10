@@ -242,7 +242,10 @@ def get_empresa_metrics(
 @app.get("/api/admin/empresa/{empresa_slug}/clientes")
 def get_empresa_clientes(
     empresa_slug: str,
-    current_user: Usuario = Depends(get_current_user)
+    current_user: Usuario = Depends(get_current_user),
+    label: str = None,
+    from_date: str = None,
+    to_date: str = None
 ):
     """Retorna lista de clientes de uma empresa específica"""
     session = SessionLocal()
@@ -255,10 +258,44 @@ def get_empresa_clientes(
         if not current_user.is_superuser and current_user.empresa_id != empresa.id:
             raise HTTPException(status_code=403, detail="Acesso negado a esta empresa")
         
-        # Buscar clientes únicos diretamente do banco de dados
-        from sqlalchemy import func
+        # Se houver filtros por label/data, basear em atendimentos
+        from sqlalchemy import func, and_
+        use_att_filter = bool(label or from_date or to_date)
+        clientes = []
+        if use_att_filter:
+            from .models import Atendimento
+            query = session.query(
+                Atendimento.cliente_id,
+                func.max(Atendimento.data_atendimento).label('ultima_atividade'),
+                func.count(Atendimento.id).label('total_mensagens')
+            ).filter(
+                Atendimento.empresa_id == empresa.id
+            )
+            if label:
+                query = query.filter(Atendimento.label_slug == label)
+            if from_date:
+                query = query.filter(Atendimento.data_atendimento >= from_date)
+            if to_date:
+                query = query.filter(Atendimento.data_atendimento <= to_date)
+            query = query.group_by(Atendimento.cliente_id).order_by(func.count(Atendimento.id).desc())
+            result = query.all()
+            for row in result:
+                cliente_info = session.query(Cliente).filter(
+                    Cliente.empresa_id == empresa.id,
+                    Cliente.cliente_id == row.cliente_id
+                ).first()
+                nome_cliente = cliente_info.nome if cliente_info and cliente_info.nome else row.cliente_id
+                clientes.append({
+                    "cliente_id": row.cliente_id,
+                    "nome": nome_cliente,
+                    "ultima_atividade": row.ultima_atividade.isoformat() if row.ultima_atividade else None,
+                    "total_mensagens": row.total_mensagens,
+                    "tipo_atividade": label or 'mensagem'
+                })
+            return {"empresa": empresa_slug, "clientes": clientes}
         
-        # Buscar clientes únicos com suas últimas atividades e nomes
+        # Fallback: comportamento atual baseado em mensagens
+        from sqlalchemy import func
         clientes_query = session.query(
             Mensagem.cliente_id,
             func.max(Mensagem.timestamp).label('ultima_atividade'),
@@ -270,7 +307,6 @@ def get_empresa_clientes(
         ).order_by(
             func.count(Mensagem.id).desc()
         )
-        
         clientes_result = clientes_query.all()
         
         # Formatar resultado
@@ -291,8 +327,6 @@ def get_empresa_clientes(
             
             tipo_atividade = 'mensagem'  # Padrão
             if ultima_mensagem:
-                # Aqui você pode adicionar lógica para determinar o tipo baseado no conteúdo
-                # Por exemplo, se contém palavras como "reserva", "agendar", etc.
                 if any(palavra in ultima_mensagem.text.lower() for palavra in ['reserva', 'agendar', 'marcar']):
                     tipo_atividade = 'reserva'
                 elif any(palavra in ultima_mensagem.text.lower() for palavra in ['atendimento', 'suporte', 'ajuda']):
@@ -402,6 +436,10 @@ async def webhook_handler(empresa_slug: str, request: Request):
                     empresa_config['google_sheets_id'] = config.get('google_sheets_id')
                 elif api_name == "Google Sheets":
                     empresa_config['google_sheets_id'] = config.get('google_sheets_id')
+                    # Adicionar campos OAuth2 específicos do Google Sheets, se existirem
+                    empresa_config['google_sheets_client_id'] = config.get('google_sheets_client_id')
+                    empresa_config['google_sheets_client_secret'] = config.get('google_sheets_client_secret')
+                    empresa_config['google_sheets_refresh_token'] = config.get('google_sheets_refresh_token')
                 elif api_name == "OpenAI":
                     # OpenAI vem da tabela empresa_apis
                     if config.get('openai_key'):
@@ -1016,7 +1054,9 @@ def get_empresa_configuracoes(
             "twilio_token": empresa.twilio_token,
             "twilio_number": empresa.twilio_number,
             # Conhecimento da empresa (JSON) para o admin
-            "knowledge_json": empresa.knowledge_json or {"items": []}
+            "knowledge_json": empresa.knowledge_json or {"items": []},
+            # Labels/classificação por empresa
+            "labels_json": getattr(empresa, 'labels_json', None) or {"labels": [], "min_confidence": 0.6}
         }
         
         # Log para debug do knowledge_json
@@ -1044,6 +1084,10 @@ def get_empresa_configuracoes(
                 config_data['google_calendar_client_email'] = config.get('google_calendar_client_email')
             elif api.nome == "Google Sheets":
                 config_data['google_sheets_id'] = config.get('google_sheets_id')
+                # Adicionar campos OAuth2 específicos do Google Sheets, se existirem
+                config_data['google_sheets_client_id'] = config.get('google_sheets_client_id')
+                config_data['google_sheets_client_secret'] = config.get('google_sheets_client_secret')
+                config_data['google_sheets_refresh_token'] = config.get('google_sheets_refresh_token')
             elif api.nome == "OpenAI":
                 config_data['openai_key'] = config.get('openai_key')
             elif api.nome == "Trinks":
@@ -1120,6 +1164,17 @@ def update_empresa_configuracoes(
             empresa.knowledge_json = kj
             logger.info(f"✅ knowledge_json atribuído ao objeto empresa")
         
+        # Atualizar labels_json (classificação) diretamente na tabela empresas
+        if "labels_json" in configuracoes:
+            lj = configuracoes["labels_json"] or {}
+            if not isinstance(lj, dict):
+                lj = {"labels": []}
+            if "labels" not in lj or not isinstance(lj["labels"], list):
+                lj["labels"] = []
+            if "min_confidence" not in lj:
+                lj["min_confidence"] = 0.6
+            empresa.labels_json = lj
+        
         # Atualizar dados do Twilio diretamente na tabela empresas
         if "twilio_sid" in configuracoes:
             empresa.twilio_sid = configuracoes["twilio_sid"]
@@ -1190,6 +1245,9 @@ def update_empresa_configuracoes(
                         mapped_config["google_sheets_client_secret"] = config["client_secret"]
                     if "refresh_token" in config:
                         mapped_config["google_sheets_refresh_token"] = config["refresh_token"]
+                    # Permitir armazenar também o ID da planilha se vier no payload dinâmico
+                    if "google_sheets_id" in config:
+                        mapped_config["google_sheets_id"] = config["google_sheets_id"]
                     logger.info(f"Mapeamento Google Sheets: {config} -> {mapped_config}")
                 
                 # Buscar ou criar conexão empresa-API

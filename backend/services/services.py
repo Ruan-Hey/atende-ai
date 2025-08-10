@@ -54,6 +54,47 @@ class DatabaseService:
             session.commit()
             session.refresh(mensagem)  # Atualiza o objeto com o ID gerado
             logger.info(f"Mensagem salva no banco: {empresa_id}:{cliente_id}")
+
+            # Classificação LLM opcional: apenas para mensagens do cliente
+            try:
+                if not is_bot:
+                    # Carregar labels_json e openai_key
+                    from sqlalchemy.orm import Session as SASession
+                    from ..models import Empresa, Atendimento
+                    from ..services.unified_config_service import get_openai_config
+                    s2: SASession = self.SessionLocal()
+                    try:
+                        empresa = s2.query(Empresa).filter(Empresa.id == empresa_id).first()
+                        labels_json = getattr(empresa, 'labels_json', None) if empresa else None
+                        if labels_json and isinstance(labels_json, dict) and labels_json.get('labels'):
+                            openai_cfg = get_openai_config(s2, empresa_id) or {}
+                            api_key = openai_cfg.get('openai_key')
+                            if api_key:
+                                from ..integrations.openai_service import OpenAIService
+                                oai = OpenAIService(api_key)
+                                result = oai.classify_message(text, labels_json)
+                                min_conf = labels_json.get('min_confidence', 0.6)
+                                if result.get('label') and float(result.get('confidence', 0.0)) >= float(min_conf):
+                                    atend = Atendimento(
+                                        empresa_id=empresa_id,
+                                        cliente_id=cliente_id,
+                                        data_atendimento=mensagem.timestamp,
+                                        label_slug=result['label'],
+                                        source_message_id=mensagem.id,
+                                        observacoes=result.get('observacoes'),
+                                        confidence=int(round(float(result.get('confidence', 0.0)) * 100))
+                                    )
+                                    s2.add(atend)
+                                    try:
+                                        s2.commit()
+                                    except Exception as ce:
+                                        s2.rollback()
+                                        logger.warning(f"Não foi possível salvar atendimento classificado (provável duplicado): {ce}")
+                    finally:
+                        s2.close()
+            except Exception as ce:
+                logger.error(f"Erro na classificação opcional: {ce}")
+
             return mensagem
         except Exception as e:
             session.rollback()

@@ -26,6 +26,8 @@ class Empresa(Base):
     mensagens = relationship('Mensagem', back_populates='empresa')
     # New optional JSON field to store company knowledge (title/description items)
     knowledge_json = Column(JSON, nullable=True)
+    # New optional JSON field to store label classification config per empresa
+    labels_json = Column(JSON, nullable=True)
 
 class Mensagem(Base):
     __tablename__ = 'messages'
@@ -44,6 +46,11 @@ class Atendimento(Base):
     cliente_id = Column(String(100), nullable=False)
     data_atendimento = Column(TIMESTAMP, server_default=func.now())
     empresa = relationship('Empresa')
+    # Classification fields (nullable for backward compatibility)
+    label_slug = Column(String(100), nullable=True)
+    source_message_id = Column(Integer, nullable=True)
+    observacoes = Column(JSON, nullable=True)
+    confidence = Column(Integer, nullable=True)  # stored as int percentage or can be float; keeping int for safety
 
 class Cliente(Base):
     __tablename__ = 'clientes'

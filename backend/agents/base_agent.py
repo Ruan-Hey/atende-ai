@@ -279,6 +279,12 @@ class BaseAgent:
             self.empresa_config.get('google_calendar_client_secret')):
             return True
         
+        # Verificar Google Sheets (para reservas)
+        if (self.empresa_config.get('google_sheets_client_id') and 
+            self.empresa_config.get('google_sheets_refresh_token') and
+            self.empresa_config.get('google_sheets_id')):
+            return True
+        
         # Verificar Trinks
         if self.empresa_config.get('trinks_enabled') and self.empresa_config.get('trinks_config'):
             return True

@@ -23,13 +23,13 @@ class GoogleSheetsService:
         self.config = config or {}
         self.client: Optional[gspread.Client] = None
         self.spreadsheet_id: Optional[str] = self.config.get("google_sheets_id")
-
+        
         # Escopos necessários para Sheets/Drive
         self.scopes = [
             "https://www.googleapis.com/auth/spreadsheets",
             "https://www.googleapis.com/auth/drive",
         ]
-
+        
         try:
             # 1) Service Account via caminho de arquivo, se fornecido
             credentials_path = self.config.get("google_sheets_credentials_path")
@@ -40,7 +40,7 @@ class GoogleSheetsService:
                 self.client = gspread.authorize(creds)
                 logger.info("Google Sheets autenticado via Service Account (arquivo)")
                 return
-
+            
             # 2) Service Account via dict JSON, se fornecido
             service_account_info = self.config.get("google_sheets_service_account")
             if isinstance(service_account_info, dict) and service_account_info:
@@ -50,11 +50,22 @@ class GoogleSheetsService:
                 self.client = gspread.authorize(creds)
                 logger.info("Google Sheets autenticado via Service Account (dict)")
                 return
-
-            # 3) OAuth2 usando refresh token (reutiliza credenciais do Calendar se existirem)
-            client_id = self.config.get("google_calendar_client_id")
-            client_secret = self.config.get("google_calendar_client_secret")
-            refresh_token = self.config.get("google_calendar_refresh_token")
+            
+            # 3) OAuth2 usando refresh token
+            # Primeiro tenta credenciais específicas do Google Sheets
+            sheets_client_id = self.config.get("google_sheets_client_id")
+            sheets_client_secret = self.config.get("google_sheets_client_secret")
+            sheets_refresh_token = self.config.get("google_sheets_refresh_token")
+            
+            # Mantém compatibilidade usando credenciais do Calendar se existirem
+            calendar_client_id = self.config.get("google_calendar_client_id")
+            calendar_client_secret = self.config.get("google_calendar_client_secret")
+            calendar_refresh_token = self.config.get("google_calendar_refresh_token")
+            
+            client_id = sheets_client_id or calendar_client_id
+            client_secret = sheets_client_secret or calendar_client_secret
+            refresh_token = sheets_refresh_token or calendar_refresh_token
+            
             if client_id and client_secret and refresh_token:
                 creds = UserCredentials(
                     None,
@@ -66,9 +77,10 @@ class GoogleSheetsService:
                 )
                 creds.refresh(Request())
                 self.client = gspread.authorize(creds)
-                logger.info("Google Sheets autenticado via OAuth2 (refresh token)")
+                source = "Sheets" if sheets_refresh_token else "Calendar"
+                logger.info(f"Google Sheets autenticado via OAuth2 (refresh token, origem: {source})")
                 return
-
+            
             logger.warning(
                 "Google Sheets não configurado: faltam credenciais (Service Account ou OAuth2)"
             )
@@ -98,19 +110,18 @@ class GoogleSheetsService:
             spreadsheet = self._get_spreadsheet()
             worksheet = spreadsheet.sheet1
             row_data = [
-                cliente,           # Nome
-                "",                # Telefone (não informado)
-                data,              # Data
-                hora,              # Horário
-                "",                # Pessoas (não informado)
-                f"Empresa: {empresa}",  # Observações
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                empresa,
+                cliente,
+                data,
+                hora,
+                "",
+                "Criado via bot",
             ]
-            worksheet.append_row(row_data)
-            logger.info(f"Reserva adicionada à planilha para {cliente} em {data} {hora}")
+            worksheet.append_row(row_data, value_input_option="RAW")
             return True
         except Exception as e:
-            logger.warning(f"Erro ao registrar reserva no Google Sheets: {e}")
+            logger.error(f"Erro ao adicionar reserva no Google Sheets: {e}")
             return False
 
     # ---------------------------------

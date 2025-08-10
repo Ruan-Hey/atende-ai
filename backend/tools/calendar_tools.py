@@ -41,6 +41,11 @@ class CalendarTools:
             # Criar configuração para o Google Sheets Service
             sheets_config = {
                 'google_sheets_id': empresa_config.get('google_sheets_id'),
+                # Preferir credenciais específicas do Sheets se existirem
+                'google_sheets_client_id': empresa_config.get('google_sheets_client_id'),
+                'google_sheets_client_secret': empresa_config.get('google_sheets_client_secret'),
+                'google_sheets_refresh_token': empresa_config.get('google_sheets_refresh_token'),
+                # Manter compatibilidade reutilizando credenciais do Calendar
                 'google_calendar_client_id': empresa_config.get('google_calendar_client_id'),
                 'google_calendar_client_secret': empresa_config.get('google_calendar_client_secret'),
                 'google_calendar_refresh_token': empresa_config.get('google_calendar_refresh_token')
