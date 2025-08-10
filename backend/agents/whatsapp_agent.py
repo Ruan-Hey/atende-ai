@@ -53,7 +53,7 @@ class WhatsAppAgent(BaseAgent):
                 response = await self.process_message(message_text, context)
                 
                 # Salvar mensagem no banco
-                from .services.services import DatabaseService
+                from ..services.services import DatabaseService
                 db_service = DatabaseService()
                 db_service.save_message(
                     empresa_db.id, 
