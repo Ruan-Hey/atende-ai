@@ -213,7 +213,7 @@ class CalendarTools:
             logger.error(f"Erro ao verificar {api_name}: {e}")
             return f"Erro ao verificar {api_name} para {data}: {str(e)}"
     
-    def fazer_reserva(self, data: str, hora: str, cliente: str, empresa_config: Dict[str, Any], email: str | None = None) -> str:
+    def fazer_reserva(self, data: str, hora: str, cliente: str, empresa_config: Dict[str, Any], email: str | None = None, contexto_reserva: Dict[str, Any] = None) -> str:
         """Faz reserva usando qualquer API de agenda disponível"""
         try:
             # Encontrar API de agenda disponível
@@ -243,9 +243,11 @@ class CalendarTools:
             if api_name == "Google Calendar":
                 return self._fazer_reserva_google_calendar(data, hora, cliente, empresa_config, email=email)
             elif api_name == "Google Sheets":
-                # Extrair WaId do contexto da empresa se disponível
-                waid = empresa_config.get('cliente_id') or empresa_config.get('waid')
-                return self._fazer_reserva_google_sheets(data, hora, cliente, empresa_config, api_config, waid=waid)
+                # Extrair WaId e outras informações do contexto de reserva
+                waid = (contexto_reserva or {}).get('waid') or empresa_config.get('cliente_id')
+                quantidade_pessoas = (contexto_reserva or {}).get('quantidade_pessoas')
+                observacoes = (contexto_reserva or {}).get('observacoes')
+                return self._fazer_reserva_google_sheets(data, hora, cliente, empresa_config, api_config, waid=waid, quantidade_pessoas=quantidade_pessoas, observacoes=observacoes)
             elif api_name == "Trinks":
                 return self._fazer_reserva_trinks(data, hora, cliente, api_config)
             else:
@@ -349,7 +351,7 @@ class CalendarTools:
             logger.error(f"Erro ao fazer reserva na {api_name}: {e}")
             return f"❌ Erro ao fazer reserva na {api_name}: {str(e)}"
     
-    def _fazer_reserva_google_sheets(self, data: str, hora: str, cliente: str, empresa_config: Dict[str, Any], api_config: Dict[str, Any], waid: str = None) -> str:
+    def _fazer_reserva_google_sheets(self, data: str, hora: str, cliente: str, empresa_config: Dict[str, Any], api_config: Dict[str, Any], waid: str = None, quantidade_pessoas: int = None, observacoes: str = None) -> str:
         """Faz reserva no Google Sheets"""
         try:
             # Criar configuração para o Google Sheets Service
@@ -364,12 +366,19 @@ class CalendarTools:
             from ..integrations.google_sheets_service import GoogleSheetsService
             sheets_service = GoogleSheetsService(sheets_config)
             
-            # Adicionar reserva na planilha com WaId se disponível
-            success = sheets_service.add_reservation(
-                data=data,
-                hora=hora,
-                cliente=cliente,
-                empresa=empresa_config.get('nome', 'Empresa')
+            # Adicionar reserva na planilha com formato correto das colunas
+            reserva_data = {
+                'nome': cliente,
+                'telefone': waid or '',  # WaId na coluna Telefone
+                'data': data,
+                'horario': hora,
+                'pessoas': str(quantidade_pessoas) if quantidade_pessoas else '',
+                'observacoes': observacoes or ''
+            }
+            
+            success = sheets_service.add_reserva(
+                spreadsheet_id=sheets_config['google_sheets_id'],
+                reserva_data=reserva_data
             )
             
             if success:

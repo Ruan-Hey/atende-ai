@@ -193,7 +193,7 @@ class BaseAgent:
                 logger.error(f"Erro ao verificar regras da API: {e}")
                 # Se não conseguir verificar, aceita sem email
             
-            return calendar_tools.fazer_reserva(data_str, hora_str, cliente_str, self.empresa_config, email=email_str)
+            return calendar_tools.fazer_reserva(data_str, hora_str, cliente_str, self.empresa_config, email=email_str, contexto_reserva=self.reservation_context)
         return wrapper
     
     def _get_enviar_mensagem_wrapper(self):
@@ -642,9 +642,16 @@ INSTRUÇÕES PARA AGENDAMENTO:
 REGRAS ESPECÍFICAS DA API ATIVA ({api_name}):
 
 {"" if not waid_required else "- **WaId é OBRIGATÓRIO**: Sempre use o WaId (WhatsApp ID) como identificador único do cliente"}
-{"" if not waid_required else "- **Consultas por WaId**: Ao buscar reservas existentes, sempre use o WaId, não apenas o nome"}
+{"" if not waid_required else "- **Consultas por WaId**: Ao buscar reservas existentes, SEMPRE use o WaId, não apenas o nome"}
 {"" if not waid_required else "- **Consistência**: O WaId garante que não haja conflitos entre clientes com nomes iguais"}
 {"" if not waid_required else "- **Formato**: WaId vem do contexto como 'cliente_id' (ex: 554195984948)"}
+{"" if not waid_required else "- **Busca de Reservas**: Para verificar reservas existentes, use o WaId como chave de busca"}
+
+{"" if api_type != "Google Sheets" else "REGRAS ESPECÍFICAS DO GOOGLE SHEETS:"}
+{"" if api_type != "Google Sheets" else "- **Coluna Telefone**: Sempre use esta coluna para armazenar o WaId (WhatsApp ID)"}
+{"" if api_type != "Google Sheets" else "- **Coluna Nome**: Armazene apenas o nome do cliente (sem data/hora)"}
+{"" if api_type != "Google Sheets" else "- **Busca por WaId**: Para verificar reservas existentes, sempre busque pela coluna Telefone usando o WaId"}
+{"" if api_type != "Google Sheets" else "- **Formato de Dados**: Mantenha cada informação em sua coluna específica (Nome, Telefone, Data, Horário, Pessoas, Observações)"}
 
 {"" if not email_required else "- **Email é OBRIGATÓRIO**: Sempre solicite email para confirmar reservas"}
 {"" if not email_required else "- **Validação**: Verifique se o email é válido antes de confirmar"}

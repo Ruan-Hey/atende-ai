@@ -27,7 +27,9 @@ class APIRulesEngine:
                 "waid_required": True,
                 "reservation_flow": "sheets",
                 "confirmation_message": "Reserva confirmada no Google Sheets!",
-                "missing_fields_message": "Faltam informações para completar a reserva no Google Sheets"
+                "missing_fields_message": "Faltam informações para completar a reserva no Google Sheets",
+                "search_by_waid": True,
+                "waid_column": "Telefone"  # Coluna onde o WaId é armazenado
             },
             APIType.GOOGLE_CALENDAR: {
                 "email_required": True,
