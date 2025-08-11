@@ -29,10 +29,21 @@ class BaseAgent:
             model="gpt-4o"
         )
         self.memory = ConversationBufferWindowMemory(
-            k=20,
+            k=50,  # Aumentado para 50 mensagens
             return_messages=True
         )
+        # Contexto persistente que mantém informações extraídas
         self.current_context: Dict[str, Any] = {}
+        # Contexto de reserva específico que persiste durante toda a conversa
+        self.reservation_context: Dict[str, Any] = {
+            'cliente_nome': None,
+            'quantidade_pessoas': None,
+            'data_reserva': None,
+            'horario_reserva': None,
+            'observacoes': None,
+            'email': None,
+            'status': 'aguardando_info'  # aguardando_info, confirmando, finalizada
+        }
         
         # Guardar referências para wrappers ANTES de criar structured_tools
         self._wrappers = {
@@ -303,6 +314,135 @@ class BaseAgent:
         
         return False
     
+    def _extract_reservation_info(self, message: str) -> None:
+        """Extrai informações de reserva da mensagem e atualiza o contexto"""
+        import re
+        from datetime import datetime, timedelta
+        
+        message_lower = message.lower()
+        
+        # Extrair nome do cliente
+        nome_patterns = [
+            r'em nome de (\w+)',
+            r'nome (\w+)',
+            r'para (\w+)',
+            r'(\w+) gimenes hey',  # Caso específico do exemplo
+            r'(\w+) hey'
+        ]
+        
+        for pattern in nome_patterns:
+            match = re.search(pattern, message_lower)
+            if match and not self.reservation_context['cliente_nome']:
+                self.reservation_context['cliente_nome'] = match.group(1).title()
+                break
+        
+        # Extrair quantidade de pessoas
+        pessoas_patterns = [
+            r'(\d+)\s*pessoas?',
+            r'para\s+(\d+)\s*pessoas?',
+            r'(\d+)\s*convidados?',
+            r'(\d+)\s*clientes?'
+        ]
+        
+        for pattern in pessoas_patterns:
+            match = re.search(pattern, message_lower)
+            if match and not self.reservation_context['quantidade_pessoas']:
+                self.reservation_context['quantidade_pessoas'] = int(match.group(1))
+                break
+        
+        # Extrair data
+        data_patterns = [
+            r'para\s+(amanhã|amanha)',
+            r'(amanhã|amanha)',
+            r'para\s+(segunda|terça|quarta|quinta|sexta|sábado|domingo)',
+            r'(segunda|terça|quarta|quinta|sexta|sábado|domingo)',
+            r'(\d{1,2})/(\d{1,2})',
+            r'(\d{4})-(\d{1,2})-(\d{1,2})'
+        ]
+        
+        for pattern in data_patterns:
+            match = re.search(pattern, message_lower)
+            if match and not self.reservation_context['data_reserva']:
+                if 'amanhã' in match.group(0) or 'amanha' in match.group(0):
+                    tomorrow = datetime.now() + timedelta(days=1)
+                    self.reservation_context['data_reserva'] = tomorrow.strftime('%Y-%m-%d')
+                elif any(dia in match.group(0) for dia in ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo']):
+                    # Calcular próxima ocorrência do dia da semana
+                    dias_semana = {
+                        'segunda': 0, 'terça': 1, 'quarta': 2, 'quinta': 3,
+                        'sexta': 4, 'sábado': 5, 'domingo': 6
+                    }
+                    dia_atual = datetime.now().weekday()
+                    dia_desejado = dias_semana[match.group(1)]
+                    dias_para_adicionar = (dia_desejado - dia_atual) % 7
+                    if dias_para_adicionar == 0:
+                        dias_para_adicionar = 7
+                    data_futura = datetime.now() + timedelta(days=dias_para_adicionar)
+                    self.reservation_context['data_reserva'] = data_futura.strftime('%Y-%m-%d')
+                break
+        
+        # Extrair horário
+        horario_patterns = [
+            r'(\d{1,2}):(\d{2})',
+            r'(\d{1,2})h',
+            r'(\d{1,2})\s*horas?',
+            r'às\s+(\d{1,2}):(\d{2})',
+            r'para\s+(\d{1,2}):(\d{2})'
+        ]
+        
+        for pattern in horario_patterns:
+            match = re.search(pattern, message_lower)
+            if match and not self.reservation_context['horario_reserva']:
+                if len(match.groups()) == 2:
+                    hora = match.group(1).zfill(2)
+                    minuto = match.group(2)
+                    self.reservation_context['horario_reserva'] = f"{hora}:{minuto}"
+                else:
+                    hora = match.group(1).zfill(2)
+                    self.reservation_context['horario_reserva'] = f"{hora}:00"
+                break
+        
+        # Extrair observações
+        if 'aniversário' in message_lower or 'aniversario' in message_lower:
+            self.reservation_context['observacoes'] = 'Aniversário'
+        
+        # Atualizar status
+        if (self.reservation_context['cliente_nome'] and 
+            self.reservation_context['quantidade_pessoas'] and
+            self.reservation_context['data_reserva'] and
+            self.reservation_context['horario_reserva']):
+            self.reservation_context['status'] = 'confirmando'
+        elif (self.reservation_context['cliente_nome'] or 
+              self.reservation_context['quantidade_pessoas'] or
+              self.reservation_context['data_reserva'] or
+              self.reservation_context['horario_reserva']):
+            self.reservation_context['status'] = 'aguardando_info'
+    
+    def _get_reservation_summary(self) -> str:
+        """Retorna um resumo do contexto de reserva atual"""
+        if self.reservation_context['status'] == 'aguardando_info':
+            info_coletada = []
+            if self.reservation_context['cliente_nome']:
+                info_coletada.append(f"Nome: {self.reservation_context['cliente_nome']}")
+            if self.reservation_context['quantidade_pessoas']:
+                info_coletada.append(f"Pessoas: {self.reservation_context['quantidade_pessoas']}")
+            if self.reservation_context['data_reserva']:
+                info_coletada.append(f"Data: {self.reservation_context['data_reserva']}")
+            if self.reservation_context['horario_reserva']:
+                info_coletada.append(f"Horário: {self.reservation_context['horario_reserva']}")
+            if self.reservation_context['observacoes']:
+                info_coletada.append(f"Observações: {self.reservation_context['observacoes']}")
+            
+            if info_coletada:
+                return f"Informações já coletadas: {', '.join(info_coletada)}"
+            else:
+                return "Nenhuma informação coletada ainda"
+        
+        elif self.reservation_context['status'] == 'confirmando':
+            return f"Reserva quase completa! Falta apenas o email para confirmar: {self.reservation_context['cliente_nome']}, {self.reservation_context['quantidade_pessoas']} pessoas, {self.reservation_context['data_reserva']} às {self.reservation_context['horario_reserva']}"
+        
+        return "Status desconhecido"
+    
     async def process_message(self, message: str, context: Dict[str, Any]) -> str:
         """Processa uma mensagem usando tool-calling: executa tools antes de responder"""
         try:
@@ -320,6 +460,9 @@ class BaseAgent:
             
             # Atualizar contexto atual
             self.current_context = context
+            
+            # Extrair informações de reserva da mensagem
+            self._extract_reservation_info(message)
             
             # Construir prompt do sistema (reforça usar tools antes de responder)
             system_prompt = self._build_system_prompt(context)
@@ -443,6 +586,9 @@ INFORMAÇÕES ATUAIS:
 - Cliente: {cliente_name} (ID: {cliente_id})
 - Status do calendário: {calendar_status}
 
+CONTEXTO DE RESERVA ATUAL:
+{self._get_reservation_summary()}
+
 INFORMAÇÕES DO CLIENTE:
 {cliente_info}
 
@@ -460,17 +606,20 @@ INSTRUÇÕES IMPORTANTES (POLÍTICA DE DECISÃO):
 - **IMPORTANTE**: Quando o cliente perguntar sobre horários de funcionamento, regras, promoções ou outras informações específicas da empresa, SEMPRE use a ferramenta get_business_knowledge para consultar essas informações antes de responder.
 - Evite respostas longas. Priorize executar a ferramenta e responder com o resultado real.
 
-{"" if has_calendar_api else "INSTRUÇÕES PARA AGENDAMENTO (quando não há APIs de agenda):"}
-{"" if has_calendar_api else "- **PRIORIDADE ABSOLUTA**: Siga EXATAMENTE as instruções do prompt da empresa sobre como lidar com reservas e agendamentos."}
-{"" if has_calendar_api else "- O prompt da empresa tem precedência sobre qualquer instrução genérica do sistema."}
-{"" if has_calendar_api else "- Use get_business_knowledge para informar horários de funcionamento quando disponíveis."}
+INSTRUÇÕES PARA AGENDAMENTO:
+- **IMPORTANTE**: Use o contexto de reserva atual para evitar perguntar informações já fornecidas
+- **NUNCA repita perguntas**: Se o cliente já forneceu nome, pessoas, data ou horário, use essas informações
+- **Contexto inteligente**: O sistema mantém informações de reservas durante toda a conversa
+- **Fluxo otimizado**: Colete apenas as informações que ainda faltam
+- **Confirmação**: Quando tiver todas as informações, confirme a reserva e peça apenas o email
+
+{"" if has_calendar_api else "NOTA: APIs de agenda não configuradas - siga o prompt da empresa para reservas"}
 {"" if has_calendar_api else ""}
-{"" if has_calendar_api else "INSTRUÇÕES PARA AGENDAMENTO (quando há APIs de agenda):"}
-{"" if has_calendar_api else "- Quando o cliente pedir para agendar/confirmar um horário, extraia data e hora do contexto recente e chame a ferramenta apropriada."}
-{"" if has_calendar_api else "- Se JÁ tivermos data e hora e o cliente confirmar (ex.: 'pode agendar às 17h'), peça o email do cliente se ainda não tiver e então chame DIRETAMENTE a ferramenta fazer_reserva com data, hora, nome e email."}
-{"" if has_calendar_api else "- Se faltar apenas UM dado (data, hora ou email), pergunte somente o que falta. Não repita perguntas já respondidas."}
-{"" if has_calendar_api else "- Sempre que o cliente mencionar 'hoje', use {current_date}. Para dias da semana (ex.: segunda-feira), calcule a próxima ocorrência a partir da data atual."}
-{"" if has_calendar_api else "- Para verificar disponibilidade, use verificar_calendario (YYYY-MM-DD). Depois que o cliente escolher um horário dessa lista e fornecer o email, chame fazer_reserva."}
+{"" if has_calendar_api else "COM APIs de agenda configuradas:"}
+{"" if has_calendar_api else "- Use verificar_calendario para ver disponibilidade"}
+{"" if has_calendar_api else "- Use fazer_reserva quando tiver todas as informações"}
+{"" if has_calendar_api else "- Sempre que o cliente mencionar 'hoje', use {current_date}"}
+{"" if has_calendar_api else "- Para dias da semana, calcule a próxima ocorrência"}
 
 PROMPT ESPECÍFICO DA EMPRESA:
 {prompt_empresa}
