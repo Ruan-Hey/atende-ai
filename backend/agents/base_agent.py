@@ -37,6 +37,7 @@ class BaseAgent:
         # Contexto de reserva específico que persiste durante toda a conversa
         self.reservation_context: Dict[str, Any] = {
             'cliente_nome': None,
+            'waid': None,  # WhatsApp ID único do cliente
             'quantidade_pessoas': None,
             'data_reserva': None,
             'horario_reserva': None,
@@ -291,9 +292,9 @@ class BaseAgent:
             return True
         
         # Verificar Google Sheets (para reservas)
-        if (self.empresa_config.get('google_sheets_client_id') and 
-            self.empresa_config.get('google_sheets_refresh_token') and
-            self.empresa_config.get('google_sheets_id')):
+        if (self.empresa_config.get('google_sheets_id') and 
+            (self.empresa_config.get('google_sheets_client_id') or 
+             self.empresa_config.get('google_sheets_service_account'))):
             return True
         
         # Verificar Trinks
@@ -314,10 +315,14 @@ class BaseAgent:
         
         return False
     
-    def _extract_reservation_info(self, message: str) -> None:
+    def _extract_reservation_info(self, message: str, context: Dict[str, Any] = None) -> None:
         """Extrai informações de reserva da mensagem e atualiza o contexto"""
         import re
         from datetime import datetime, timedelta
+        
+        # Extrair WaId do contexto se disponível
+        if context and context.get('cliente_id'):
+            self.reservation_context['waid'] = context['cliente_id']
         
         message_lower = message.lower()
         
@@ -422,6 +427,8 @@ class BaseAgent:
         """Retorna um resumo do contexto de reserva atual"""
         if self.reservation_context['status'] == 'aguardando_info':
             info_coletada = []
+            if self.reservation_context['waid']:
+                info_coletada.append(f"WaId: {self.reservation_context['waid']}")
             if self.reservation_context['cliente_nome']:
                 info_coletada.append(f"Nome: {self.reservation_context['cliente_nome']}")
             if self.reservation_context['quantidade_pessoas']:
@@ -439,7 +446,8 @@ class BaseAgent:
                 return "Nenhuma informação coletada ainda"
         
         elif self.reservation_context['status'] == 'confirmando':
-            return f"Reserva quase completa! Falta apenas o email para confirmar: {self.reservation_context['cliente_nome']}, {self.reservation_context['quantidade_pessoas']} pessoas, {self.reservation_context['data_reserva']} às {self.reservation_context['horario_reserva']}"
+            waid_info = f" (WaId: {self.reservation_context['waid']})" if self.reservation_context['waid'] else ""
+            return f"Reserva quase completa! Falta apenas o email para confirmar: {self.reservation_context['cliente_nome']}{waid_info}, {self.reservation_context['quantidade_pessoas']} pessoas, {self.reservation_context['data_reserva']} às {self.reservation_context['horario_reserva']}"
         
         return "Status desconhecido"
     
@@ -462,7 +470,7 @@ class BaseAgent:
             self.current_context = context
             
             # Extrair informações de reserva da mensagem
-            self._extract_reservation_info(message)
+            self._extract_reservation_info(message, context)
             
             # Construir prompt do sistema (reforça usar tools antes de responder)
             system_prompt = self._build_system_prompt(context)
@@ -569,6 +577,11 @@ class BaseAgent:
         has_calendar_api = self._has_calendar_api()
         calendar_status = "✅ APIs de agenda configuradas e funcionando" if has_calendar_api else "❌ Nenhuma API de agenda configurada"
         
+        # Verificar especificamente se Google Sheets está ativo
+        has_google_sheets = (empresa_config.get('google_sheets_id') and 
+                            (empresa_config.get('google_sheets_client_id') or 
+                             empresa_config.get('google_sheets_service_account')))
+        
         # Listar APIs dinâmicas conectadas
         dynamic_api_list = []
         for key, value in empresa_config.items():
@@ -612,6 +625,12 @@ INSTRUÇÕES PARA AGENDAMENTO:
 - **Contexto inteligente**: O sistema mantém informações de reservas durante toda a conversa
 - **Fluxo otimizado**: Colete apenas as informações que ainda faltam
 - **Confirmação**: Quando tiver todas as informações, confirme a reserva e peça apenas o email
+
+{"" if not has_google_sheets else "REGRAS ESPECÍFICAS PARA GOOGLE SHEETS:"}
+{"" if not has_google_sheets else "- **WaId é OBRIGATÓRIO**: Sempre use o WaId (WhatsApp ID) como identificador único do cliente"}
+{"" if not has_google_sheets else "- **Consultas por WaId**: Ao buscar reservas existentes, sempre use o WaId, não apenas o nome"}
+{"" if not has_google_sheets else "- **Consistência**: O WaId garante que não haja conflitos entre clientes com nomes iguais"}
+{"" if not has_google_sheets else "- **Formato**: WaId vem do contexto como 'cliente_id' (ex: 554195984948)"}
 
 {"" if has_calendar_api else "NOTA: APIs de agenda não configuradas - siga o prompt da empresa para reservas"}
 {"" if has_calendar_api else ""}

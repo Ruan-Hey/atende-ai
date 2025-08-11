@@ -243,7 +243,9 @@ class CalendarTools:
             if api_name == "Google Calendar":
                 return self._fazer_reserva_google_calendar(data, hora, cliente, empresa_config, email=email)
             elif api_name == "Google Sheets":
-                return self._fazer_reserva_google_sheets(data, hora, cliente, empresa_config, api_config)
+                # Extrair WaId do contexto da empresa se disponível
+                waid = empresa_config.get('cliente_id') or empresa_config.get('waid')
+                return self._fazer_reserva_google_sheets(data, hora, cliente, empresa_config, api_config, waid=waid)
             elif api_name == "Trinks":
                 return self._fazer_reserva_trinks(data, hora, cliente, api_config)
             else:
@@ -347,7 +349,7 @@ class CalendarTools:
             logger.error(f"Erro ao fazer reserva na {api_name}: {e}")
             return f"❌ Erro ao fazer reserva na {api_name}: {str(e)}"
     
-    def _fazer_reserva_google_sheets(self, data: str, hora: str, cliente: str, empresa_config: Dict[str, Any], api_config: Dict[str, Any]) -> str:
+    def _fazer_reserva_google_sheets(self, data: str, hora: str, cliente: str, empresa_config: Dict[str, Any], api_config: Dict[str, Any], waid: str = None) -> str:
         """Faz reserva no Google Sheets"""
         try:
             # Criar configuração para o Google Sheets Service
@@ -362,7 +364,7 @@ class CalendarTools:
             from ..integrations.google_sheets_service import GoogleSheetsService
             sheets_service = GoogleSheetsService(sheets_config)
             
-            # Adicionar reserva na planilha
+            # Adicionar reserva na planilha com WaId se disponível
             success = sheets_service.add_reservation(
                 data=data,
                 hora=hora,
@@ -371,7 +373,8 @@ class CalendarTools:
             )
             
             if success:
-                return f"✅ Reserva confirmada no Google Sheets!\nData: {data}\nHora: {hora}\nCliente: {cliente}\nA reserva foi registrada na planilha de controle."
+                waid_info = f" (WaId: {waid})" if waid else ""
+                return f"✅ Reserva confirmada no Google Sheets!\nData: {data}\nHora: {hora}\nCliente: {cliente}{waid_info}\nA reserva foi registrada na planilha de controle."
             else:
                 return f"❌ Erro ao registrar reserva no Google Sheets. Por favor, tente novamente ou entre em contato diretamente."
             
