@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from ..config import Config
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
-from ..models import Mensagem, Cliente, Atendimento, Atividade
+from ..models import Mensagem, Cliente, Atendimento, Atividade, Empresa
 
 logger = logging.getLogger(__name__)
 

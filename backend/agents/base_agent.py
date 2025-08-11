@@ -662,7 +662,8 @@ INSTRUÇÕES PARA AGENDAMENTO:
 - **NUNCA repita perguntas**: Se o cliente já forneceu nome, pessoas, data ou horário, use essas informações
 - **Contexto inteligente**: O sistema mantém informações de reservas durante toda a conversa
 - **Fluxo otimizado**: Colete apenas as informações que ainda faltam
-- **Confirmação**: Quando tiver todas as informações, confirme a reserva seguindo as regras da API ativa
+- **OBRIGATÓRIO**: Quando tiver todas as informações (nome, pessoas, data, horário), SEMPRE use a ferramenta fazer_reserva para confirmar a reserva
+- **NUNCA confirme sem usar a ferramenta**: Sempre execute fazer_reserva antes de dizer que confirmou
 
 REGRAS ESPECÍFICAS DA API ATIVA ({api_name}):
 
@@ -689,6 +690,11 @@ REGRAS ESPECÍFICAS DA API ATIVA ({api_name}):
 {"" if has_calendar_api else "- Use fazer_reserva quando tiver todas as informações"}
 {"" if has_calendar_api else "- Sempre que o cliente mencionar 'hoje', use {current_date}"}
 {"" if has_calendar_api else "- Para dias da semana, calcule a próxima ocorrência"}
+{"" if has_calendar_api else ""}
+{"" if has_calendar_api else "**REGRAS CRÍTICAS PARA RESERVAS:**"}
+{"" if has_calendar_api else "- SEMPRE use fazer_reserva quando tiver: nome, pessoas, data e horário"}
+{"" if has_calendar_api else "- NUNCA diga 'confirmado' sem executar fazer_reserva"}
+{"" if has_calendar_api else "- A ferramenta fazer_reserva é OBRIGATÓRIA para confirmar reservas"}
 
 PROMPT ESPECÍFICO DA EMPRESA:
 {prompt_empresa}
