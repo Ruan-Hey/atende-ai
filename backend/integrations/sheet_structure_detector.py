@@ -6,6 +6,7 @@ Mapeia colunas dinamicamente baseado nos cabeçalhos
 import logging
 from typing import Dict, Any, List, Optional, Tuple
 import gspread
+import unicodedata
 
 logger = logging.getLogger(__name__)
 
@@ -95,18 +96,21 @@ class SheetStructureDetector:
     
     def _identify_column_type(self, header: str) -> Optional[str]:
         """Identifica o tipo de coluna baseado no cabeçalho"""
-        header_lower = header.lower().strip()
+        # Normaliza acentos e caixa
+        header_norm = unicodedata.normalize('NFKD', header).encode('ASCII', 'ignore').decode('ASCII').lower().strip()
         
         # Buscar correspondências exatas primeiro
         for column_type, keywords in self.column_keywords.items():
             for keyword in keywords:
-                if keyword == header_lower:  # Correspondência exata
+                keyword_norm = unicodedata.normalize('NFKD', keyword).encode('ASCII', 'ignore').decode('ASCII').lower().strip()
+                if keyword_norm == header_norm:  # Correspondência exata
                     return column_type
         
         # Se não encontrar correspondência exata, buscar parcial
         for column_type, keywords in self.column_keywords.items():
             for keyword in keywords:
-                if keyword in header_lower:  # Correspondência parcial
+                keyword_norm = unicodedata.normalize('NFKD', keyword).encode('ASCII', 'ignore').decode('ASCII').lower().strip()
+                if keyword_norm in header_norm:  # Correspondência parcial
                     return column_type
         
         return None
