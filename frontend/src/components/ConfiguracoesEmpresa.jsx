@@ -693,8 +693,7 @@ const ConfiguracoesEmpresa = () => {
           <label>{field.label}</label>
           <textarea
             {...commonProps}
-            rows={6}
-            className="form-textarea"
+            className={`form-textarea ${field.name === 'prompt' ? 'prompt-long' : ''}`}
             onKeyDown={(e) => handleTextareaKeyDown(e)}
           />
         </div>
@@ -789,19 +788,19 @@ const ConfiguracoesEmpresa = () => {
             </div>
             <div className="field-group">
               <label>Descrição</label>
-              <textarea rows={3} className="form-textarea" value={lb.description || ''} onChange={(e) => updateLabelField(idx, 'description', e.target.value)} placeholder="Explique quando essa label deve ser aplicada" />
+              <textarea className="form-textarea" value={lb.description || ''} onChange={(e) => updateLabelField(idx, 'description', e.target.value)} placeholder="Explique quando essa label deve ser aplicada" />
             </div>
             <div className="field-group">
               <label>Exemplos Positivos (um por linha)</label>
-              <textarea rows={3} className="form-textarea" value={(lb.positive_examples || []).join('\n')} onChange={(e) => updateLabelField(idx, 'positive_examples', e.target.value.split('\n').filter(Boolean))} />
+              <textarea className="form-textarea" value={(lb.positive_examples || []).join('\n')} onChange={(e) => updateLabelField(idx, 'positive_examples', e.target.value.split('\n').filter(Boolean))} />
             </div>
             <div className="field-group">
               <label>Exemplos Negativos (opcional, um por linha)</label>
-              <textarea rows={3} className="form-textarea" value={(lb.negative_examples || []).join('\n')} onChange={(e) => updateLabelField(idx, 'negative_examples', e.target.value.split('\n').filter(Boolean))} />
+              <textarea className="form-textarea" value={(lb.negative_examples || []).join('\n')} onChange={(e) => updateLabelField(idx, 'negative_examples', e.target.value.split('\n').filter(Boolean))} />
             </div>
             <div className="field-group">
               <label>Instruções de Observações (o que extrair)</label>
-              <textarea rows={2} className="form-textarea" value={lb.observations_instructions || ''} onChange={(e) => updateLabelField(idx, 'observations_instructions', e.target.value)} placeholder="Ex.: Se identificar reserva, extrair nome, data e horário" />
+              <textarea className="form-textarea" value={lb.observations_instructions || ''} onChange={(e) => updateLabelField(idx, 'observations_instructions', e.target.value)} placeholder="Ex.: Se identificar reserva, extrair nome, data e horário" />
             </div>
             <div style={{ textAlign: 'right' }}>
               <button type="button" className="remove-btn" onClick={() => removeLabel(idx)}>Remover</button>
@@ -1131,7 +1130,6 @@ const ConfiguracoesEmpresa = () => {
                                 <label>Descrição</label>
                                 <textarea
                                   className="form-textarea"
-                                  rows={3}
                                   value={item.description || ''}
                                   onChange={(e) => handleKnowledgeChange(idx, 'description', e.target.value)}
                                   onKeyDown={(e) => handleKnowledgeTextareaKeyDown(e, idx, 'description')}

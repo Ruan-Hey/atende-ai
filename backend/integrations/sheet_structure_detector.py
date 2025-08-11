@@ -19,11 +19,12 @@ class SheetStructureDetector:
         self.column_keywords = {
             'horario': ['horario', 'hora', 'time', 'hour'],
             'pessoas': ['pessoas', 'people', 'convidados', 'guests', 'quantidade', 'qtd', 'qty'],
-            'observacoes': ['observacoes', 'obs', 'observations', 'notes', 'comentarios', 'comments'],
+            'observacoes': ['observacoes', 'observations', 'notes', 'comentarios', 'comments', 'obs'],
             'ultima_alteracao': ['ultima alteracao', 'last change', 'modificado', 'modified', 'atualizado', 'updated'],
             'waid': ['telefone', 'whatsapp', 'waid', 'phone', 'celular', 'mobile', 'id', 'identificador'],
             'data': ['data', 'date', 'dia', 'day'],
-            'nome': ['nome', 'cliente', 'customer', 'client', 'person']  # Removido 'pessoa' para evitar conflito
+            'nome': ['nome', 'cliente', 'customer', 'client', 'person'],  # Removido 'pessoa' para evitar conflito
+            'status': ['status', 'situacao', 'situacao da reserva', 'tipo', 'acao', 'reservation status', 'state']
         }
     
     def detect_structure(self, worksheet: gspread.Worksheet) -> Dict[str, Any]:

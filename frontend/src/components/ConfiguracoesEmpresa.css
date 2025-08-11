@@ -225,10 +225,18 @@
 }
 
 .form-textarea {
-  min-height: 120px;
+  min-height: 2.75rem; /* Mesma altura do input (0.75rem padding * 2 + 1.25rem conteúdo) */
+  max-height: 120px; /* Altura máxima para manter o comportamento atual */
   resize: vertical;
   font-family: 'Inter', sans-serif;
   line-height: 1.5;
+  overflow-y: auto; /* Garantir rolagem interna quando necessário */
+}
+
+/* Para campos de prompt longo (como o prompt geral da empresa) */
+.form-textarea.prompt-long {
+  min-height: 8rem; /* Altura mínima maior para campos de prompt */
+  max-height: 200px; /* Altura máxima maior para permitir mais conteúdo */
 }
 
 .form-textarea::placeholder {

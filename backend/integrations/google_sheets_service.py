@@ -155,6 +155,10 @@ class GoogleSheetsService:
                 logger.error(f"Estrutura da planilha inválida: {errors}")
                 return False
             
+            # Garantir um status padrão
+            if 'status' not in reserva_data or not reserva_data.get('status'):
+                reserva_data['status'] = 'Nova Reserva'
+            
             # Criar linha baseada na estrutura detectada
             row_data = self._create_row_from_structure(structure, reserva_data)
             
@@ -184,7 +188,8 @@ class GoogleSheetsService:
             if column_type == 'nome':
                 row_data[col_index] = reserva_data.get('nome', '')
             elif column_type == 'waid':
-                row_data[col_index] = reserva_data.get('waid', '')
+                # aceitar tanto 'waid' quanto 'telefone' como origem
+                row_data[col_index] = reserva_data.get('waid', '') or reserva_data.get('telefone', '')
             elif column_type == 'data':
                 row_data[col_index] = reserva_data.get('data', '')
             elif column_type == 'horario':
@@ -195,12 +200,16 @@ class GoogleSheetsService:
                 row_data[col_index] = reserva_data.get('observacoes', '')
             elif column_type == 'ultima_alteracao':
                 row_data[col_index] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            elif column_type == 'status':
+                row_data[col_index] = reserva_data.get('status', '')
         
         logger.info(f"📝 Linha criada: {row_data}")
         return row_data
     
     def update_reserva(self, spreadsheet_id: str, waid: str, reserva_data: Dict[str, Any]) -> bool:
-        """Atualiza reserva usando WaId (obrigatório) e estrutura detectada"""
+        """Atualiza reserva usando WaId (obrigatório) e estrutura detectada.
+        Se houver múltiplas reservas com o mesmo WaId, tenta casar pela data e/ou horário
+        presente em reserva_data. Se não encontrar linha correspondente, retorna False."""
         try:
             spreadsheet = self._get_spreadsheet(spreadsheet_id)
             worksheet = spreadsheet.sheet1
@@ -220,22 +229,49 @@ class GoogleSheetsService:
                 return False
             
             try:
-                # Buscar célula com o WaId
-                cell = worksheet.find(waid)
-                row_number = cell.row
+                # Buscar todas as ocorrências com o WaId
+                cells = worksheet.findall(waid)
+                if not cells:
+                    logger.info(f"Nenhuma linha encontrada para WaId: {waid}")
+                    return False
+                
+                target_row = None
+                data_alvo = reserva_data.get('data')
+                horario_alvo = reserva_data.get('horario')
+                data_col_info = structure['column_mapping'].get('data')
+                horario_col_info = structure['column_mapping'].get('horario')
+                
+                if data_alvo and data_col_info:
+                    for cell in cells:
+                        row_vals = worksheet.row_values(cell.row)
+                        # Proteger contra linhas curtas
+                        data_val = row_vals[data_col_info['index']] if len(row_vals) > data_col_info['index'] else ''
+                        horario_val = row_vals[horario_col_info['index']] if horario_col_info and len(row_vals) > horario_col_info['index'] else ''
+                        if data_val == data_alvo and (not horario_alvo or horario_val == horario_alvo):
+                            target_row = cell.row
+                            break
+                
+                # Se não encontrou por data/horário, usar a primeira ocorrência
+                if target_row is None:
+                    # Se houver exatamente uma linha com este WaId, usar ela
+                    if len(cells) == 1:
+                        target_row = cells[0].row
+                    else:
+                        # múltiplas entradas e sem data para desambiguar
+                        logger.warning(f"Múltiplas reservas para WaId {waid} sem data/horário para desambiguar")
+                        return False
                 
                 # Atualizar cada coluna baseado na estrutura detectada
                 for column_type, column_info in structure['column_mapping'].items():
+                    cell_ref = f"{column_info['letter']}{target_row}"
                     if column_type == 'ultima_alteracao':
-                        # Sempre atualizar timestamp de modificação
-                        worksheet.update(f"{column_info['letter']}{row_number}", 
-                                      datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                        worksheet.update(cell_ref, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                    elif column_type == 'status':
+                        worksheet.update(cell_ref, reserva_data.get('status', 'Alteração'))
                     elif column_type in reserva_data:
-                        # Atualizar dados fornecidos
-                        worksheet.update(f"{column_info['letter']}{row_number}", 
-                                      reserva_data[column_type])
+                        worksheet.update(cell_ref, reserva_data[column_type])
                 
-                logger.info(f"✅ Reserva atualizada com sucesso: WaId {waid}")
+                logger.info(f"✅ Reserva atualizada com sucesso: WaId {waid} (linha {target_row})")
                 return True
                 
             except gspread.CellNotFound:
@@ -245,6 +281,24 @@ class GoogleSheetsService:
         except Exception as e:
             logger.error(f"Erro ao atualizar reserva: {e}")
             return False
+    
+    def upsert_reserva(self, spreadsheet_id: str, waid: str, reserva_data: Dict[str, Any]) -> str:
+        """Tenta atualizar a reserva existente; se não existir, cria nova.
+        Retorna 'updated' ou 'created' conforme a ação executada."""
+        try:
+            # Tenta atualizar marcando status como Alteração, se não informado
+            if not reserva_data.get('status'):
+                reserva_data['status'] = 'Alteração'
+            updated = self.update_reserva(spreadsheet_id, waid, reserva_data)
+            if updated:
+                return 'updated'
+            # Criar nova com status padrão
+            reserva_data['status'] = reserva_data.get('status') or 'Nova Reserva'
+            created = self.add_reserva(spreadsheet_id, reserva_data)
+            return 'created' if created else 'error'
+        except Exception as e:
+            logger.error(f"Erro no upsert da reserva: {e}")
+            return 'error'
     
     def cancel_reserva(self, spreadsheet_id: str, waid: str) -> bool:
         """Cancela reserva usando WaId (obrigatório) e estrutura detectada"""
@@ -277,6 +331,11 @@ class GoogleSheetsService:
                     if column_type in structure['column_mapping']:
                         column_info = structure['column_mapping'][column_type]
                         worksheet.update(f"{column_info['letter']}{row_number}", "Cancelado")
+                
+                # Atualizar status, se existir
+                if 'status' in structure['column_mapping']:
+                    status_col = structure['column_mapping']['status']
+                    worksheet.update(f"{status_col['letter']}{row_number}", "Cancelado")
                 
                 # Atualizar timestamp de modificação
                 if 'ultima_alteracao' in structure['column_mapping']:

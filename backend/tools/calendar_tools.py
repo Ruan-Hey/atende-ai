@@ -366,26 +366,32 @@ class CalendarTools:
             from ..integrations.google_sheets_service import GoogleSheetsService
             sheets_service = GoogleSheetsService(sheets_config)
             
-            # Adicionar reserva na planilha com formato correto das colunas
+            # Montar dados padronizados
             reserva_data = {
                 'nome': cliente,
                 'telefone': waid or '',  # WaId na coluna Telefone
+                'waid': waid or '',
                 'data': data,
                 'horario': hora,
                 'pessoas': str(quantidade_pessoas) if quantidade_pessoas else '',
                 'observacoes': observacoes or ''
             }
             
-            success = sheets_service.add_reserva(
+            # Upsert: atualizar se já existir, senão criar
+            action = sheets_service.upsert_reserva(
                 spreadsheet_id=sheets_config['google_sheets_id'],
+                waid=waid or '',
                 reserva_data=reserva_data
             )
             
-            if success:
+            if action == 'updated':
                 waid_info = f" (WaId: {waid})" if waid else ""
-                return f"✅ Reserva confirmada no Google Sheets!\nData: {data}\nHora: {hora}\nCliente: {cliente}{waid_info}\nA reserva foi registrada na planilha de controle."
+                return f"✅ Reserva atualizada no Google Sheets!\nData: {data}\nHora: {hora}\nCliente: {cliente}{waid_info}"
+            elif action == 'created':
+                waid_info = f" (WaId: {waid})" if waid else ""
+                return f"✅ Reserva confirmada no Google Sheets!\nData: {data}\nHora: {hora}\nCliente: {cliente}{waid_info}\nA reserva foi registrada na planilha."
             else:
-                return f"❌ Erro ao registrar reserva no Google Sheets. Por favor, tente novamente ou entre em contato diretamente."
+                return f"❌ Não foi possível registrar/atualizar a reserva no Google Sheets."
             
         except Exception as e:
             logger.error(f"Erro ao fazer reserva no Google Sheets: {e}")
