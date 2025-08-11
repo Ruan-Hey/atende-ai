@@ -183,6 +183,16 @@ class BaseAgent:
             cliente_str = cliente or kwargs.get('cliente') or kwargs.get('customer') or self.current_context.get('cliente_name') or 'Cliente'
             if not data_str or not hora_str:
                 return "Parâmetros ausentes: forneça data (YYYY-MM-DD) e hora (HH:MM)"
+            
+            # Verificar se email é obrigatório baseado nas regras da API
+            try:
+                from .api_rules_engine import api_rules_engine
+                if api_rules_engine.is_email_required(self.empresa_config) and not email_str:
+                    return "❌ Email é obrigatório para esta API. Por favor, forneça um email válido."
+            except Exception as e:
+                logger.error(f"Erro ao verificar regras da API: {e}")
+                # Se não conseguir verificar, aceita sem email
+            
             return calendar_tools.fazer_reserva(data_str, hora_str, cliente_str, self.empresa_config, email=email_str)
         return wrapper
     
@@ -219,7 +229,7 @@ class BaseAgent:
             structured.append(t_verificar_calendario)
             
             @lc_tool("fazer_reserva")
-            def t_fazer_reserva(data: str, hora: str, nome: str, email: str) -> str:
+            def t_fazer_reserva(data: str, hora: str, nome: str, email: str = None) -> str:
                 """Faz reserva real na agenda para uma data, hora, nome e email específicos."""
                 return self._wrappers["fazer_reserva"](data=data, hora=hora, cliente=nome, email=email)
             structured.append(t_fazer_reserva)
@@ -286,34 +296,41 @@ class BaseAgent:
     
     def _has_calendar_api(self) -> bool:
         """Verifica se há alguma API de agenda configurada e ativa"""
-        # Verificar Google Calendar
-        if (self.empresa_config.get('google_calendar_client_id') and 
-            self.empresa_config.get('google_calendar_client_secret')):
-            return True
-        
-        # Verificar Google Sheets (para reservas)
-        if (self.empresa_config.get('google_sheets_id') and 
-            (self.empresa_config.get('google_sheets_client_id') or 
-             self.empresa_config.get('google_sheets_service_account'))):
-            return True
-        
-        # Verificar Trinks
-        if self.empresa_config.get('trinks_enabled') and self.empresa_config.get('trinks_config'):
-            return True
-        
-        # Verificar outras APIs de agenda dinamicamente
-        for key, value in self.empresa_config.items():
-            if key.endswith('_enabled') and value is True:
-                api_name = key.replace('_enabled', '').replace('_', ' ').title()
-                config_key = f"{key.replace('_enabled', '')}_config"
-                config = self.empresa_config.get(config_key, {})
-                
-                # Verificar se é uma API de agenda (por nome ou configuração)
-                if any(word in api_name.lower() for word in ['calendar', 'agenda', 'booking', 'schedule', 'trinks']):
-                    if config:  # Só considerar se tiver configuração
-                        return True
-        
-        return False
+        try:
+            from .api_rules_engine import api_rules_engine
+            rules = api_rules_engine.get_api_rules(self.empresa_config)
+            return rules['api_type'].value != "Nenhuma"
+        except Exception as e:
+            logger.error(f"Erro ao verificar APIs de agenda: {e}")
+            # Fallback para verificação manual
+            # Verificar Google Calendar
+            if (self.empresa_config.get('google_calendar_client_id') and 
+                self.empresa_config.get('google_calendar_client_secret')):
+                return True
+            
+            # Verificar Google Sheets (para reservas)
+            if (self.empresa_config.get('google_sheets_id') and 
+                (self.empresa_config.get('google_sheets_client_id') or 
+                 self.empresa_config.get('google_sheets_service_account'))):
+                return True
+            
+            # Verificar Trinks
+            if self.empresa_config.get('trinks_enabled') and self.empresa_config.get('trinks_config'):
+                return True
+            
+            # Verificar outras APIs de agenda dinamicamente
+            for key, value in self.empresa_config.items():
+                if key.endswith('_enabled') and value is True:
+                    api_name = key.replace('_enabled', '').replace('_', ' ').title()
+                    config_key = f"{key.replace('_enabled', '')}_config"
+                    config = self.empresa_config.get(config_key, {})
+                    
+                    # Verificar se é uma API de agenda (por nome ou configuração)
+                    if any(word in api_name.lower() for word in ['calendar', 'agenda', 'booking', 'schedule', 'trinks']):
+                        if config:  # Só considerar se tiver configuração
+                            return True
+            
+            return False
     
     def _extract_reservation_info(self, message: str, context: Dict[str, Any] = None) -> None:
         """Extrai informações de reserva da mensagem e atualiza o contexto"""
@@ -411,45 +428,31 @@ class BaseAgent:
         if 'aniversário' in message_lower or 'aniversario' in message_lower:
             self.reservation_context['observacoes'] = 'Aniversário'
         
-        # Atualizar status
-        if (self.reservation_context['cliente_nome'] and 
-            self.reservation_context['quantidade_pessoas'] and
-            self.reservation_context['data_reserva'] and
-            self.reservation_context['horario_reserva']):
-            self.reservation_context['status'] = 'confirmando'
-        elif (self.reservation_context['cliente_nome'] or 
-              self.reservation_context['quantidade_pessoas'] or
-              self.reservation_context['data_reserva'] or
-              self.reservation_context['horario_reserva']):
-            self.reservation_context['status'] = 'aguardando_info'
+        # Status será determinado pelo motor de regras da API
+        # Não mais hardcoded aqui
     
     def _get_reservation_summary(self) -> str:
-        """Retorna um resumo do contexto de reserva atual"""
-        if self.reservation_context['status'] == 'aguardando_info':
+        """Retorna um resumo do contexto de reserva atual baseado nas regras da API"""
+        try:
+            from .api_rules_engine import api_rules_engine
+            return api_rules_engine.get_reservation_summary(self.empresa_config, self.reservation_context)
+        except Exception as e:
+            logger.error(f"Erro ao obter resumo da reserva: {e}")
+            # Fallback simples se houver erro
             info_coletada = []
-            if self.reservation_context['waid']:
-                info_coletada.append(f"WaId: {self.reservation_context['waid']}")
-            if self.reservation_context['cliente_nome']:
+            if self.reservation_context.get('cliente_nome'):
                 info_coletada.append(f"Nome: {self.reservation_context['cliente_nome']}")
-            if self.reservation_context['quantidade_pessoas']:
+            if self.reservation_context.get('quantidade_pessoas'):
                 info_coletada.append(f"Pessoas: {self.reservation_context['quantidade_pessoas']}")
-            if self.reservation_context['data_reserva']:
+            if self.reservation_context.get('data_reserva'):
                 info_coletada.append(f"Data: {self.reservation_context['data_reserva']}")
-            if self.reservation_context['horario_reserva']:
+            if self.reservation_context.get('horario_reserva'):
                 info_coletada.append(f"Horário: {self.reservation_context['horario_reserva']}")
-            if self.reservation_context['observacoes']:
-                info_coletada.append(f"Observações: {self.reservation_context['observacoes']}")
             
             if info_coletada:
-                return f"Informações já coletadas: {', '.join(info_coletada)}"
+                return f"Informações coletadas: {', '.join(info_coletada)}"
             else:
                 return "Nenhuma informação coletada ainda"
-        
-        elif self.reservation_context['status'] == 'confirmando':
-            waid_info = f" (WaId: {self.reservation_context['waid']})" if self.reservation_context['waid'] else ""
-            return f"Reserva quase completa! Falta apenas o email para confirmar: {self.reservation_context['cliente_nome']}{waid_info}, {self.reservation_context['quantidade_pessoas']} pessoas, {self.reservation_context['data_reserva']} às {self.reservation_context['horario_reserva']}"
-        
-        return "Status desconhecido"
     
     async def process_message(self, message: str, context: Dict[str, Any]) -> str:
         """Processa uma mensagem usando tool-calling: executa tools antes de responder"""
@@ -577,18 +580,28 @@ class BaseAgent:
         has_calendar_api = self._has_calendar_api()
         calendar_status = "✅ APIs de agenda configuradas e funcionando" if has_calendar_api else "❌ Nenhuma API de agenda configurada"
         
-        # Verificar especificamente se Google Sheets está ativo
-        has_google_sheets = (empresa_config.get('google_sheets_id') and 
-                            (empresa_config.get('google_sheets_client_id') or 
-                             empresa_config.get('google_sheets_service_account')))
+        # Obter regras da API ativa
+        try:
+            from .api_rules_engine import api_rules_engine
+            api_rules = api_rules_engine.get_api_rules(empresa_config)
+            api_type = api_rules['api_type']
+            api_name = api_rules['api_name']
+            email_required = api_rules['email_required']
+            waid_required = api_rules['waid_required']
+        except Exception as e:
+            logger.error(f"Erro ao obter regras da API: {e}")
+            api_type = "Nenhuma"
+            api_name = "Nenhuma"
+            email_required = False
+            waid_required = False
         
         # Listar APIs dinâmicas conectadas
         dynamic_api_list = []
         for key, value in empresa_config.items():
             if key.endswith('_enabled') and value is True:
-                api_name = key.replace('_enabled', '').replace('_', ' ').title()
-                if api_name not in ["Google Calendar", "Openai", "Google Sheets"]:
-                    dynamic_api_list.append(api_name)
+                api_name_dyn = key.replace('_enabled', '').replace('_', ' ').title()
+                if api_name_dyn not in ["Google Calendar", "Openai", "Google Sheets"]:
+                    dynamic_api_list.append(api_name_dyn)
         dynamic_tools_info = "\n".join([f"- {api}: use a tool {api.lower().replace(' ', '_')}_api_call" for api in dynamic_api_list]) or "(nenhuma)"
         
         system_prompt = f"""Você é um assistente virtual da {empresa_nome}.
@@ -624,13 +637,18 @@ INSTRUÇÕES PARA AGENDAMENTO:
 - **NUNCA repita perguntas**: Se o cliente já forneceu nome, pessoas, data ou horário, use essas informações
 - **Contexto inteligente**: O sistema mantém informações de reservas durante toda a conversa
 - **Fluxo otimizado**: Colete apenas as informações que ainda faltam
-- **Confirmação**: Quando tiver todas as informações, confirme a reserva e peça apenas o email
+- **Confirmação**: Quando tiver todas as informações, confirme a reserva seguindo as regras da API ativa
 
-{"" if not has_google_sheets else "REGRAS ESPECÍFICAS PARA GOOGLE SHEETS:"}
-{"" if not has_google_sheets else "- **WaId é OBRIGATÓRIO**: Sempre use o WaId (WhatsApp ID) como identificador único do cliente"}
-{"" if not has_google_sheets else "- **Consultas por WaId**: Ao buscar reservas existentes, sempre use o WaId, não apenas o nome"}
-{"" if not has_google_sheets else "- **Consistência**: O WaId garante que não haja conflitos entre clientes com nomes iguais"}
-{"" if not has_google_sheets else "- **Formato**: WaId vem do contexto como 'cliente_id' (ex: 554195984948)"}
+REGRAS ESPECÍFICAS DA API ATIVA ({api_name}):
+
+{"" if not waid_required else "- **WaId é OBRIGATÓRIO**: Sempre use o WaId (WhatsApp ID) como identificador único do cliente"}
+{"" if not waid_required else "- **Consultas por WaId**: Ao buscar reservas existentes, sempre use o WaId, não apenas o nome"}
+{"" if not waid_required else "- **Consistência**: O WaId garante que não haja conflitos entre clientes com nomes iguais"}
+{"" if not waid_required else "- **Formato**: WaId vem do contexto como 'cliente_id' (ex: 554195984948)"}
+
+{"" if not email_required else "- **Email é OBRIGATÓRIO**: Sempre solicite email para confirmar reservas"}
+{"" if not email_required else "- **Validação**: Verifique se o email é válido antes de confirmar"}
+{"" if not email_required else "- **Formato**: Aceite emails no formato padrão (ex: usuario@dominio.com)"}
 
 {"" if has_calendar_api else "NOTA: APIs de agenda não configuradas - siga o prompt da empresa para reservas"}
 {"" if has_calendar_api else ""}

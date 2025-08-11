@@ -164,6 +164,40 @@ def health() -> HealthCheck:
     """Health check do sistema"""
     return HealthCheck(status="ok")
 
+@app.get("/api/admin/agent-cache/stats")
+def get_agent_cache_stats(current_user: Usuario = Depends(get_current_superuser)):
+    """Retorna estatísticas do cache de agentes"""
+    try:
+        from .agents.agent_cache import agent_cache
+        stats = agent_cache.get_cache_stats()
+        return {
+            "success": True,
+            "cache_stats": stats
+        }
+    except Exception as e:
+        logger.error(f"Erro ao obter estatísticas do cache: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.post("/api/admin/agent-cache/clear")
+def clear_agent_cache(current_user: Usuario = Depends(get_current_superuser)):
+    """Limpa o cache de agentes"""
+    try:
+        from .agents.agent_cache import agent_cache
+        agent_cache.clear_cache()
+        return {
+            "success": True,
+            "message": "Cache de agentes limpo com sucesso"
+        }
+    except Exception as e:
+        logger.error(f"Erro ao limpar cache: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
 @app.get("/api/admin/metrics")
 def get_admin_metrics(current_user: Usuario = Depends(get_current_superuser)) -> AdminMetrics:
     """Retorna métricas para o painel admin"""
@@ -543,13 +577,16 @@ async def webhook_handler(empresa_slug: str, request: Request):
 
         # Processar mensagem com LangChain Agent
         try:
-            from .agents.whatsapp_agent import WhatsAppAgent
+            from .agents.agent_cache import agent_cache
             
-            # Criar agent para WhatsApp
-            whatsapp_agent = WhatsAppAgent(empresa_config)
+            # Obter agente do cache (reutiliza se existir, cria se não existir)
+            whatsapp_agent = agent_cache.get_agent(empresa_slug, wa_id, empresa_config)
             
             # Processar mensagem
             result = await whatsapp_agent.process_whatsapp_message(webhook_data, empresa_config)
+            
+            # Atualizar timestamp de último uso
+            agent_cache.update_last_used(empresa_slug, wa_id)
             
             # Enviar resposta via Twilio
             if result.get('success'):
