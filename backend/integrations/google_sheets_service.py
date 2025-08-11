@@ -136,96 +136,250 @@ class GoogleSheetsService:
             raise
     
     def add_reserva(self, spreadsheet_id: str, reserva_data: Dict[str, Any]) -> bool:
-        """Assinatura antiga: adiciona nova reserva à planilha informada."""
+        """Adiciona nova reserva usando detecção automática de estrutura."""
         try:
             spreadsheet = self._get_spreadsheet(spreadsheet_id)
             worksheet = spreadsheet.sheet1
-            row_data = [
-                reserva_data.get("nome", ""),
-                reserva_data.get("telefone", ""),
-                reserva_data.get("data", ""),
-                reserva_data.get("horario", ""),
-                reserva_data.get("pessoas", ""),
-                reserva_data.get("observacoes", ""),
-                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            ]
+            
+            # Detectar estrutura da planilha automaticamente
+            from .sheet_structure_detector import sheet_structure_detector
+            structure = sheet_structure_detector.detect_structure(worksheet)
+            
+            if not structure.get('detection_success'):
+                logger.error(f"Falha na detecção da estrutura: {structure.get('error')}")
+                return False
+            
+            # Validar estrutura
+            is_valid, errors = sheet_structure_detector.validate_structure(structure)
+            if not is_valid:
+                logger.error(f"Estrutura da planilha inválida: {errors}")
+                return False
+            
+            # Criar linha baseada na estrutura detectada
+            row_data = self._create_row_from_structure(structure, reserva_data)
+            
+            # Adicionar linha à planilha
             worksheet.append_row(row_data)
-            logger.info(f"Reserva adicionada: {reserva_data.get('nome')}")
+            logger.info(f"✅ Reserva adicionada com sucesso: {reserva_data.get('nome')}")
+            logger.info(f"📊 Estrutura detectada: {len(structure['column_mapping'])} colunas")
+            
             return True
+            
         except Exception as e:
             logger.error(f"Erro ao adicionar reserva: {e}")
             return False
     
-    def update_reserva(self, spreadsheet_id: str, nome: str, reserva_data: Dict[str, Any]) -> bool:
+    def _create_row_from_structure(self, structure: Dict[str, Any], reserva_data: Dict[str, Any]) -> List[str]:
+        """Cria linha de dados baseada na estrutura detectada"""
+        column_mapping = structure['column_mapping']
+        total_columns = structure['total_columns']
+        
+        # Inicializar linha com valores vazios
+        row_data = [''] * total_columns
+        
+        # Mapear dados para as colunas corretas
+        for column_type, column_info in column_mapping.items():
+            col_index = column_info['index']
+            
+            if column_type == 'nome':
+                row_data[col_index] = reserva_data.get('nome', '')
+            elif column_type == 'waid':
+                row_data[col_index] = reserva_data.get('waid', '')
+            elif column_type == 'data':
+                row_data[col_index] = reserva_data.get('data', '')
+            elif column_type == 'horario':
+                row_data[col_index] = reserva_data.get('horario', '')
+            elif column_type == 'pessoas':
+                row_data[col_index] = str(reserva_data.get('pessoas', '')) if reserva_data.get('pessoas') else ''
+            elif column_type == 'observacoes':
+                row_data[col_index] = reserva_data.get('observacoes', '')
+            elif column_type == 'ultima_alteracao':
+                row_data[col_index] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        logger.info(f"📝 Linha criada: {row_data}")
+        return row_data
+    
+    def update_reserva(self, spreadsheet_id: str, waid: str, reserva_data: Dict[str, Any]) -> bool:
+        """Atualiza reserva usando WaId (obrigatório) e estrutura detectada"""
         try:
             spreadsheet = self._get_spreadsheet(spreadsheet_id)
             worksheet = spreadsheet.sheet1
-            try:
-                cell = worksheet.find(nome)
-                row_number = cell.row
-                worksheet.update(f"A{row_number}", reserva_data.get("nome", ""))
-                worksheet.update(f"B{row_number}", reserva_data.get("telefone", ""))
-                worksheet.update(f"C{row_number}", reserva_data.get("data", ""))
-                worksheet.update(f"D{row_number}", reserva_data.get("horario", ""))
-                worksheet.update(f"E{row_number}", reserva_data.get("pessoas", ""))
-                worksheet.update(f"F{row_number}", reserva_data.get("observacoes", ""))
-                worksheet.update(
-                    f"G{row_number}", datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                )
-                logger.info(f"Reserva atualizada: {nome}")
-                return True
-            except gspread.CellNotFound:
-                logger.warning(f"Reserva não encontrada: {nome}")
+            
+            # Detectar estrutura da planilha
+            from .sheet_structure_detector import sheet_structure_detector
+            structure = sheet_structure_detector.detect_structure(worksheet)
+            
+            if not structure.get('detection_success'):
+                logger.error(f"Falha na detecção da estrutura: {structure.get('error')}")
                 return False
+            
+            # Buscar por WaId (coluna obrigatória)
+            waid_column_info = structure['column_mapping'].get('waid')
+            if not waid_column_info:
+                logger.error("Coluna WaId não encontrada para busca")
+                return False
+            
+            try:
+                # Buscar célula com o WaId
+                cell = worksheet.find(waid)
+                row_number = cell.row
+                
+                # Atualizar cada coluna baseado na estrutura detectada
+                for column_type, column_info in structure['column_mapping'].items():
+                    if column_type == 'ultima_alteracao':
+                        # Sempre atualizar timestamp de modificação
+                        worksheet.update(f"{column_info['letter']}{row_number}", 
+                                      datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                    elif column_type in reserva_data:
+                        # Atualizar dados fornecidos
+                        worksheet.update(f"{column_info['letter']}{row_number}", 
+                                      reserva_data[column_type])
+                
+                logger.info(f"✅ Reserva atualizada com sucesso: WaId {waid}")
+                return True
+                
+            except gspread.CellNotFound:
+                logger.warning(f"Reserva não encontrada com WaId: {waid}")
+                return False
+                
         except Exception as e:
             logger.error(f"Erro ao atualizar reserva: {e}")
             return False
     
-    def cancel_reserva(self, spreadsheet_id: str, nome: str) -> bool:
+    def cancel_reserva(self, spreadsheet_id: str, waid: str) -> bool:
+        """Cancela reserva usando WaId (obrigatório) e estrutura detectada"""
         try:
             spreadsheet = self._get_spreadsheet(spreadsheet_id)
             worksheet = spreadsheet.sheet1
-            try:
-                cell = worksheet.find(nome)
-                row_number = cell.row
-                worksheet.update(f"C{row_number}", "Cancelado")
-                worksheet.update(f"D{row_number}", "Cancelado")
-                worksheet.update(f"E{row_number}", "Cancelado")
-                worksheet.update(f"F{row_number}", "Cancelado")
-                worksheet.update(
-                    f"G{row_number}", datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                )
-                logger.info(f"Reserva cancelada: {nome}")
-                return True
-            except gspread.CellNotFound:
-                logger.warning(f"Reserva não encontrada para cancelar: {nome}")
+            
+            # Detectar estrutura da planilha
+            from .sheet_structure_detector import sheet_structure_detector
+            structure = sheet_structure_detector.detect_structure(worksheet)
+            
+            if not structure.get('detection_success'):
+                logger.error(f"Falha na detecção da estrutura: {structure.get('error')}")
                 return False
+            
+            # Buscar por WaId (coluna obrigatória)
+            waid_column_info = structure['column_mapping'].get('waid')
+            if not waid_column_info:
+                logger.error("Coluna WaId não encontrada para busca")
+                return False
+            
+            try:
+                # Buscar célula com o WaId
+                cell = worksheet.find(waid)
+                row_number = cell.row
+                
+                # Marcar como cancelado nas colunas relevantes
+                cancel_columns = ['data', 'horario', 'pessoas', 'observacoes']
+                for column_type in cancel_columns:
+                    if column_type in structure['column_mapping']:
+                        column_info = structure['column_mapping'][column_type]
+                        worksheet.update(f"{column_info['letter']}{row_number}", "Cancelado")
+                
+                # Atualizar timestamp de modificação
+                if 'ultima_alteracao' in structure['column_mapping']:
+                    ultima_col = structure['column_mapping']['ultima_alteracao']
+                    worksheet.update(f"{ultima_col['letter']}{row_number}", 
+                                  datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                
+                logger.info(f"✅ Reserva cancelada com sucesso: WaId {waid}")
+                return True
+                
+            except gspread.CellNotFound:
+                logger.warning(f"Reserva não encontrada com WaId para cancelar: {waid}")
+                return False
+                
         except Exception as e:
             logger.error(f"Erro ao cancelar reserva: {e}")
             return False
     
-    def get_reservas(self, spreadsheet_id: str) -> List[Dict[str, Any]]:
+    def buscar_reserva_por_waid(self, spreadsheet_id: str, waid: str) -> Optional[Dict[str, Any]]:
+        """Busca reserva específica por WaId usando estrutura detectada"""
         try:
             spreadsheet = self._get_spreadsheet(spreadsheet_id)
             worksheet = spreadsheet.sheet1
+            
+            # Detectar estrutura da planilha
+            from .sheet_structure_detector import sheet_structure_detector
+            structure = sheet_structure_detector.detect_structure(worksheet)
+            
+            if not structure.get('detection_success'):
+                logger.error(f"Falha na detecção da estrutura: {structure.get('error')}")
+                return None
+            
+            # Buscar por WaId (coluna obrigatória)
+            waid_column_info = structure['column_mapping'].get('waid')
+            if not waid_column_info:
+                logger.error("Coluna WaId não encontrada para busca")
+                return None
+            
+            try:
+                # Buscar célula com o WaId
+                cell = worksheet.find(waid)
+                row_number = cell.row
+                
+                # Obter dados da linha
+                row_data = worksheet.row_values(row_number)
+                if len(row_data) < len(structure['column_mapping']):
+                    logger.warning(f"Dados insuficientes na linha {row_number}")
+                    return None
+                
+                # Mapear dados baseado na estrutura detectada
+                reserva = {}
+                for column_type, column_info in structure['column_mapping'].items():
+                    col_index = column_info['index']
+                    if col_index < len(row_data):
+                        reserva[column_type] = row_data[col_index]
+                
+                logger.info(f"✅ Reserva encontrada com WaId {waid}: {reserva.get('nome', 'N/A')}")
+                return reserva
+                
+            except gspread.CellNotFound:
+                logger.info(f"Reserva não encontrada com WaId: {waid}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Erro ao buscar reserva por WaId: {e}")
+            return None
+    
+    def get_reservas(self, spreadsheet_id: str) -> List[Dict[str, Any]]:
+        """Busca reservas usando estrutura detectada automaticamente"""
+        try:
+            spreadsheet = self._get_spreadsheet(spreadsheet_id)
+            worksheet = spreadsheet.sheet1
+            
+            # Detectar estrutura da planilha
+            from .sheet_structure_detector import sheet_structure_detector
+            structure = sheet_structure_detector.detect_structure(worksheet)
+            
+            if not structure.get('detection_success'):
+                logger.error(f"Falha na detecção da estrutura: {structure.get('error')}")
+                return []
+            
             all_values = worksheet.get_all_values()
             if len(all_values) < 2:
                 return []
+            
             reservas: List[Dict[str, Any]] = []
-            for row in all_values[1:]:
-                if len(row) >= 7:
-                    reservas.append(
-                        {
-                            "nome": row[0],
-                            "telefone": row[1],
-                            "data": row[2],
-                            "horario": row[3],
-                            "pessoas": row[4],
-                            "observacoes": row[5],
-                            "ultima_alteracao": row[6],
-                    }
-                    )
+            column_mapping = structure['column_mapping']
+            
+            for row in all_values[1:]:  # Pular cabeçalho
+                if len(row) >= len(column_mapping):
+                    reserva = {}
+                    
+                    # Mapear dados baseado na estrutura detectada
+                    for column_type, column_info in column_mapping.items():
+                        col_index = column_info['index']
+                        if col_index < len(row):
+                            reserva[column_type] = row[col_index]
+                    
+                    reservas.append(reserva)
+            
+            logger.info(f"✅ {len(reservas)} reservas encontradas usando estrutura detectada")
             return reservas
+            
         except Exception as e:
             logger.error(f"Erro ao buscar reservas: {e}")
             return []

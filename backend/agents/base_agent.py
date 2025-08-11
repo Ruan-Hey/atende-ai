@@ -427,6 +427,31 @@ class BaseAgent:
         # Extrair observações
         if 'aniversário' in message_lower or 'aniversario' in message_lower:
             self.reservation_context['observacoes'] = 'Aniversário'
+        elif 'aniversariante' in message_lower:
+            self.reservation_context['observacoes'] = 'Aniversariante 🎉'
+        elif 'especial' in message_lower:
+            self.reservation_context['observacoes'] = 'Pedido especial'
+        
+        # Log para debug
+        logger.info(f"Contexto de reserva atualizado: {self.reservation_context}")
+        
+        # Verificar se todas as informações estão sendo extraídas
+        info_coletada = []
+        if self.reservation_context.get('cliente_nome'):
+            info_coletada.append(f"Nome: {self.reservation_context['cliente_nome']}")
+        if self.reservation_context.get('waid'):
+            info_coletada.append(f"WaId: {self.reservation_context['waid']}")
+        if self.reservation_context.get('quantidade_pessoas'):
+            info_coletada.append(f"Pessoas: {self.reservation_context['quantidade_pessoas']}")
+        if self.reservation_context.get('data_reserva'):
+            info_coletada.append(f"Data: {self.reservation_context['data_reserva']}")
+        if self.reservation_context.get('horario_reserva'):
+            info_coletada.append(f"Horário: {self.reservation_context['horario_reserva']}")
+        if self.reservation_context.get('observacoes'):
+            info_coletada.append(f"Observações: {self.reservation_context['observacoes']}")
+        
+        if info_coletada:
+            logger.info(f"Informações coletadas: {', '.join(info_coletada)}")
         
         # Status será determinado pelo motor de regras da API
         # Não mais hardcoded aqui
