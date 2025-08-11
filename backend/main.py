@@ -6,6 +6,8 @@ import logging
 import json
 from datetime import datetime, timedelta
 import random
+import asyncio
+import time
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -21,7 +23,7 @@ from passlib.hash import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 
-from typing import Optional, List
+from typing import Optional, List, Dict, Tuple, Any
 
 # Configurações
 config = Config()
@@ -387,23 +389,65 @@ def get_empresa_clientes(
     finally:
         session.close()
 
-@app.get("/api/admin/buffer/status")
+@app.get("/api/admin/debounce/status")
 def get_buffer_status():
-    """Retorna status do buffer de mensagens (descontinuado)"""
-    return {
-        "status": "disabled",
-        "message": "Buffer descontinuado - usando LangChain Agents",
-        "active_buffers": 0,
-        "total_messages": 0
-    }
+    """Retorna status do debounce em memória"""
+    try:
+        active = len(debounce_state)
+        keys = [
+            {"empresa": k[0], "cliente_id": k[1], "restante_ms": int(max(0, v.get('deadline', 0) - time.time()) * 1000)}
+            for k, v in debounce_state.items()
+        ]
+        return {
+            "status": "active" if active > 0 else "idle",
+            "message": "Debounce em memória ativo",
+            "active_clients": active,
+            "timers": keys
+        }
+    except Exception as e:
+        logger.error(f"Erro ao verificar status do debounce: {e}")
+        return {
+            "status": "error",
+            "message": f"Erro ao verificar debounce: {str(e)}",
+            "active_clients": 0,
+            "timers": []
+        }
 
-@app.post("/api/admin/buffer/force-process")
-def force_process_buffer(cliente_id: str, empresa: str):
-    """Força o processamento do buffer para um cliente específico (descontinuado)"""
-    return {
-        "success": True, 
-        "message": "Buffer descontinuado - usando LangChain Agents"
-    }
+@app.post("/api/admin/debounce/flush")
+def force_process_buffer(cliente_id: str = None, empresa: str = None):
+    """Força o processamento imediato dos timers ativos (flush)"""
+    try:
+        targets = []
+        for (emp, wa), entry in list(debounce_state.items()):
+            if cliente_id and wa != cliente_id:
+                continue
+            if empresa and emp != empresa:
+                continue
+            targets.append((emp, wa, entry))
+        
+        processed = 0
+        for emp, wa, entry in targets:
+            try:
+                # ajustar deadline para agora e disparar task
+                entry['deadline'] = time.time()
+                # criar task isolada para cada alvo
+                empresa_config = entry.get('empresa_config', {})
+                asyncio.create_task(_debounce_wait_and_process(emp, wa, empresa_config))
+                processed += 1
+            except Exception as e:
+                logger.error(f"Erro no flush do debounce para {emp}:{wa}: {e}")
+        
+        return {
+            "success": True,
+            "message": "Flush disparado",
+            "targets": processed
+        }
+    except Exception as e:
+        logger.error(f"Erro ao forçar flush do debounce: {e}")
+        return {
+            "success": False,
+            "message": f"Erro: {str(e)}"
+        }
 
 @app.get("/test-webhook")
 async def test_webhook():
@@ -547,7 +591,7 @@ async def webhook_handler(empresa_slug: str, request: Request):
             # Atualizar o webhook_data com o texto descritivo
             webhook_data['Body'] = body
         
-        # Se houver áudio, tentar transcrever antes de processar
+        # Transcrever áudio quando possível
         try:
             media_url = webhook_data.get('MediaUrl0')
             media_type = webhook_data.get('MediaContentType0', '')
@@ -558,23 +602,44 @@ async def webhook_handler(empresa_slug: str, request: Request):
                 is_audio_media = (message_type == 'audio')
 
             if is_audio_media and media_url and empresa_config.get('openai_key'):
-                try:
-                    logger.info("Transcrevendo áudio recebido via WhatsApp...")
-                    from .integrations.openai_service import OpenAIService
-                    oai = OpenAIService(empresa_config.get('openai_key'))
-                    transcript = oai.transcribe_audio(media_url, empresa_config.get('twilio_sid'), empresa_config.get('twilio_token'))
-                    if transcript:
-                        body = transcript
-                        webhook_data['Body'] = transcript
-                        webhook_data['MessageType'] = 'text'
-                        logger.info("Transcrição de áudio concluída com sucesso")
-                    else:
-                        logger.warning("Falha ao transcrever áudio ou transcrição vazia")
-                except Exception as te:
-                    logger.error(f"Erro ao transcrever áudio: {te}")
-        except Exception:
-            pass
-
+                logger.info("Transcrevendo áudio recebido via WhatsApp...")
+                from .integrations.openai_service import OpenAIService
+                oai = OpenAIService(empresa_config.get('openai_key'))
+                transcript = oai.transcribe_audio(media_url, empresa_config.get('twilio_sid'), empresa_config.get('twilio_token'))
+                if transcript:
+                    body = transcript
+                    webhook_data['Body'] = transcript
+                    webhook_data['MessageType'] = 'text'
+                    logger.info("Transcrição de áudio concluída com sucesso")
+        except Exception as te:
+            logger.error(f"Erro ao transcrever áudio: {te}")
+        
+        # DEBOUNCE EM MEMÓRIA (substitui buffer em banco)
+        if empresa_config.get('usar_buffer', True):
+            # Debounce: atualiza estado e adia o processamento
+            key = _get_debounce_key(empresa_slug, wa_id)
+            deadline = time.time() + DEFAULT_DEBOUNCE_SECONDS
+            entry = debounce_state.get(key) or {}
+            entry.update({
+                'deadline': deadline,
+                'webhook_data': webhook_data,
+                'empresa_config': empresa_config
+            })
+            debounce_state[key] = entry
+            
+            # Se não houver task ativa, criar uma
+            if not entry.get('timer') or entry['timer'].done():
+                entry['timer'] = asyncio.create_task(_debounce_wait_and_process(empresa_slug, wa_id, empresa_config))
+            
+            return JSONResponse(content={
+                'success': True,
+                'message': 'Mensagem recebida. Vou aguardar alguns segundos para consolidar e responder.',
+                'empresa': empresa_slug,
+                'cliente_id': wa_id,
+                'debounce_ms': int(DEFAULT_DEBOUNCE_SECONDS * 1000)
+            })
+        
+        # Se não usar buffer ou se falhar, processar imediatamente
         # Processar mensagem com LangChain Agent
         try:
             from .agents.agent_cache import agent_cache
@@ -598,12 +663,32 @@ async def webhook_handler(empresa_slug: str, request: Request):
                 )
                 
                 response_message = result.get('message', '')
-                twilio_result = twilio_service.send_whatsapp_message(wa_id, response_message)
                 
-                if twilio_result.get('success'):
-                    logger.info(f"Mensagem processada e enviada com sucesso para {empresa_slug}:{wa_id}")
+                # IMPLEMENTAÇÃO DA MENSAGEM QUEBRADA
+                if empresa_config.get('mensagem_quebrada', False) and len(response_message) > 200:
+                    # Quebrar mensagem longa em partes menores
+                    messages = _break_long_message(response_message)
+                    
+                    # Enviar cada parte separadamente
+                    for i, msg_part in enumerate(messages):
+                        twilio_result = twilio_service.send_whatsapp_message(wa_id, msg_part)
+                        if not twilio_result.get('success'):
+                            logger.error(f"Erro ao enviar parte {i+1} da mensagem: {twilio_result.get('error')}")
+                            break
+                        
+                        # Pequena pausa entre mensagens para não sobrecarregar
+                        if i < len(messages) - 1:
+                            await asyncio.sleep(0.5)
+                    
+                    logger.info(f"Mensagem quebrada enviada em {len(messages)} partes para {empresa_slug}:{wa_id}")
                 else:
-                    logger.error(f"Erro ao enviar mensagem via Twilio: {twilio_result.get('error')}")
+                    # Enviar mensagem completa
+                    twilio_result = twilio_service.send_whatsapp_message(wa_id, response_message)
+                    
+                    if twilio_result.get('success'):
+                        logger.info(f"Mensagem processada e enviada com sucesso para {empresa_slug}:{wa_id}")
+                    else:
+                        logger.error(f"Erro ao enviar mensagem via Twilio: {twilio_result.get('error')}")
             
             return JSONResponse(content={
                 'success': result.get('success', True),
@@ -640,6 +725,47 @@ async def webhook_handler(empresa_slug: str, request: Request):
     except Exception as e:
         logger.error(f"Erro no webhook handler: {e}")
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+def _break_long_message(message: str, max_length: int = 200) -> List[str]:
+    """Quebra mensagem longa em partes menores"""
+    if len(message) <= max_length:
+        return [message]
+    
+    # Tentar quebrar por frases naturais
+    sentences = message.split('. ')
+    parts = []
+    current_part = ""
+    
+    for sentence in sentences:
+        if len(current_part + sentence) <= max_length:
+            current_part += sentence + ". "
+        else:
+            if current_part:
+                parts.append(current_part.strip())
+            current_part = sentence + ". "
+    
+    if current_part:
+        parts.append(current_part.strip())
+    
+    # Se ainda houver partes muito longas, quebrar por palavras
+    final_parts = []
+    for part in parts:
+        if len(part) <= max_length:
+            final_parts.append(part)
+        else:
+            words = part.split()
+            current_chunk = ""
+            for word in words:
+                if len(current_chunk + " " + word) <= max_length:
+                    current_chunk += " " + word if current_chunk else word
+                else:
+                    if current_chunk:
+                        final_parts.append(current_chunk)
+                    current_chunk = word
+            if current_chunk:
+                final_parts.append(current_chunk)
+    
+    return final_parts
 
 @app.get("/api/logs")
 def get_logs(empresa: str = None, limit: int = 100, level: str = None, exclude_info: bool = True):
@@ -2495,6 +2621,62 @@ async def generate_oauth_token_get(
             status_code=500,
             content={"success": False, "message": f"Erro interno: {str(e)}"}
         )
+
+# Estado de debounce em memória por cliente (WaId)
+debounce_state: Dict[Tuple[str, str], Dict[str, Any]] = {}
+# Estrutura: {(empresa_slug, wa_id): { 'timer': asyncio.Task, 'last_message': str, 'webhook_data': dict, 'deadline': float }}
+
+DEFAULT_DEBOUNCE_SECONDS = 8  # pode ser tornado configurável por empresa futuramente
+
+def _get_debounce_key(empresa_slug: str, wa_id: str) -> Tuple[str, str]:
+    return (empresa_slug, wa_id)
+
+async def _debounce_wait_and_process(empresa_slug: str, wa_id: str, empresa_config: dict):
+    key = _get_debounce_key(empresa_slug, wa_id)
+    entry = debounce_state.get(key)
+    if not entry:
+        return
+    deadline = entry.get('deadline', 0)
+    now = time.time()
+    delay = max(0, deadline - now)
+    await asyncio.sleep(delay)
+
+    # Verificar se ninguém atualizou a deadline durante a espera
+    latest = debounce_state.get(key)
+    if not latest or latest.get('deadline') != deadline:
+        return  # houve nova mensagem, cancela este processamento
+
+    # Processar a última mensagem recebida
+    webhook_data = latest.get('webhook_data', {})
+    try:
+        from .agents.agent_cache import agent_cache
+        whatsapp_agent = agent_cache.get_agent(empresa_slug, wa_id, empresa_config)
+        result = await whatsapp_agent.process_whatsapp_message(webhook_data, empresa_config)
+        agent_cache.update_last_used(empresa_slug, wa_id)
+
+        if result.get('success'):
+            from .integrations.twilio_service import TwilioService
+            twilio_service = TwilioService(
+                empresa_config.get('twilio_sid'),
+                empresa_config.get('twilio_token'),
+                empresa_config.get('twilio_number')
+            )
+            response_message = result.get('message', '')
+            if empresa_config.get('mensagem_quebrada', False) and len(response_message) > 200:
+                parts = _break_long_message(response_message)
+                for i, part in enumerate(parts):
+                    twilio_service.send_whatsapp_message(wa_id, part)
+                    if i < len(parts) - 1:
+                        await asyncio.sleep(0.5)
+            else:
+                twilio_service.send_whatsapp_message(wa_id, response_message)
+        else:
+            logger.warning(f"Agente retornou falha no debounce para {empresa_slug}:{wa_id}")
+    except Exception as e:
+        logger.error(f"Erro no processamento debounce: {e}")
+    finally:
+        # Limpar estado
+        debounce_state.pop(key, None)
 
 if __name__ == "__main__":
     import uvicorn

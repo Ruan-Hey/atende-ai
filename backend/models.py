@@ -178,5 +178,11 @@ class EmpresaAPI(Base):
 Empresa.apis = relationship("EmpresaAPI", back_populates="empresa")
 API.empresas = relationship("EmpresaAPI", back_populates="api")
 
+# (Modelo BufferMessage removido; debounce agora é em memória)
+
+# Remover relacionamento dinamicamente adicionado se existir
+if hasattr(Empresa, 'buffer_messages'):
+    delattr(Empresa, 'buffer_messages')
+
 def gerar_hash_senha(senha: str) -> str:
     return bcrypt.hash(senha) 
