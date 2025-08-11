@@ -31,7 +31,6 @@ class DatabaseService:
             session.add(mensagem)
             
             # Atualizar ou criar registro do cliente
-            from ..models import Cliente
             cliente = session.query(Cliente).filter(
                 Cliente.empresa_id == empresa_id,
                 Cliente.cliente_id == cliente_id
@@ -60,7 +59,6 @@ class DatabaseService:
                 if not is_bot:
                     # Carregar labels_json e openai_key
                     from sqlalchemy.orm import Session as SASession
-                    from ..models import Empresa, Atendimento
                     from ..services.unified_config_service import get_openai_config
                     s2: SASession = self.SessionLocal()
                     try:

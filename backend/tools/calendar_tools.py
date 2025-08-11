@@ -69,6 +69,17 @@ class CalendarTools:
                 'google_sheets_id': empresa_config.get('google_sheets_id')
             }
         
+        # Verificar Google Sheets como alternativa para reservas
+        if (empresa_config.get('google_sheets_id') and 
+            (empresa_config.get('google_sheets_client_id') or empresa_config.get('google_sheets_service_account'))):
+            return "Google Sheets", {
+                'google_sheets_id': empresa_config.get('google_sheets_id'),
+                'google_sheets_client_id': empresa_config.get('google_sheets_client_id'),
+                'google_sheets_client_secret': empresa_config.get('google_sheets_client_secret'),
+                'google_sheets_refresh_token': empresa_config.get('google_sheets_refresh_token'),
+                'google_sheets_service_account': empresa_config.get('google_sheets_service_account')
+            }
+        
         # Verificar Trinks
         if empresa_config.get('trinks_enabled') and empresa_config.get('trinks_config'):
             return "Trinks", empresa_config.get('trinks_config', {})
@@ -105,6 +116,8 @@ class CalendarTools:
             # Usar API específica ou genérica
             if api_name == "Google Calendar":
                 return self._verificar_google_calendar(data, empresa_config)
+            elif api_name == "Google Sheets":
+                return self._verificar_google_sheets(data, empresa_config, api_config)
             elif api_name == "Trinks":
                 return self._verificar_trinks(data, api_config)
             else:
@@ -136,6 +149,17 @@ class CalendarTools:
         except Exception as e:
             logger.error(f"Erro ao verificar Google Calendar: {e}")
             return f"Erro ao verificar Google Calendar para {data}: {str(e)}"
+    
+    def _verificar_google_sheets(self, data: str, empresa_config: Dict[str, Any], api_config: Dict[str, Any]) -> str:
+        """Verifica disponibilidade no Google Sheets (sempre retorna disponível)"""
+        try:
+            # Para Google Sheets, sempre retornamos que está disponível
+            # já que não temos lógica de verificação de conflitos implementada
+            return f"✅ Horários disponíveis para {data} no Google Sheets.\nA planilha está configurada para receber reservas."
+            
+        except Exception as e:
+            logger.error(f"Erro ao verificar Google Sheets: {e}")
+            return f"Erro ao verificar Google Sheets para {data}: {str(e)}"
     
     def _verificar_trinks(self, data: str, config: Dict[str, Any]) -> str:
         """Verifica disponibilidade na API Trinks"""
@@ -218,6 +242,8 @@ class CalendarTools:
             # Usar API específica ou genérica
             if api_name == "Google Calendar":
                 return self._fazer_reserva_google_calendar(data, hora, cliente, empresa_config, email=email)
+            elif api_name == "Google Sheets":
+                return self._fazer_reserva_google_sheets(data, hora, cliente, empresa_config, api_config)
             elif api_name == "Trinks":
                 return self._fazer_reserva_trinks(data, hora, cliente, api_config)
             else:
@@ -320,6 +346,38 @@ class CalendarTools:
         except Exception as e:
             logger.error(f"Erro ao fazer reserva na {api_name}: {e}")
             return f"❌ Erro ao fazer reserva na {api_name}: {str(e)}"
+    
+    def _fazer_reserva_google_sheets(self, data: str, hora: str, cliente: str, empresa_config: Dict[str, Any], api_config: Dict[str, Any]) -> str:
+        """Faz reserva no Google Sheets"""
+        try:
+            # Criar configuração para o Google Sheets Service
+            sheets_config = {
+                'google_sheets_id': api_config.get('google_sheets_id'),
+                'google_sheets_client_id': api_config.get('google_sheets_client_id'),
+                'google_sheets_client_secret': api_config.get('google_sheets_client_secret'),
+                'google_sheets_refresh_token': api_config.get('google_sheets_refresh_token'),
+                'google_sheets_service_account': api_config.get('google_sheets_service_account')
+            }
+            
+            from ..integrations.google_sheets_service import GoogleSheetsService
+            sheets_service = GoogleSheetsService(sheets_config)
+            
+            # Adicionar reserva na planilha
+            success = sheets_service.add_reservation(
+                data=data,
+                hora=hora,
+                cliente=cliente,
+                empresa=empresa_config.get('nome', 'Empresa')
+            )
+            
+            if success:
+                return f"✅ Reserva confirmada no Google Sheets!\nData: {data}\nHora: {hora}\nCliente: {cliente}\nA reserva foi registrada na planilha de controle."
+            else:
+                return f"❌ Erro ao registrar reserva no Google Sheets. Por favor, tente novamente ou entre em contato diretamente."
+            
+        except Exception as e:
+            logger.error(f"Erro ao fazer reserva no Google Sheets: {e}")
+            return f"❌ Erro ao fazer reserva no Google Sheets: {str(e)}"
     
     def cancelar_reserva(self, event_id: str, empresa_config: Dict[str, Any]) -> str:
         """Cancela reserva usando qualquer API de agenda disponível"""
