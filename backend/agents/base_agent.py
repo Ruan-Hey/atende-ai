@@ -105,32 +105,69 @@ class BaseAgent:
                         for it in items:
                             if not isinstance(it, dict):
                                 continue
-                            aliases = it.get('aliases', []) if isinstance(it, dict) else []
+                            aliases = it.get('aliases', []) if isinstance(aliases, list) else []
                             aliases_norm = [_normalize(a) for a in aliases if isinstance(a, str)]
                             if key_norm in aliases_norm:
                                 found = it
                                 break
 
-                    # 4) match parcial: se a key contiver palavras de 'horario de funcionamento', etc.
+                    # 4) match parcial inteligente para diferentes tipos de conhecimento
                     if not found:
-                        # termos comuns para horário
-                        horario_norms = {_normalize(t) for t in [
-                            'horario de atendimento', 'horario de funcionamento', 'funcionamento', 'horarios', 'expediente',
-                            'horario', 'horário de atendimento', 'horário de funcionamento'
-                        ]}
-                        if any(term in key_norm for term in horario_norms):
-                            # preferir item cuja key/title/aliases contenham 'horario'
-                            for it in items:
-                                if not isinstance(it, dict):
-                                    continue
-                                blob = ' '.join([
-                                    _normalize(it.get('key', '')),
-                                    _normalize(it.get('title', '')),
-                                    ' '.join([_normalize(a) for a in (it.get('aliases') or []) if isinstance(a, str)])
-                                ])
-                                if 'horario' in blob or 'funcionamento' in blob:
-                                    found = it
-                                    break
+                        # Termos comuns para horário
+                        horario_terms = {
+                            'horario de atendimento', 'horario de funcionamento', 'funcionamento', 
+                            'horarios', 'expediente', 'horario', 'horário de atendimento', 
+                            'horário de funcionamento'
+                        }
+                        
+                        # Termos comuns para preços/valores
+                        preco_terms = {
+                            'valor', 'valores', 'preco', 'preços', 'precos', 'custo', 'custos',
+                            'rodizio', 'rodízio', 'preco do rodizio', 'valor do rodizio',
+                            'quanto custa', 'quanto é', 'preco do', 'valor do'
+                        }
+                        
+                        # Termos comuns para endereço/localização
+                        endereco_terms = {
+                            'endereco', 'endereço', 'localizacao', 'localização', 'onde fica',
+                            'rua', 'bairro', 'cidade', 'estado', 'cep', 'estacionamento'
+                        }
+                        
+                        # Termos comuns para pedidos/delivery
+                        pedidos_terms = {
+                            'pedidos', 'delivery', 'entrega', 'retirada', 'balcao', 'balcão',
+                            'como fazer pedido', 'como pedir', 'telefone para pedido'
+                        }
+                        
+                        # Verificar se a chave contém algum desses termos
+                        if any(term in key_norm for term in horario_terms):
+                            search_terms = ['horario', 'funcionamento']
+                        elif any(term in key_norm for term in preco_terms):
+                            search_terms = ['valor', 'preco', 'rodizio', 'custo']
+                        elif any(term in key_norm for term in endereco_terms):
+                            search_terms = ['endereco', 'localizacao', 'estacionamento']
+                        elif any(term in key_norm for term in pedidos_terms):
+                            search_terms = ['pedidos', 'delivery', 'entrega']
+                        else:
+                            # Busca genérica por palavras-chave
+                            search_terms = key_norm.split()
+                        
+                        # Buscar por termos relevantes
+                        for it in items:
+                            if not isinstance(it, dict):
+                                continue
+                            
+                            # Criar blob de texto para busca
+                            blob = ' '.join([
+                                _normalize(it.get('key', '')),
+                                _normalize(it.get('title', '')),
+                                ' '.join([_normalize(a) for a in (it.get('aliases') or []) if isinstance(a, str)])
+                            ])
+                            
+                            # Verificar se algum termo de busca está presente
+                            if any(term in blob for term in search_terms):
+                                found = it
+                                break
 
                     if not found:
                         return ""
@@ -138,7 +175,8 @@ class BaseAgent:
                     desc = (found.get('description') or "").strip()
                     self._knowledge_cache[cache_key] = desc
                     return desc
-                except Exception:
+                except Exception as e:
+                    logger.error(f"Erro no get_business_knowledge: {e}")
                     return ""
             return wrapper
         self._wrappers["get_business_knowledge"] = _get_business_knowledge_wrapper()
