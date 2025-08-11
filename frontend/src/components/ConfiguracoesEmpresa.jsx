@@ -340,7 +340,7 @@ const ConfiguracoesEmpresa = () => {
     setConfiguracoes(prev => {
       const kj = prev.knowledge_json || { items: [] }
       const items = Array.isArray(kj.items) ? [...kj.items] : []
-      items.push({ key: '', title: '', aliases: [], description: '', active: true })
+      items.push({ key: '', title: '', description: '', active: true })
       return { ...prev, knowledge_json: { ...kj, items } }
     })
   }
@@ -375,52 +375,6 @@ const ConfiguracoesEmpresa = () => {
         item.key = slugify(item.title)
         items[index] = item
       }
-      return { ...prev, knowledge_json: { ...kj, items } }
-    })
-  }
-
-  const generateAliasesFromTitle = (index) => {
-    setConfiguracoes(prev => {
-      const kj = prev.knowledge_json || { items: [] }
-      const items = Array.isArray(kj.items) ? [...kj.items] : []
-      const item = items[index] || {}
-      
-      if (!item.title) return prev
-      
-      const title = item.title.toLowerCase()
-      let aliases = []
-      
-      // Gerar aliases baseados no título
-      if (title.includes('horário') || title.includes('horario')) {
-        aliases = ['horario', 'funcionamento', 'expediente', 'aberto', 'fechado']
-      } else if (title.includes('rodízio') || title.includes('rodizio')) {
-        aliases = ['rodizio', 'valor', 'preco', 'preço', 'custo', 'quanto custa', 'quanto é']
-      } else if (title.includes('endereço') || title.includes('endereco')) {
-        aliases = ['endereco', 'localizacao', 'localização', 'onde fica', 'rua', 'bairro']
-      } else if (title.includes('pedidos') || title.includes('delivery')) {
-        aliases = ['pedidos', 'delivery', 'entrega', 'retirada', 'balcao', 'balcão', 'como pedir']
-      } else if (title.includes('telefone') || title.includes('contato')) {
-        aliases = ['telefone', 'contato', 'ligar', 'chamar', 'whatsapp']
-      } else {
-        // Aliases genéricos baseados em palavras-chave
-        const words = title.split(' ').filter(word => word.length > 2)
-        aliases = words.slice(0, 3) // Máximo 3 palavras como aliases
-      }
-      
-      // Adicionar o título em diferentes variações
-      if (!aliases.includes(title)) {
-        aliases.unshift(title)
-      }
-      
-      // Adicionar variações sem acentos
-      const titleNoAccent = title.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      if (!aliases.includes(titleNoAccent)) {
-        aliases.push(titleNoAccent)
-      }
-      
-      item.aliases = aliases
-      items[index] = item
-      
       return { ...prev, knowledge_json: { ...kj, items } }
     })
   }
@@ -1158,7 +1112,7 @@ const ConfiguracoesEmpresa = () => {
                         {section.fields.map(field => renderField(field))}
                         <div className="knowledge-section">
                           <h3 style={{ marginTop: '1rem' }}>Conhecimento da Empresa</h3>
-                          <p className="field-hint">Adicione linhas com Título, Aliases (opcional) e Descrição. A chave (key) é gerada automaticamente a partir do título.</p>
+                          <p className="field-hint">Adicione linhas com Título (esquerda) e Descrição (direita). A chave (key) é gerada automaticamente a partir do título.</p>
                           {(configuracoes.knowledge_json?.items || []).map((item, idx) => (
                             <div key={idx} className="knowledge-row">
                               <div className="field-group">
@@ -1171,31 +1125,6 @@ const ConfiguracoesEmpresa = () => {
                                   onBlur={() => ensureKeyForItem(idx)}
                                   placeholder="Ex: Horário de funcionamento"
                                 />
-                              </div>
-                              <div className="field-group">
-                                <label>Aliases (opcional)</label>
-                                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
-                                  <input
-                                    type="text"
-                                    className="form-input"
-                                    style={{ flex: 1 }}
-                                    value={item.aliases ? item.aliases.join(', ') : ''}
-                                    onChange={(e) => {
-                                      const aliases = e.target.value.split(',').map(a => a.trim()).filter(a => a);
-                                      handleKnowledgeChange(idx, 'aliases', aliases);
-                                    }}
-                                    placeholder="Ex: horario, funcionamento, expediente"
-                                  />
-                                  <button
-                                    type="button"
-                                    className="generate-aliases-btn"
-                                    onClick={() => generateAliasesFromTitle(idx)}
-                                    title="Gerar aliases baseados no título"
-                                  >
-                                    🔄
-                                  </button>
-                                </div>
-                                <small className="field-hint">Separe múltiplos aliases com vírgula ou clique no botão para gerar automaticamente</small>
                               </div>
                               <div className="field-group">
                                 <label>Descrição</label>

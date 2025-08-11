@@ -105,69 +105,52 @@ class BaseAgent:
                         for it in items:
                             if not isinstance(it, dict):
                                 continue
-                            aliases = it.get('aliases', []) if isinstance(aliases, list) else []
+                            aliases = it.get('aliases', []) if isinstance(it.get('aliases'), list) else []
                             aliases_norm = [_normalize(a) for a in aliases if isinstance(a, str)]
                             if key_norm in aliases_norm:
                                 found = it
                                 break
 
-                    # 4) match parcial inteligente para diferentes tipos de conhecimento
+                    # 4) BUSCA INTELIGENTE por similaridade de conteúdo
                     if not found:
-                        # Termos comuns para horário
-                        horario_terms = {
-                            'horario de atendimento', 'horario de funcionamento', 'funcionamento', 
-                            'horarios', 'expediente', 'horario', 'horário de atendimento', 
-                            'horário de funcionamento'
-                        }
-                        
-                        # Termos comuns para preços/valores
-                        preco_terms = {
-                            'valor', 'valores', 'preco', 'preços', 'precos', 'custo', 'custos',
-                            'rodizio', 'rodízio', 'preco do rodizio', 'valor do rodizio',
-                            'quanto custa', 'quanto é', 'preco do', 'valor do'
-                        }
-                        
-                        # Termos comuns para endereço/localização
-                        endereco_terms = {
-                            'endereco', 'endereço', 'localizacao', 'localização', 'onde fica',
-                            'rua', 'bairro', 'cidade', 'estado', 'cep', 'estacionamento'
-                        }
-                        
-                        # Termos comuns para pedidos/delivery
-                        pedidos_terms = {
-                            'pedidos', 'delivery', 'entrega', 'retirada', 'balcao', 'balcão',
-                            'como fazer pedido', 'como pedir', 'telefone para pedido'
-                        }
-                        
-                        # Verificar se a chave contém algum desses termos
-                        if any(term in key_norm for term in horario_terms):
-                            search_terms = ['horario', 'funcionamento']
-                        elif any(term in key_norm for term in preco_terms):
-                            search_terms = ['valor', 'preco', 'rodizio', 'custo']
-                        elif any(term in key_norm for term in endereco_terms):
-                            search_terms = ['endereco', 'localizacao', 'estacionamento']
-                        elif any(term in key_norm for term in pedidos_terms):
-                            search_terms = ['pedidos', 'delivery', 'entrega']
-                        else:
-                            # Busca genérica por palavras-chave
-                            search_terms = key_norm.split()
-                        
-                        # Buscar por termos relevantes
+                        # Criar contexto para o LLM analisar
+                        knowledge_context = []
                         for it in items:
-                            if not isinstance(it, dict):
-                                continue
-                            
-                            # Criar blob de texto para busca
-                            blob = ' '.join([
-                                _normalize(it.get('key', '')),
-                                _normalize(it.get('title', '')),
-                                ' '.join([_normalize(a) for a in (it.get('aliases') or []) if isinstance(a, str)])
-                            ])
-                            
-                            # Verificar se algum termo de busca está presente
-                            if any(term in blob for term in search_terms):
-                                found = it
-                                break
+                            if isinstance(it, dict) and it.get('active') != False:
+                                title = it.get('title', '')
+                                description = it.get('description', '')
+                                if title and description:
+                                    knowledge_context.append(f"Título: {title}\nDescrição: {description}")
+                        
+                        if knowledge_context:
+                            # Usar o LLM para encontrar o item mais relevante
+                            try:
+                                prompt = f"""Analise a pergunta do usuário e encontre o item de conhecimento mais relevante.
+
+Pergunta do usuário: "{key}"
+
+Itens de conhecimento disponíveis:
+{chr(10).join([f"{i+1}. {item}" for i, item in enumerate(knowledge_context)])}
+
+Responda APENAS com o número do item mais relevante (1, 2, 3, etc.) ou "nenhum" se não houver correspondência."""
+
+                                # Usar o chat_llm para análise
+                                response = self.chat_llm.invoke([HumanMessage(content=prompt)])
+                                response_text = response.content.strip()
+                                
+                                # Tentar extrair o número do item
+                                try:
+                                    item_number = int(response_text) - 1  # Converter para índice
+                                    if 0 <= item_number < len(items):
+                                        found = items[item_number]
+                                        logger.info(f"🧠 LLM encontrou item relevante: {found.get('title', 'N/A')}")
+                                except (ValueError, IndexError):
+                                    logger.info(f"LLM não encontrou correspondência para: {key}")
+                                    
+                            except Exception as e:
+                                logger.warning(f"Erro na busca inteligente: {e}")
+                                # Fallback para busca por palavras-chave
+                                found = self._fallback_keyword_search(key_norm, items)
 
                     if not found:
                         return ""
@@ -178,6 +161,36 @@ class BaseAgent:
                 except Exception as e:
                     logger.error(f"Erro no get_business_knowledge: {e}")
                     return ""
+            
+            def _fallback_keyword_search(self, key_norm: str, items: list):
+                """Busca fallback por palavras-chave quando o LLM falha"""
+                # Termos comuns para diferentes categorias
+                category_terms = {
+                    'horario': ['horario', 'funcionamento', 'expediente', 'aberto', 'fechado'],
+                    'preco': ['valor', 'preco', 'custo', 'quanto', 'rodizio', 'rodízio'],
+                    'endereco': ['endereco', 'localizacao', 'onde', 'rua', 'bairro'],
+                    'pedidos': ['pedidos', 'delivery', 'entrega', 'retirada', 'telefone']
+                }
+                
+                # Identificar categoria da pergunta
+                category = None
+                for cat, terms in category_terms.items():
+                    if any(term in key_norm for term in terms):
+                        category = cat
+                        break
+                
+                if category:
+                    # Buscar por itens que contenham termos da categoria
+                    for item in items:
+                        if isinstance(item, dict) and item.get('active') != False:
+                            title = _normalize(item.get('title', ''))
+                            description = _normalize(item.get('description', ''))
+                            
+                            if any(term in title or term in description for term in category_terms[category]):
+                                return item
+                
+                return None
+            
             return wrapper
         self._wrappers["get_business_knowledge"] = _get_business_knowledge_wrapper()
         
