@@ -14,14 +14,15 @@ class SheetStructureDetector:
     
     def __init__(self):
         # Mapeamento de palavras-chave para tipos de coluna
+        # ORDEM É IMPORTANTE: colunas específicas primeiro, genéricas depois
         self.column_keywords = {
-            'nome': ['nome', 'cliente', 'customer', 'client', 'pessoa', 'person'],
-            'waid': ['telefone', 'whatsapp', 'waid', 'phone', 'celular', 'mobile', 'id', 'identificador'],
-            'data': ['data', 'date', 'dia', 'day'],
             'horario': ['horario', 'hora', 'time', 'hour'],
             'pessoas': ['pessoas', 'people', 'convidados', 'guests', 'quantidade', 'qtd', 'qty'],
             'observacoes': ['observacoes', 'obs', 'observations', 'notes', 'comentarios', 'comments'],
-            'ultima_alteracao': ['ultima alteracao', 'last change', 'modificado', 'modified', 'atualizado', 'updated']
+            'ultima_alteracao': ['ultima alteracao', 'last change', 'modificado', 'modified', 'atualizado', 'updated'],
+            'waid': ['telefone', 'whatsapp', 'waid', 'phone', 'celular', 'mobile', 'id', 'identificador'],
+            'data': ['data', 'date', 'dia', 'day'],
+            'nome': ['nome', 'cliente', 'customer', 'client', 'person']  # Removido 'pessoa' para evitar conflito
         }
     
     def detect_structure(self, worksheet: gspread.Worksheet) -> Dict[str, Any]:
@@ -94,9 +95,20 @@ class SheetStructureDetector:
     
     def _identify_column_type(self, header: str) -> Optional[str]:
         """Identifica o tipo de coluna baseado no cabeçalho"""
+        header_lower = header.lower().strip()
+        
+        # Buscar correspondências exatas primeiro
         for column_type, keywords in self.column_keywords.items():
-            if any(keyword in header for keyword in keywords):
-                return column_type
+            for keyword in keywords:
+                if keyword == header_lower:  # Correspondência exata
+                    return column_type
+        
+        # Se não encontrar correspondência exata, buscar parcial
+        for column_type, keywords in self.column_keywords.items():
+            for keyword in keywords:
+                if keyword in header_lower:  # Correspondência parcial
+                    return column_type
+        
         return None
     
     def _get_column_letter(self, col_index: int) -> str:
