@@ -81,8 +81,12 @@ class CalendarTools:
             }
         
         # Verificar Trinks
-        if empresa_config.get('trinks_enabled') and empresa_config.get('trinks_config'):
-            return "Trinks", empresa_config.get('trinks_config', {})
+        if empresa_config.get('trinks_enabled') and empresa_config.get('trinks_api_key'):
+            return "Trinks", {
+                'api_key': empresa_config.get('trinks_api_key'),
+                'base_url': empresa_config.get('trinks_base_url'),
+                'estabelecimento_id': empresa_config.get('trinks_estabelecimento_id')
+            }
         
         # Verificar outras APIs de agenda dinamicamente
         for key, value in empresa_config.items():
@@ -119,7 +123,8 @@ class CalendarTools:
             elif api_name == "Google Sheets":
                 return self._verificar_google_sheets(data, empresa_config, api_config)
             elif api_name == "Trinks":
-                return self._verificar_trinks(data, api_config)
+                # Passar empresa_config para usar ferramentas inteligentes
+                return self._verificar_trinks(data, api_config, empresa_config)
             else:
                 return self._verificar_api_generica(api_name, data, api_config)
             
@@ -161,19 +166,45 @@ class CalendarTools:
             logger.error(f"Erro ao verificar Google Sheets: {e}")
             return f"Erro ao verificar Google Sheets para {data}: {str(e)}"
     
-    def _verificar_trinks(self, data: str, config: Dict[str, Any]) -> str:
-        """Verifica disponibilidade na API Trinks"""
+    def _verificar_trinks(self, data: str, config: Dict[str, Any], empresa_config: Dict[str, Any]) -> str:
+        """Verifica disponibilidade na API Trinks usando ferramentas inteligentes"""
         try:
-            # Chamar endpoint de disponibilidade da Trinks
-            result = self.api_tools.call_api(
-                api_name="Trinks",
-                endpoint_path="/api/availability",
-                method="GET",
-                config=config,
-                date=data
-            )
+            # Importar ferramentas inteligentes
+            from .trinks_intelligent_tools import trinks_intelligent_tools
             
-            return f"Verificação Trinks para {data}: {result}"
+            # Verificar se temos configuração da empresa
+            # empresa_config = getattr(self, 'empresa_config', None) # This line is removed as per the edit hint
+            
+            # Usar ferramentas inteligentes se disponível
+            try:
+                # Verificar disponibilidade usando regras expandidas
+                availability_result = trinks_intelligent_tools.check_professional_availability(
+                    data=data,
+                    service_id=None,  # Não temos service_id aqui, mas podemos expandir depois
+                    empresa_config=empresa_config
+                )
+                
+                if availability_result.get("available"):
+                    slots = availability_result.get("available_slots", [])
+                    if slots:
+                        slots_info = "\n".join([f"- {slot}" for slot in slots[:10]])
+                        return f"✅ Horários disponíveis no Trinks para {data}:\n{slots_info}"
+                    else:
+                        return f"✅ Trinks está disponível para {data}, mas não há horários específicos configurados"
+                else:
+                    return f"❌ Nenhum horário disponível no Trinks para {data}"
+                    
+            except Exception as e:
+                logger.warning(f"Erro ao usar ferramentas inteligentes, usando fallback: {e}")
+                # Fallback para método antigo
+                result = self.api_tools.call_api(
+                    api_name="Trinks",
+                    endpoint_path="/api/availability",
+                    method="GET",
+                    config=config,
+                    date=data
+                )
+                return f"Verificação Trinks para {data}: {result}"
             
         except Exception as e:
             logger.error(f"Erro ao verificar Trinks: {e}")

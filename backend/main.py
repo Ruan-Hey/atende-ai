@@ -525,6 +525,11 @@ async def webhook_handler(empresa_slug: str, request: Request):
                 elif api_name == "Trinks":
                     empresa_config['trinks_api_key'] = config.get('api_key')
                     empresa_config['trinks_base_url'] = config.get('base_url')
+                    empresa_config['trinks_estabelecimento_id'] = config.get('estabelecimento_id')
+                elif api_name == "Chatwoot":
+                    config_data['chatwoot_token'] = config.get('chatwoot_token')
+                    config_data['chatwoot_inbox_id'] = config.get('chatwoot_inbox_id')
+                    config_data['chatwoot_origem'] = config.get('chatwoot_origem')
                 
                 # Adicionar campos genéricos para qualquer API
                 empresa_config[f'{api_prefix}_api_key'] = config.get('api_key')
@@ -1254,8 +1259,9 @@ def get_empresa_configuracoes(
             elif api.nome == "OpenAI":
                 config_data['openai_key'] = config.get('openai_key')
             elif api.nome == "Trinks":
-                config_data['trinks_api_key'] = config.get('api_key')
-                config_data['trinks_base_url'] = config.get('base_url')
+                empresa_config['trinks_api_key'] = config.get('api_key')
+                empresa_config['trinks_base_url'] = config.get('base_url')
+                empresa_config['trinks_estabelecimento_id'] = config.get('estabelecimento_id')
             elif api.nome == "Chatwoot":
                 config_data['chatwoot_token'] = config.get('chatwoot_token')
                 config_data['chatwoot_inbox_id'] = config.get('chatwoot_inbox_id')
@@ -1388,6 +1394,10 @@ def update_empresa_configuracoes(
                 elif api.nome == "Trinks" and "key" in config:
                     mapped_config["api_key"] = config["key"]
                     del mapped_config["key"]
+                    # Adicionar estabelecimento_id se presente
+                    if "estabelecimento_id" in config:
+                        mapped_config["estabelecimento_id"] = config["estabelecimento_id"]
+                    logger.info(f"Mapeamento Trinks: {config} -> {mapped_config}")
                 elif api.nome == "Chatwoot" and "key" in config:
                     mapped_config["chatwoot_token"] = config["key"]
                     del mapped_config["key"]

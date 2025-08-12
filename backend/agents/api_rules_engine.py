@@ -39,11 +39,88 @@ class APIRulesEngine:
                 "missing_fields_message": "Faltam informações para completar a reserva no Google Calendar"
             },
             APIType.TRINKS: {
-                "email_required": True,
-                "waid_required": False,
+                "email_required": False,
+                "waid_required": True,
                 "reservation_flow": "trinks",
                 "confirmation_message": "Reserva confirmada no Trinks!",
-                "missing_fields_message": "Faltam informações para completar a reserva no Trinks"
+                "missing_fields_message": "Faltam informações para completar a reserva no Trinks",
+                
+                # REGRAS EXPANDIDAS ESPECÍFICAS DO TRINKS
+                "client_search": {
+                    "api_endpoint": "/clientes",
+                    "search_method": "cpf",
+                    "create_if_not_found": True,
+                    "required_fields": ["cpf", "nome", "telefone"]
+                },
+                
+                "service_detection": {
+                    "api_endpoint": "/servicos",
+                    "search_method": "nome",
+                    "service_mapping": {
+                        "consulta ginecológica": ["ginecologia", "gineco", "consulta", "médico"],
+                        "tratamento slim": ["slim", "emagrecimento", "emagrecer", "perder peso"],
+                        "drenagem": ["drenagem", "linfática", "desinchar"],
+                        "limpeza de pele": ["limpeza", "pele", "facial", "acne"],
+                        "ultraformer": ["ultraformer", "mpt", "lifting", "rejuvenescimento"],
+                        "botox": ["botox", "toxina", "rugas", "expressão"],
+                        "carboxiterapia": ["carboxi", "gás", "estrias", "celulite"],
+                        "nutrição": ["nutrição", "nutricionista", "dieta", "alimentação"]
+                    },
+                    "fallback_keywords": ["consulta", "tratamento", "procedimento", "avaliação"]
+                },
+                
+                "professional_search": {
+                    "api_endpoint": "/profissionais",
+                    "filter_by_service": True,
+                    "required_fields": ["nome", "especialidade"]
+                },
+                
+                "availability_check": {
+                    "api_endpoint": "/agendamentos/profissionais/{data}",  # Endpoint para verificar agenda
+                    "method": "GET",
+                    "required_params": ["data", "estabelecimentoId"],
+                    "optional_params": ["servicold", "servicoDuracao", "profissionalld", "page", "excluirExcecoesDeAgendamentoOnline"],
+                    "slot_calculation": {
+                        "use_service_duration": True,  # ✅ IMPORTANTE: Usar duração real do serviço
+                        "buffer_time": 15,             # 15 min de intervalo entre agendamentos
+                        "working_hours": {
+                            "start": "08:00",
+                            "end": "18:00"
+                        },
+                        "default_slot_duration": 60,   # Duração padrão em minutos (fallback)
+                        "consider_existing_appointments": True,  # ✅ NOVO: Considerar agendamentos existentes
+                        "validate_conflicts": True,     # ✅ NOVO: Validar conflitos de horário
+                        "min_advance_booking": 2,      # ✅ NOVO: Mínimo 2 horas de antecedência
+                        "max_advance_booking": 30      # ✅ NOVO: Máximo 30 dias de antecedência
+                    },
+                    "required_headers": ["estabelecimentoId"]
+                },
+                
+                "reservation_creation": {
+                    "api_endpoint": "/agendamentos",   # Endpoint para criar agendamento
+                    "method": "POST",
+                    "required_fields": ["servicold", "clienteld", "dataHoraInicio", "duracaoEmMinutos", "valor"],
+                    "optional_fields": ["profissionalld", "observacoes", "confirmado"],
+                    "auto_confirmation": False,        # Não confirmar automaticamente
+                    "confirmation_endpoint": "/agendamentos/{id}/status/confirmado",
+                    "validation_rules": {              # ✅ NOVO: Regras de validação
+                        "check_availability_before_creation": True,  # Verificar disponibilidade antes de criar
+                        "validate_service_duration": True,          # Validar duração do serviço
+                        "check_professional_availability": True,    # Verificar disponibilidade do profissional
+                        "prevent_double_booking": True,            # Evitar dupla reserva
+                        "respect_buffer_time": True                # Respeitar tempo de buffer
+                    },
+                    "required_headers": ["estabelecimentoId"]
+                },
+                
+                "reservation_management": {
+                    "get_endpoint": "/agendamentos/{id}",
+                    "update_endpoint": "/agendamentos/{id}",
+                    "cancel_endpoint": "/agendamentos/{id}/status/cancelado",
+                    "confirm_endpoint": "/agendamentos/{id}/status/confirmado",
+                    "list_endpoint": "/agendamentos",
+                    "required_headers": ["estabelecimentoId"]
+                }
             },
             APIType.NONE: {
                 "email_required": False,
@@ -69,7 +146,7 @@ class APIRulesEngine:
                 return APIType.GOOGLE_CALENDAR
             
             # Verificar Trinks
-            if empresa_config.get('trinks_enabled'):
+            if empresa_config.get('trinks_enabled') and empresa_config.get('trinks_api_key'):
                 return APIType.TRINKS
             
             # Nenhuma API configurada
@@ -175,6 +252,54 @@ class APIRulesEngine:
                 return "📝 Nenhuma informação coletada ainda"
         
         return "Status desconhecido"
+    
+    # NOVOS MÉTODOS PARA REGRAS EXPANDIDAS DO TRINKS
+    
+    def get_client_search_rules(self, empresa_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Retorna regras de busca de cliente para a API ativa"""
+        rules = self.get_api_rules(empresa_config)
+        if rules['api_type'] == APIType.TRINKS:
+            return rules.get('client_search', {})
+        return {}
+    
+    def get_service_detection_rules(self, empresa_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Retorna regras de detecção de serviço para a API ativa"""
+        rules = self.get_api_rules(empresa_config)
+        if rules['api_type'] == APIType.TRINKS:
+            return rules.get('service_detection', {})
+        return {}
+    
+    def get_professional_search_rules(self, empresa_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Retorna regras de busca de profissionais para a API ativa"""
+        rules = self.get_api_rules(empresa_config)
+        if rules['api_type'] == APIType.TRINKS:
+            return rules.get('professional_search', {})
+        return {}
+    
+    def get_availability_check_rules(self, empresa_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Retorna regras de verificação de disponibilidade para a API ativa"""
+        rules = self.get_api_rules(empresa_config)
+        if rules['api_type'] == APIType.TRINKS:
+            return rules.get('availability_check', {})
+        return {}
+    
+    def get_reservation_creation_rules(self, empresa_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Retorna regras de criação de reserva para a API ativa"""
+        rules = self.get_api_rules(empresa_config)
+        if rules['api_type'] == APIType.TRINKS:
+            return rules.get('reservation_creation', {})
+        return {}
+    
+    def get_reservation_management_rules(self, empresa_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Retorna regras de gerenciamento de reserva para a API ativa"""
+        rules = self.get_api_rules(empresa_config)
+        if rules['api_type'] == APIType.TRINKS:
+            return rules.get('reservation_management', {})
+        return {}
+    
+    def is_trinks_api(self, empresa_config: Dict[str, Any]) -> bool:
+        """Verifica se a API ativa é Trinks"""
+        return self.detect_active_api(empresa_config) == APIType.TRINKS
 
 # Instância global do motor de regras
 api_rules_engine = APIRulesEngine() 

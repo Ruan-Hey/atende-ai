@@ -1,0 +1,992 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Trinks API - FINAL",
+    "description": "API de agendamentos da Trinks com 16 endpoints precisos",
+    "version": "v1.0"
+  },
+  "servers": [
+    {
+      "url": "https://api.trinks.com/v1"
+    }
+  ],
+  "paths": {
+    "/agendamentos": {
+      "get": {
+        "summary": "GET /agendamentos",
+        "description": "Listar os agendamentos do estabelecimento",
+        "operationId": "get__agendamentos",
+        "parameters": [
+          {
+            "name": "estabelecimentoId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID do estabelecimento (OBRIGATÓRIO)"
+          }
+        ],
+        "requestBody": null,
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "201": {
+            "description": "Criado com sucesso"
+          },
+          "204": {
+            "description": "Sem conteúdo"
+          },
+          "400": {
+            "description": "Dados inválidos"
+          },
+          "401": {
+            "description": "Não autorizado"
+          },
+          "404": {
+            "description": "Não encontrado"
+          },
+          "422": {
+            "description": "Erro de validação"
+          },
+          "500": {
+            "description": "Erro interno"
+          }
+        }
+      },
+      "post": {
+        "summary": "POST /agendamentos",
+        "description": "Cria um agendamento",
+        "operationId": "post__agendamentos",
+        "parameters": [
+          {
+            "name": "estabelecimentoId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID do estabelecimento (OBRIGATÓRIO)"
+          }
+        ],
+        "requestBody": {
+          "required": [
+            "servicold",
+            "clienteld",
+            "dataHoralnicio",
+            "duracaoEmMinutos",
+            "valor"
+          ],
+          "properties": {
+            "servicold": {
+              "type": "int32",
+              "description": "ID do serviço (OBRIGATÓRIO)"
+            },
+            "clienteld": {
+              "type": "int32",
+              "description": "ID do cliente (OBRIGATÓRIO)"
+            },
+            "dataHoralnicio": {
+              "type": "date-time",
+              "description": "Data e hora de início (OBRIGATÓRIO)"
+            },
+            "duracaoEmMinutos": {
+              "type": "int32",
+              "description": "Duração em minutos (OBRIGATÓRIO)"
+            },
+            "valor": {
+              "type": "double",
+              "description": "Valor do serviço (OBRIGATÓRIO)"
+            },
+            "profissionalld": {
+              "type": "int32",
+              "description": "ID do profissional (pode ser null)"
+            },
+            "observacoes": {
+              "type": "string",
+              "description": "Observações adicionais (pode ser null)"
+            },
+            "confirmado": {
+              "type": "boolean",
+              "description": "Se o agendamento está confirmado"
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "201": {
+            "description": "Criado com sucesso"
+          },
+          "204": {
+            "description": "Sem conteúdo"
+          },
+          "400": {
+            "description": "Dados inválidos"
+          },
+          "401": {
+            "description": "Não autorizado"
+          },
+          "404": {
+            "description": "Não encontrado"
+          },
+          "422": {
+            "description": "Erro de validação"
+          },
+          "500": {
+            "description": "Erro interno"
+          }
+        }
+      }
+    },
+    "/agendamentos/{id}": {
+      "get": {
+        "summary": "GET /agendamentos/{id}",
+        "description": "Obter detalhes de um agendamento",
+        "operationId": "get__agendamentos_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "int32"
+            },
+            "description": "ID do agendamento (PATH PARAMS - OBRIGATÓRIO)"
+          },
+          {
+            "name": "estabelecimentoId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID do estabelecimento (OBRIGATÓRIO)"
+          }
+        ],
+        "requestBody": null,
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "201": {
+            "description": "Criado com sucesso"
+          },
+          "204": {
+            "description": "Sem conteúdo"
+          },
+          "400": {
+            "description": "Dados inválidos"
+          },
+          "401": {
+            "description": "Não autorizado"
+          },
+          "404": {
+            "description": "Não encontrado"
+          },
+          "422": {
+            "description": "Erro de validação"
+          },
+          "500": {
+            "description": "Erro interno"
+          }
+        }
+      }
+    },
+    "/agendamentos/configuracoes": {
+      "get": {
+        "summary": "GET /agendamentos/configuracoes",
+        "description": "Lista as configurações de agendamento do estabelecimento",
+        "operationId": "get__agendamentos_configuracoes",
+        "parameters": [
+          {
+            "name": "estabelecimentoId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID do estabelecimento (OBRIGATÓRIO)"
+          }
+        ],
+        "requestBody": null,
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "201": {
+            "description": "Criado com sucesso"
+          },
+          "204": {
+            "description": "Sem conteúdo"
+          },
+          "400": {
+            "description": "Dados inválidos"
+          },
+          "401": {
+            "description": "Não autorizado"
+          },
+          "404": {
+            "description": "Não encontrado"
+          },
+          "422": {
+            "description": "Erro de validação"
+          },
+          "500": {
+            "description": "Erro interno"
+          }
+        }
+      }
+    },
+    "/agendamentos/{agendamentoId}": {
+      "put": {
+        "summary": "PUT /agendamentos/{agendamentoId}",
+        "description": "Edita um agendamento",
+        "operationId": "put__agendamentos_agendamentoId",
+        "parameters": [
+          {
+            "name": "agendamentoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "int32"
+            },
+            "description": "ID do agendamento (PATH PARAMS - OBRIGATÓRIO)"
+          },
+          {
+            "name": "estabelecimentoId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID do estabelecimento (OBRIGATÓRIO)"
+          }
+        ],
+        "requestBody": {
+          "required": [
+            "agendamentoId"
+          ],
+          "properties": {
+            "agendamentoId": {
+              "type": "int32",
+              "description": "ID do agendamento (PATH PARAMS - OBRIGATÓRIO)"
+            },
+            "servicoId": {
+              "type": "int32",
+              "description": "ID do serviço"
+            },
+            "clienteId": {
+              "type": "int32",
+              "description": "ID do cliente"
+            },
+            "profissionalId": {
+              "type": "int32",
+              "description": "ID do profissional (pode ser null)"
+            },
+            "dataHoraInicio": {
+              "type": "date-time",
+              "description": "Data e hora de início"
+            },
+            "duracaoEmMinutos": {
+              "type": "int32",
+              "description": "Duração em minutos"
+            },
+            "valor": {
+              "type": "double",
+              "description": "Valor do serviço"
+            },
+            "observacoes": {
+              "type": "string",
+              "description": "Observações adicionais"
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "201": {
+            "description": "Criado com sucesso"
+          },
+          "204": {
+            "description": "Sem conteúdo"
+          },
+          "400": {
+            "description": "Dados inválidos"
+          },
+          "401": {
+            "description": "Não autorizado"
+          },
+          "404": {
+            "description": "Não encontrado"
+          },
+          "422": {
+            "description": "Erro de validação"
+          },
+          "500": {
+            "description": "Erro interno"
+          }
+        }
+      }
+    },
+    "/agendamentos/{agendamentoId}/status/confirmado": {
+      "patch": {
+        "summary": "PATCH /agendamentos/{agendamentoId}/status/confirmado",
+        "description": "Confirma um agendamento",
+        "operationId": "patch__agendamentos_agendamentoId_status_confirmado",
+        "parameters": [
+          {
+            "name": "agendamentoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "int32"
+            },
+            "description": "ID do agendamento (PATH PARAMS - OBRIGATÓRIO)"
+          },
+          {
+            "name": "estabelecimentoId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID do estabelecimento (OBRIGATÓRIO)"
+          }
+        ],
+        "requestBody": {
+          "required": [
+            "agendamentoId"
+          ],
+          "properties": {
+            "agendamentoId": {
+              "type": "int32",
+              "description": "ID do agendamento (PATH PARAMS - OBRIGATÓRIO)"
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "201": {
+            "description": "Criado com sucesso"
+          },
+          "204": {
+            "description": "Sem conteúdo"
+          },
+          "400": {
+            "description": "Dados inválidos"
+          },
+          "401": {
+            "description": "Não autorizado"
+          },
+          "404": {
+            "description": "Não encontrado"
+          },
+          "422": {
+            "description": "Erro de validação"
+          },
+          "500": {
+            "description": "Erro interno"
+          }
+        }
+      }
+    },
+    "/agendamentos/{agendamentoId}/status/cancelado": {
+      "patch": {
+        "summary": "PATCH /agendamentos/{agendamentoId}/status/cancelado",
+        "description": "Cancela um agendamento",
+        "operationId": "patch__agendamentos_agendamentoId_status_cancelado",
+        "parameters": [
+          {
+            "name": "agendamentoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "int32"
+            },
+            "description": "ID do agendamento (PATH PARAMS - OBRIGATÓRIO)"
+          },
+          {
+            "name": "estabelecimentoId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID do estabelecimento (OBRIGATÓRIO)"
+          }
+        ],
+        "requestBody": {
+          "required": [
+            "agendamentoId",
+            "quemCancelou",
+            "motivo"
+          ],
+          "properties": {
+            "agendamentoId": {
+              "type": "int32",
+              "description": "ID do agendamento (PATH PARAMS - OBRIGATÓRIO)"
+            },
+            "quemCancelou": {
+              "type": "int32",
+              "description": "ID de quem cancelou (OBRIGATÓRIO)"
+            },
+            "motivo": {
+              "type": "string",
+              "description": "Motivo do cancelamento (OBRIGATÓRIO, length ≥ 1)"
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "201": {
+            "description": "Criado com sucesso"
+          },
+          "204": {
+            "description": "Sem conteúdo"
+          },
+          "400": {
+            "description": "Dados inválidos"
+          },
+          "401": {
+            "description": "Não autorizado"
+          },
+          "404": {
+            "description": "Não encontrado"
+          },
+          "422": {
+            "description": "Erro de validação"
+          },
+          "500": {
+            "description": "Erro interno"
+          }
+        }
+      }
+    },
+    "/agendamentos/profissionais/{data}": {
+      "get": {
+        "summary": "GET /agendamentos/profissionais/{data}",
+        "description": "Lista os profissionais com agenda do estabelecimento",
+        "operationId": "get__agendamentos_profissionais_data",
+        "parameters": [
+          {
+            "name": "data",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "date"
+            },
+            "description": "Data para consultar agenda (PATH PARAMS - OBRIGATÓRIO)"
+          },
+          {
+            "name": "estabelecimentoId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID do estabelecimento (OBRIGATÓRIO)"
+          }
+        ],
+        "requestBody": null,
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "201": {
+            "description": "Criado com sucesso"
+          },
+          "204": {
+            "description": "Sem conteúdo"
+          },
+          "400": {
+            "description": "Dados inválidos"
+          },
+          "401": {
+            "description": "Não autorizado"
+          },
+          "404": {
+            "description": "Não encontrado"
+          },
+          "422": {
+            "description": "Erro de validação"
+          },
+          "500": {
+            "description": "Erro interno"
+          }
+        }
+      }
+    },
+    "/clientes": {
+      "get": {
+        "summary": "GET /clientes",
+        "description": "Listar todos os clientes do estabelecimento",
+        "operationId": "get__clientes",
+        "parameters": [
+          {
+            "name": "estabelecimentoId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID do estabelecimento (OBRIGATÓRIO)"
+          }
+        ],
+        "requestBody": null,
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "201": {
+            "description": "Criado com sucesso"
+          },
+          "204": {
+            "description": "Sem conteúdo"
+          },
+          "400": {
+            "description": "Dados inválidos"
+          },
+          "401": {
+            "description": "Não autorizado"
+          },
+          "404": {
+            "description": "Não encontrado"
+          },
+          "422": {
+            "description": "Erro de validação"
+          },
+          "500": {
+            "description": "Erro interno"
+          }
+        }
+      },
+      "post": {
+        "summary": "POST /clientes",
+        "description": "Cria um novo cliente no estabelecimento",
+        "operationId": "post__clientes",
+        "parameters": [
+          {
+            "name": "estabelecimentoId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID do estabelecimento (OBRIGATÓRIO)"
+          }
+        ],
+        "requestBody": {
+          "required": [],
+          "properties": {
+            "nome": {
+              "type": "string",
+              "description": "Nome do cliente (pode ser null)"
+            },
+            "email": {
+              "type": "string",
+              "description": "Email do cliente (pode ser null)"
+            },
+            "cpf": {
+              "type": "string",
+              "description": "CPF do cliente (pode ser null)"
+            },
+            "genero": {
+              "type": "string",
+              "description": "Gênero: M=Masculino, F=Feminino, N=Não-Binário, X=Não informado"
+            },
+            "observacoes": {
+              "type": "string",
+              "description": "Observações adicionais (pode ser null)"
+            },
+            "codigoExterno": {
+              "type": "string",
+              "description": "Código externo (pode ser null)"
+            },
+            "telefones": {
+              "type": "array",
+              "description": "Array de telefones (pode ser null)"
+            },
+            "preferencias": {
+              "type": "object",
+              "description": "Objeto de preferências (pode ser null)"
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "201": {
+            "description": "Criado com sucesso"
+          },
+          "204": {
+            "description": "Sem conteúdo"
+          },
+          "400": {
+            "description": "Dados inválidos"
+          },
+          "401": {
+            "description": "Não autorizado"
+          },
+          "404": {
+            "description": "Não encontrado"
+          },
+          "422": {
+            "description": "Erro de validação"
+          },
+          "500": {
+            "description": "Erro interno"
+          }
+        }
+      }
+    },
+    "/clientes/{id}": {
+      "get": {
+        "summary": "GET /clientes/{id}",
+        "description": "Obtem todos os detalhes de um cliente",
+        "operationId": "get__clientes_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "int32"
+            },
+            "description": "ID do cliente (PATH PARAMS - OBRIGATÓRIO)"
+          },
+          {
+            "name": "estabelecimentoId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID do estabelecimento (OBRIGATÓRIO)"
+          }
+        ],
+        "requestBody": null,
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "201": {
+            "description": "Criado com sucesso"
+          },
+          "204": {
+            "description": "Sem conteúdo"
+          },
+          "400": {
+            "description": "Dados inválidos"
+          },
+          "401": {
+            "description": "Não autorizado"
+          },
+          "404": {
+            "description": "Não encontrado"
+          },
+          "422": {
+            "description": "Erro de validação"
+          },
+          "500": {
+            "description": "Erro interno"
+          }
+        }
+      }
+    },
+    "/clientes/{clienteld}": {
+      "put": {
+        "summary": "PUT /clientes/{clienteld}",
+        "description": "Alterar os dados de um cliente",
+        "operationId": "put__clientes_clienteld",
+        "parameters": [
+          {
+            "name": "clienteld",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "int32"
+            },
+            "description": "ID do cliente (PATH PARAMS - OBRIGATÓRIO)"
+          },
+          {
+            "name": "estabelecimentoId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID do estabelecimento (OBRIGATÓRIO)"
+          }
+        ],
+        "requestBody": {
+          "required": [
+            "clienteld"
+          ],
+          "properties": {
+            "clienteld": {
+              "type": "int32",
+              "description": "ID do cliente (PATH PARAMS - OBRIGATÓRIO)"
+            },
+            "nome": {
+              "type": "string",
+              "description": "Nome do cliente (pode ser null)"
+            },
+            "email": {
+              "type": "string",
+              "description": "Email do cliente (pode ser null)"
+            },
+            "cpf": {
+              "type": "string",
+              "description": "CPF do cliente (pode ser null)"
+            },
+            "genero": {
+              "type": "string",
+              "description": "Gênero: M=Masculino, F=Feminino, N=Não-Binário, X=Não informado"
+            },
+            "observacoes": {
+              "type": "string",
+              "description": "Observações adicionais (pode ser null)"
+            },
+            "codigoExterno": {
+              "type": "string",
+              "description": "Código externo (pode ser null)"
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "201": {
+            "description": "Criado com sucesso"
+          },
+          "204": {
+            "description": "Sem conteúdo"
+          },
+          "400": {
+            "description": "Dados inválidos"
+          },
+          "401": {
+            "description": "Não autorizado"
+          },
+          "404": {
+            "description": "Não encontrado"
+          },
+          "422": {
+            "description": "Erro de validação"
+          },
+          "500": {
+            "description": "Erro interno"
+          }
+        }
+      }
+    },
+    "/clientes/{clientId}": {
+      "delete": {
+        "summary": "DELETE /clientes/{clientId}",
+        "description": "Excluir um cliente do estabelecimento",
+        "operationId": "delete__clientes_clientId",
+        "parameters": [
+          {
+            "name": "clientId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "int32"
+            },
+            "description": "ID do cliente (PATH PARAMS - OBRIGATÓRIO)"
+          },
+          {
+            "name": "estabelecimentoId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID do estabelecimento (OBRIGATÓRIO)"
+          }
+        ],
+        "requestBody": null,
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "201": {
+            "description": "Criado com sucesso"
+          },
+          "204": {
+            "description": "Sem conteúdo"
+          },
+          "400": {
+            "description": "Dados inválidos"
+          },
+          "401": {
+            "description": "Não autorizado"
+          },
+          "404": {
+            "description": "Não encontrado"
+          },
+          "422": {
+            "description": "Erro de validação"
+          },
+          "500": {
+            "description": "Erro interno"
+          }
+        }
+      }
+    },
+    "/produtos": {
+      "get": {
+        "summary": "GET /produtos",
+        "description": "Listar todos os produtos do estabelecimento",
+        "operationId": "get__produtos",
+        "parameters": [
+          {
+            "name": "estabelecimentoId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID do estabelecimento (OBRIGATÓRIO)"
+          }
+        ],
+        "requestBody": null,
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "201": {
+            "description": "Criado com sucesso"
+          },
+          "204": {
+            "description": "Sem conteúdo"
+          },
+          "400": {
+            "description": "Dados inválidos"
+          },
+          "401": {
+            "description": "Não autorizado"
+          },
+          "404": {
+            "description": "Não encontrado"
+          },
+          "422": {
+            "description": "Erro de validação"
+          },
+          "500": {
+            "description": "Erro interno"
+          }
+        }
+      }
+    },
+    "/servicos": {
+      "get": {
+        "summary": "GET /servicos",
+        "description": "Listar todos os serviços do estabelecimento",
+        "operationId": "get__servicos",
+        "parameters": [
+          {
+            "name": "estabelecimentoId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID do estabelecimento (OBRIGATÓRIO)"
+          }
+        ],
+        "requestBody": null,
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "201": {
+            "description": "Criado com sucesso"
+          },
+          "204": {
+            "description": "Sem conteúdo"
+          },
+          "400": {
+            "description": "Dados inválidos"
+          },
+          "401": {
+            "description": "Não autorizado"
+          },
+          "404": {
+            "description": "Não encontrado"
+          },
+          "422": {
+            "description": "Erro de validação"
+          },
+          "500": {
+            "description": "Erro interno"
+          }
+        }
+      }
+    },
+    "/servicos/{id}/promocoes": {
+      "get": {
+        "summary": "GET /servicos/{id}/promocoes",
+        "description": "Lista as promoções associadas a um serviço com o valor por dia da semana",
+        "operationId": "get__servicos_id_promocoes",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "int32"
+            },
+            "description": "ID do serviço (PATH PARAMS - OBRIGATÓRIO)"
+          },
+          {
+            "name": "estabelecimentoId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID do estabelecimento (OBRIGATÓRIO)"
+          }
+        ],
+        "requestBody": null,
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "201": {
+            "description": "Criado com sucesso"
+          },
+          "204": {
+            "description": "Sem conteúdo"
+          },
+          "400": {
+            "description": "Dados inválidos"
+          },
+          "401": {
+            "description": "Não autorizado"
+          },
+          "404": {
+            "description": "Não encontrado"
+          },
+          "422": {
+            "description": "Erro de validação"
+          },
+          "500": {
+            "description": "Erro interno"
+          }
+        }
+      }
+    }
+  }
+}

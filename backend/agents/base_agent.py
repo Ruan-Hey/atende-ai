@@ -366,7 +366,7 @@ Responda APENAS com o número do item mais relevante (1, 2, 3, etc.) ou "nenhum"
                 return True
             
             # Verificar Trinks
-            if self.empresa_config.get('trinks_enabled') and self.empresa_config.get('trinks_config'):
+            if self.empresa_config.get('trinks_enabled') and self.empresa_config.get('trinks_api_key'):
                 return True
             
             # Verificar outras APIs de agenda dinamicamente
