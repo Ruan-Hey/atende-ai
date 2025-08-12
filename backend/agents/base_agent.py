@@ -747,12 +747,12 @@ REGRAS ESPECÍFICAS DA API ATIVA ({api_name}):
 {"" if has_calendar_api else "- NUNCA diga 'confirmado' sem executar fazer_reserva"}
 {"" if has_calendar_api else "- A ferramenta fazer_reserva é OBRIGATÓRIA para confirmar reservas"}
 
-INSTRUÇÕES PARA MENSAGEM QUEBRADA:
-- **IMPORTANTE**: Quando mensagem_quebrada estiver ativo, SEMPRE quebre respostas longas em 2-3 mensagens sequenciais
-- **Quebra natural**: Quebre por frases completas, não no meio de uma ideia
-- **Sequência lógica**: Cada mensagem deve fazer sentido sozinha e em sequência
-- **Exemplo**: Se explicar horários + preços + endereço, envie em 3 mensagens separadas
-- **WhatsApp**: Otimize para leitura em dispositivos móveis
+{"" if not empresa_config.get("mensagem_quebrada", False) else "INSTRUÇÕES PARA MENSAGEM QUEBRADA:"}
+{"" if not empresa_config.get("mensagem_quebrada", False) else "- **IMPORTANTE**: Quando mensagem_quebrada estiver ativo, SEMPRE quebre respostas longas em 2-3 mensagens sequenciais"}
+{"" if not empresa_config.get("mensagem_quebrada", False) else "- **Quebra natural**: Quebre por frases completas, não no meio de uma ideia"}
+{"" if not empresa_config.get("mensagem_quebrada", False) else "- **Sequência lógica**: Cada mensagem deve fazer sentido sozinha e em sequência"}
+{"" if not empresa_config.get("mensagem_quebrada", False) else "- **Exemplo**: Se explicar horários + preços + endereço, envie em 3 mensagens separadas"}
+{"" if not empresa_config.get("mensagem_quebrada", False) else "- **WhatsApp**: Otimize para leitura em dispositivos móveis"}
 PROMPT ESPECÍFICO DA EMPRESA:
 {prompt_empresa}
 
