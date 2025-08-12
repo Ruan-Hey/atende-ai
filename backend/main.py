@@ -527,8 +527,13 @@ async def webhook_handler(empresa_slug: str, request: Request):
                     # Normalizar chaves canônicas usadas pelo motor de regras e ferramentas inteligentes
                     trinks_api_key = config.get('api_key') or config.get('key')
                     trinks_base_url = (
-                        config.get('base_url') or config.get('url_base') or config.get('url')
+                        config.get('base_url') or config.get('url_base') or config.get('url') or ''
                     )
+                    # Fallback padrão e correção de esquema
+                    if not trinks_base_url:
+                        trinks_base_url = 'https://api.trinks.com/v1'
+                    elif not trinks_base_url.startswith(('http://', 'https://')):
+                        trinks_base_url = 'https://' + trinks_base_url.lstrip('/')
                     trinks_estabelecimento_id = (
                         config.get('estabelecimento_id') or config.get('estabelecimentoId') or config.get('estabelecimento')
                     )
@@ -679,13 +684,6 @@ async def webhook_handler(empresa_slug: str, request: Request):
             
             # Obter agente do cache (reutiliza se existir, cria se não existir)
             whatsapp_agent = agent_cache.get_agent(empresa_slug, wa_id, empresa_config)
-            
-            # Sempre atualizar config do agente com a configuração mais recente (evita base_url/headers antigos)
-            try:
-                if hasattr(whatsapp_agent, 'refresh_config'):
-                    whatsapp_agent.refresh_config(empresa_config)
-            except Exception as _e:
-                logger.warning(f"Não foi possível atualizar a config do agente: {_e}")
             
             # Processar mensagem
             result = await whatsapp_agent.process_whatsapp_message(webhook_data, empresa_config)
