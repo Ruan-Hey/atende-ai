@@ -218,8 +218,15 @@ Responda APENAS com o número do item mais relevante (1, 2, 3, etc.) ou "nenhum"
         def wrapper(data: str = None, **kwargs) -> str:
             data_str = data or kwargs.get('data') or kwargs.get('date')
             if not data_str:
-                return "Parâmetros ausentes: forneça data no formato YYYY-MM-DD"
-            return calendar_tools.verificar_disponibilidade(data_str, self.empresa_config)
+                return "Parâmetros ausentes: forneça data"
+            # Passar contexto e última mensagem para permitir detecção de serviço/profissional
+            last_message = getattr(self, '_last_message', None)
+            return calendar_tools.verificar_disponibilidade(
+                data_str,
+                self.empresa_config,
+                contexto_reserva=self.reservation_context,
+                mensagem=last_message,
+            )
         return wrapper
     
     def _get_fazer_reserva_wrapper(self):
@@ -559,6 +566,8 @@ Responda APENAS com o número do item mais relevante (1, 2, 3, etc.) ou "nenhum"
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=message)
             ]
+            # Guardar última mensagem do usuário para ferramentas que precisem de NLP
+            self._last_message = message
             
             # Adicionar histórico de conversa da memória
             if hasattr(self.memory, 'chat_memory') and self.memory.chat_memory.messages:

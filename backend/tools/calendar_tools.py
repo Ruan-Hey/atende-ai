@@ -101,7 +101,7 @@ class CalendarTools:
         
         return None, {}
     
-    def verificar_disponibilidade(self, data: str, empresa_config: Dict[str, Any]) -> str:
+    def verificar_disponibilidade(self, data: str, empresa_config: Dict[str, Any], contexto_reserva: Dict[str, Any] = None, mensagem: str = None) -> str:
         """Verifica disponibilidade usando qualquer API de agenda disponível"""
         try:
             # Encontrar API de agenda disponível
@@ -123,8 +123,8 @@ class CalendarTools:
             elif api_name == "Google Sheets":
                 return self._verificar_google_sheets(data, empresa_config, api_config)
             elif api_name == "Trinks":
-                # Passar empresa_config para usar ferramentas inteligentes
-                return self._verificar_trinks(data, api_config, empresa_config)
+                # Passar empresa_config e contexto para usar ferramentas inteligentes
+                return self._verificar_trinks(data, api_config, empresa_config, contexto_reserva=contexto_reserva or {}, mensagem=mensagem)
             else:
                 return self._verificar_api_generica(api_name, data, api_config)
             
@@ -166,7 +166,7 @@ class CalendarTools:
             logger.error(f"Erro ao verificar Google Sheets: {e}")
             return f"Erro ao verificar Google Sheets para {data}: {str(e)}"
     
-    def _verificar_trinks(self, data: str, config: Dict[str, Any], empresa_config: Dict[str, Any]) -> str:
+    def _verificar_trinks(self, data: str, config: Dict[str, Any], empresa_config: Dict[str, Any], contexto_reserva: Dict[str, Any] = None, mensagem: str = None) -> str:
         """Verifica disponibilidade na API Trinks usando ferramentas inteligentes"""
         try:
             # Importar ferramentas inteligentes
@@ -177,11 +177,49 @@ class CalendarTools:
             
             # Usar ferramentas inteligentes se disponível
             try:
-                # Verificar disponibilidade usando regras expandidas
+                # 1) Se vier mensagem, tentar detectar serviço pela conversa
+                detected_service_id = None
+                if mensagem:
+                    try:
+                        det = trinks_intelligent_tools.detect_service_from_conversation(mensagem, empresa_config)
+                        if det.get('detected') and det.get('service_id'):
+                            detected_service_id = det.get('service_id')
+                    except Exception:
+                        pass
+
+                # 2) Caso ainda não tenha, tentar usar contexto_reserva (ex.: nome do serviço)
+                if not detected_service_id and contexto_reserva:
+                    servico_ctx = (contexto_reserva.get('servico') or contexto_reserva.get('service') or '').strip()
+                    if servico_ctx:
+                        det2 = trinks_intelligent_tools._search_service_in_api(servico_ctx, empresa_config)
+                        if det2.get('detected') and det2.get('service_id'):
+                            detected_service_id = det2.get('service_id')
+
+                # 3) Opcional: tentar encontrar profissional pelo serviço (pode filtrar por Amabile no futuro)
+                professional_id = None
+                if detected_service_id:
+                    try:
+                        profs = trinks_intelligent_tools.find_professionals_for_service(str(detected_service_id), empresa_config)
+                        # Se houver contexto com nome da doutora, tentar filtrar
+                        nome_prof_ctx = (contexto_reserva or {}).get('profissional_nome') or ''
+                        if profs.get('found') and isinstance(profs.get('professionals'), list):
+                            if nome_prof_ctx:
+                                for p in profs['professionals']:
+                                    nome = (p.get('nome') or '').lower()
+                                    if nome_prof_ctx.lower() in nome:
+                                        professional_id = p.get('id')
+                                        break
+                            if not professional_id and profs['professionals']:
+                                professional_id = profs['professionals'][0].get('id')
+                    except Exception:
+                        pass
+
+                # 4) Verificar disponibilidade usando regras expandidas e a duração real do serviço
                 availability_result = trinks_intelligent_tools.check_professional_availability(
                     data=data,
-                    service_id=None,  # Não temos service_id aqui, mas podemos expandir depois
-                    empresa_config=empresa_config
+                    service_id=str(detected_service_id) if detected_service_id else None,
+                    empresa_config=empresa_config,
+                    professional_id=str(professional_id) if professional_id else None,
                 )
                 
                 if availability_result.get("available"):
