@@ -294,6 +294,14 @@ const ConfiguracoesEmpresa = () => {
                 novasConfiguracoes[fieldName] = apiKey
               }
             }
+            
+            // Adicionar suporte para estabelecimento_id do Trinks
+            if (empApi.api_name.includes('Trinks') && empApi.config.estabelecimento_id) {
+              const fieldName = `api_${apiId}_estabelecimento_id`
+              if (!onlyNew || !novasConfiguracoes[fieldName]) {
+                novasConfiguracoes[fieldName] = empApi.config.estabelecimento_id
+              }
+            }
           }
         }
       }
@@ -1097,6 +1105,25 @@ const ConfiguracoesEmpresa = () => {
                                         value={configuracoes[`api_${api.id}_key`] || ''}
                                         onChange={handleChange}
                                       />
+                                      
+                                      {/* Campo específico para Trinks - Estabelecimento ID */}
+                                      {api.nome.includes('Trinks') && (
+                                        <div className="field-group" style={{ marginTop: '1rem' }}>
+                                          <label>ID do Estabelecimento</label>
+                                          <input
+                                            type="text"
+                                            name={`api_${api.id}_estabelecimento_id`}
+                                            placeholder="ID do estabelecimento (ex: 12345)"
+                                            className="form-input"
+                                            value={configuracoes[`api_${api.id}_estabelecimento_id`] || ''}
+                                            onChange={handleChange}
+                                          />
+                                          <small className="field-hint">
+                                            ID único do estabelecimento na plataforma Trinks. 
+                                            Este campo é obrigatório para todos os endpoints da API.
+                                          </small>
+                                        </div>
+                                      )}
                                     </div>
                                   )}
                                 </div>

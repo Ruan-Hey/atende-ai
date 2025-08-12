@@ -522,10 +522,38 @@ async def webhook_handler(empresa_slug: str, request: Request):
                     # OpenAI vem da tabela empresa_apis
                     if config.get('openai_key'):
                         empresa_config['openai_key'] = config.get('openai_key')
-                elif api_name == "Trinks":
-                    empresa_config['trinks_api_key'] = config.get('api_key')
-                    empresa_config['trinks_base_url'] = config.get('base_url')
-                    empresa_config['trinks_estabelecimento_id'] = config.get('estabelecimento_id')
+                # Tratar qualquer variação de nome que contenha "Trinks" (ex.: "Trinks", "Trinks Api V2")
+                elif "trinks" in api_name.lower():
+                    # Normalizar chaves canônicas usadas pelo motor de regras e ferramentas inteligentes
+                    trinks_api_key = config.get('api_key') or config.get('key')
+                    trinks_base_url = (
+                        config.get('base_url') or config.get('url_base') or config.get('url')
+                    )
+                    trinks_estabelecimento_id = (
+                        config.get('estabelecimento_id') or config.get('estabelecimentoId') or config.get('estabelecimento')
+                    )
+
+                    empresa_config['trinks_api_key'] = trinks_api_key
+                    empresa_config['trinks_base_url'] = trinks_base_url
+                    empresa_config['trinks_estabelecimento_id'] = trinks_estabelecimento_id
+                    empresa_config['trinks_enabled'] = True
+
+                    # Garantir que o config usado pelas tools tenha base_url e headers obrigatórios
+                    merged_config = dict(config) if isinstance(config, dict) else {}
+                    if trinks_base_url and not merged_config.get('base_url'):
+                        merged_config['base_url'] = trinks_base_url
+
+                    headers = dict(merged_config.get('headers') or {})
+                    if trinks_api_key and 'X-API-KEY' not in headers:
+                        headers['X-API-KEY'] = trinks_api_key
+                    if trinks_estabelecimento_id and 'estabelecimentoId' not in headers:
+                        headers['estabelecimentoId'] = trinks_estabelecimento_id
+                    if headers:
+                        merged_config['headers'] = headers
+
+                    # Sobrescrever o config específico desta API e também expor como 'trinks_config'
+                    empresa_config[f'{api_prefix}_config'] = merged_config
+                    empresa_config['trinks_config'] = merged_config
                 elif api_name == "Chatwoot":
                     config_data['chatwoot_token'] = config.get('chatwoot_token')
                     config_data['chatwoot_inbox_id'] = config.get('chatwoot_inbox_id')
