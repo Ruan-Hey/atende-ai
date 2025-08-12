@@ -344,15 +344,26 @@ class TrinksIntelligentTools:
     def _get_service_duration(self, service_id: str, empresa_config: Dict[str, Any]) -> Optional[int]:
         """Busca a duração real do serviço na API"""
         try:
+            # Se não houver service_id, retorna duração padrão sem chamar API
+            if not service_id:
+                return 60
+
+            # Resolver base URL com fallback
+            safe_base_url = (
+                empresa_config.get('trinks_base_url')
+                or (empresa_config.get('trinks_config', {}) or {}).get('base_url')
+                or 'https://api.trinks.com/v1'
+            )
+
             headers = {
-                'X-API-KEY': empresa_config["trinks_api_key"],
-                'estabelecimentoId': empresa_config['trinks_estabelecimento_id'],
+                'X-API-KEY': empresa_config.get("trinks_api_key", ""),
+                'estabelecimentoId': empresa_config.get('trinks_estabelecimento_id', ''),
                 'Content-Type': 'application/json'
             }
             
             # Buscar detalhes do serviço
             response = requests.get(
-                f"{empresa_config['trinks_base_url']}/servicos/{service_id}",
+                f"{safe_base_url}/servicos/{service_id}",
                 headers=headers,
                 timeout=30
             )
@@ -363,7 +374,7 @@ class TrinksIntelligentTools:
             else:
                 # Fallback: buscar na lista de serviços
                 response_list = requests.get(
-                    f"{empresa_config['trinks_base_url']}/servicos",
+                    f"{safe_base_url}/servicos",
                     headers=headers,
                     timeout=30
                 )
@@ -371,8 +382,11 @@ class TrinksIntelligentTools:
                 if response_list.status_code == 200:
                     services = response_list.json().get('data', [])
                     for service in services:
-                        if service.get('id') == int(service_id):
-                            return service.get('duracaoEmMinutos', 60)
+                        try:
+                            if service.get('id') == int(service_id):
+                                return service.get('duracaoEmMinutos', 60)
+                        except Exception:
+                            continue
             
             return 60  # Duração padrão se não conseguir buscar
             
@@ -384,9 +398,16 @@ class TrinksIntelligentTools:
                                   professional_id: str = None) -> Dict[str, Any]:
         """Busca agendamentos existentes para uma data"""
         try:
+            # Resolver base URL com fallback
+            safe_base_url = (
+                empresa_config.get('trinks_base_url')
+                or (empresa_config.get('trinks_config', {}) or {}).get('base_url')
+                or 'https://api.trinks.com/v1'
+            )
+
             headers = {
-                'X-API-KEY': empresa_config["trinks_api_key"],
-                'estabelecimentoId': empresa_config['trinks_estabelecimento_id'],
+                'X-API-KEY': empresa_config.get("trinks_api_key", ""),
+                'estabelecimentoId': empresa_config.get('trinks_estabelecimento_id', ''),
                 'Content-Type': 'application/json'
             }
             
@@ -395,7 +416,7 @@ class TrinksIntelligentTools:
                 params['profissionalId'] = professional_id
             
             response = requests.get(
-                f"{empresa_config['trinks_base_url']}/agendamentos",
+                f"{safe_base_url}/agendamentos",
                 headers=headers,
                 params=params,
                 timeout=30
