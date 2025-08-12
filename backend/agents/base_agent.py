@@ -196,6 +196,25 @@ Responda APENAS com o número do item mais relevante (1, 2, 3, etc.) ou "nenhum"
         
         # Tools estruturadas para tool-calling nativo
         self.structured_tools = self._setup_structured_tools()
+
+    def refresh_config(self, nova_config: Dict[str, Any]) -> None:
+        """Atualiza a configuração da empresa e reconstrói wrappers/tools.
+        Mantém memória e contexto atuais.
+        """
+        try:
+            self.empresa_config = nova_config or {}
+            # Recriar wrappers que dependem da config
+            self._wrappers = {
+                "buscar_cliente": self._get_buscar_cliente_wrapper(),
+                "verificar_calendario": self._get_verificar_calendario_wrapper(),
+                "fazer_reserva": self._get_fazer_reserva_wrapper(),
+                "enviar_mensagem": self._get_enviar_mensagem_wrapper(),
+                "get_business_knowledge": self._wrappers.get("get_business_knowledge"),
+            }
+            # Regerar structured tools com a nova config
+            self.structured_tools = self._setup_structured_tools()
+        except Exception as e:
+            logger.error(f"Erro ao atualizar configuração do agente: {e}")
     
     def _get_buscar_cliente_wrapper(self):
         """Retorna wrapper para buscar_cliente"""

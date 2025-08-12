@@ -680,6 +680,13 @@ async def webhook_handler(empresa_slug: str, request: Request):
             # Obter agente do cache (reutiliza se existir, cria se não existir)
             whatsapp_agent = agent_cache.get_agent(empresa_slug, wa_id, empresa_config)
             
+            # Sempre atualizar config do agente com a configuração mais recente (evita base_url/headers antigos)
+            try:
+                if hasattr(whatsapp_agent, 'refresh_config'):
+                    whatsapp_agent.refresh_config(empresa_config)
+            except Exception as _e:
+                logger.warning(f"Não foi possível atualizar a config do agente: {_e}")
+            
             # Processar mensagem
             result = await whatsapp_agent.process_whatsapp_message(webhook_data, empresa_config)
             

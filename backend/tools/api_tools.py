@@ -28,9 +28,13 @@ class APITools:
             self._setup_auth(config)
             
             # Construir URL
-            base_url = config.get('base_url', '')
-            if not base_url:
-                base_url = config.get('url_base', '')
+            base_url = config.get('base_url') or config.get('url_base') or config.get('url')
+            # Fallbacks por API conhecida
+            if (not base_url) and ('trinks' in api_name.lower() or 'trinks' in str(config).lower()):
+                base_url = 'https://api.trinks.com/v1'
+            # Garantir esquema
+            if base_url and not base_url.startswith('http'):
+                base_url = f"https://{base_url.lstrip('/')}"
             
             url = urljoin(base_url, endpoint_path)
             
