@@ -747,6 +747,12 @@ REGRAS ESPECÍFICAS DA API ATIVA ({api_name}):
 {"" if has_calendar_api else "- NUNCA diga 'confirmado' sem executar fazer_reserva"}
 {"" if has_calendar_api else "- A ferramenta fazer_reserva é OBRIGATÓRIA para confirmar reservas"}
 
+INSTRUÇÕES PARA MENSAGEM QUEBRADA:
+- **IMPORTANTE**: Quando mensagem_quebrada estiver ativo, SEMPRE quebre respostas longas em 2-3 mensagens sequenciais
+- **Quebra natural**: Quebre por frases completas, não no meio de uma ideia
+- **Sequência lógica**: Cada mensagem deve fazer sentido sozinha e em sequência
+- **Exemplo**: Se explicar horários + preços + endereço, envie em 3 mensagens separadas
+- **WhatsApp**: Otimize para leitura em dispositivos móveis
 PROMPT ESPECÍFICO DA EMPRESA:
 {prompt_empresa}
 
