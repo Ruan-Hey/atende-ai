@@ -196,25 +196,6 @@ Responda APENAS com o número do item mais relevante (1, 2, 3, etc.) ou "nenhum"
         
         # Tools estruturadas para tool-calling nativo
         self.structured_tools = self._setup_structured_tools()
-
-    def refresh_config(self, nova_config: Dict[str, Any]) -> None:
-        """Atualiza a configuração da empresa e reconstrói wrappers/tools.
-        Mantém memória e contexto atuais.
-        """
-        try:
-            self.empresa_config = nova_config or {}
-            # Recriar wrappers que dependem da config
-            self._wrappers = {
-                "buscar_cliente": self._get_buscar_cliente_wrapper(),
-                "verificar_calendario": self._get_verificar_calendario_wrapper(),
-                "fazer_reserva": self._get_fazer_reserva_wrapper(),
-                "enviar_mensagem": self._get_enviar_mensagem_wrapper(),
-                "get_business_knowledge": self._wrappers.get("get_business_knowledge"),
-            }
-            # Regerar structured tools com a nova config
-            self.structured_tools = self._setup_structured_tools()
-        except Exception as e:
-            logger.error(f"Erro ao atualizar configuração do agente: {e}")
     
     def _get_buscar_cliente_wrapper(self):
         """Retorna wrapper para buscar_cliente"""
@@ -448,7 +429,23 @@ Responda APENAS com o número do item mais relevante (1, 2, 3, etc.) ou "nenhum"
             if match and not self.reservation_context['quantidade_pessoas']:
                 self.reservation_context['quantidade_pessoas'] = int(match.group(1))
                 break
-        
+ 
+        # Extrair nome do profissional (ex.: Dra. Amabile, Dra Geraldine, Dr. João)
+        if not self.reservation_context.get('profissional_nome'):
+            prof_patterns = [
+                r'\bdr\.?\s+([a-zà-úñç]+(?:\s+[a-zà-úñç]+)?)',
+                r'\bdra\.?\s+([a-zà-úñç]+(?:\s+[a-zà-úñç]+)?)',
+                r'\bdoutor(a)?\s+([a-zà-úñç]+(?:\s+[a-zà-úñç]+)?)'
+            ]
+            for pattern in prof_patterns:
+                m = re.search(pattern, message_lower)
+                if m:
+                    # Pega o último grupo não vazio como nome
+                    name = m.group(m.lastindex or 1)
+                    if isinstance(name, str):
+                        self.reservation_context['profissional_nome'] = name.strip().title()
+                        break
+
         # Extrair data
         data_patterns = [
             r'para\s+(amanhã|amanha)',

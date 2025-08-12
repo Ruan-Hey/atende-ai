@@ -276,7 +276,66 @@ class TrinksIntelligentTools:
         except Exception as e:
             logger.error(f"Erro ao buscar profissionais: {e}")
             return {"error": f"Erro na busca de profissionais: {str(e)}"}
-    
+
+    def resolve_professional_id_by_name(self, name: str, empresa_config: Dict[str, Any]) -> Optional[str]:
+        """Resolve o ID do profissional pelo nome (match case-insensitive)."""
+        try:
+            endpoint = "/profissionais"
+            result = self.api_tools.call_api(
+                api_name="Trinks",
+                endpoint_path=endpoint,
+                method="GET",
+                config=empresa_config.get('trinks_config', {}),
+            )
+            import json
+            data = {}
+            if isinstance(result, str):
+                try:
+                    data = json.loads(result)
+                except Exception:
+                    data = {"raw": result}
+            else:
+                data = result or {}
+            items = data.get('data', []) or data.get('items', []) or []
+            name_norm = (name or '').strip().lower()
+            for p in items:
+                pname = (p.get('nome') or '').strip().lower()
+                if name_norm and name_norm in pname:
+                    return str(p.get('id'))
+            return None
+        except Exception as e:
+            logger.warning(f"Falha ao resolver profissional por nome: {e}")
+            return None
+
+    def _get_working_windows(self, data: str, empresa_config: Dict[str, Any], professional_id: Optional[str]) -> Optional[List[Dict[str, str]]]:
+        """Busca janelas reais de trabalho via /agendamentos/profissionais/{data}."""
+        try:
+            if not data:
+                return None
+            # Fallback seguro de base_url
+            safe_base_url = (
+                empresa_config.get('trinks_base_url')
+                or (empresa_config.get('trinks_config', {}) or {}).get('base_url')
+                or 'https://api.trinks.com/v1'
+            )
+            headers = {
+                'X-API-KEY': empresa_config.get("trinks_api_key", ""),
+                'estabelecimentoId': empresa_config.get('trinks_estabelecimento_id', ''),
+                'Content-Type': 'application/json'
+            }
+            params = {}
+            if professional_id:
+                params['profissionalId'] = professional_id
+            import requests
+            resp = requests.get(f"{safe_base_url}/agendamentos/profissionais/{data}", headers=headers, params=params, timeout=30)
+            if resp.status_code == 200:
+                payload = resp.json()
+                return payload.get('data') or payload.get('items') or []
+            return None
+        except Exception as e:
+            logger.warning(f"Falha ao obter janelas de trabalho: {e}")
+            return None
+
     def check_professional_availability(self, data: str, service_id: str, empresa_config: Dict[str, Any], 
                                       professional_id: str = None) -> Dict[str, Any]:
         """
@@ -307,17 +366,43 @@ class TrinksIntelligentTools:
             if not service_duration:
                 return {"error": "Não foi possível determinar a duração do serviço"}
             
-            # 2. Buscar agendamentos existentes para a data
+            # 1.1 Resolver professional_id pelo nome no contexto, se não informado
+            if not professional_id:
+                prof_name = (empresa_config.get('current_context', {}) or {}).get('profissional_nome')
+                if not prof_name:
+                    # tentar pegar de um campo comum no empresa_config passado pela camada superior
+                    prof_name = (empresa_config.get('profissional_nome') or '').strip()
+                if prof_name:
+                    resolved = self.resolve_professional_id_by_name(prof_name, empresa_config)
+                    if resolved:
+                        professional_id = resolved
+
+            # 2. Buscar agendamentos existentes para a data (filtrando por profissional se houver)
             existing_appointments = self._get_existing_appointments(data, empresa_config, professional_id)
             if existing_appointments.get('error'):
                 return existing_appointments
             
             # 3. Calcular slots disponíveis considerando duração real
+            # 3.1 Tentar obter janelas reais de trabalho e ajustar working_hours
+            windows = self._get_working_windows(data, empresa_config, professional_id)
+            if windows:
+                # Ajustar working hours com base nas janelas (pega a primeira janela do dia para simplificar)
+                try:
+                    first = windows[0]
+                    start = (first.get('inicio') or first.get('start') or '08:00')[-5:]
+                    end = (first.get('fim') or first.get('end') or '18:00')[-5:]
+                    avail_rules = dict(avail_rules)
+                    sc = dict(avail_rules.get('slot_calculation', {}))
+                    sc['working_hours'] = {'start': start, 'end': end}
+                    avail_rules['slot_calculation'] = sc
+                except Exception:
+                    pass
+
             available_slots = self._calculate_available_slots(
-                data, 
-                service_duration, 
+                data,
+                service_duration,
                 existing_appointments.get('appointments', []),
-                avail_rules
+                avail_rules,
             )
             
             if available_slots:
