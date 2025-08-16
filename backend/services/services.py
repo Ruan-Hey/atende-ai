@@ -3,10 +3,10 @@ import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 
-from ..config import Config
+from config import Config
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
-from ..models import Mensagem, Cliente, Atendimento, Atividade, Empresa
+from models import Mensagem, Cliente, Atendimento, Atividade, Empresa
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ class DatabaseService:
                 if not is_bot:
                     # Carregar labels_json e openai_key
                     from sqlalchemy.orm import Session as SASession
-                    from ..services.unified_config_service import get_openai_config
+                    from services.unified_config_service import get_openai_config
                     s2: SASession = self.SessionLocal()
                     try:
                         empresa = s2.query(Empresa).filter(Empresa.id == empresa_id).first()
@@ -68,7 +68,7 @@ class DatabaseService:
                             openai_cfg = get_openai_config(s2, empresa_id) or {}
                             api_key = openai_cfg.get('openai_key')
                             if api_key:
-                                from ..integrations.openai_service import OpenAIService
+                                from integrations.openai_service import OpenAIService
                                 oai = OpenAIService(api_key)
                                 result = oai.classify_message(text, labels_json)
                                 min_conf = labels_json.get('min_confidence', 0.6)
@@ -196,8 +196,8 @@ class MetricsService:
             # Buscar todas as empresas
             from sqlalchemy import create_engine
             from sqlalchemy.orm import sessionmaker
-            from ..models import Empresa
-            from ..config import Config
+            from models import Empresa
+            from config import Config
             
             engine = create_engine(Config.POSTGRES_URL)
             SessionLocal = sessionmaker(bind=engine)
@@ -257,8 +257,8 @@ class MetricsService:
         try:
             from sqlalchemy import create_engine
             from sqlalchemy.orm import sessionmaker
-            from ..models import Empresa
-            from ..config import Config
+            from models import Empresa
+            from config import Config
             
             engine = create_engine(Config.POSTGRES_URL)
             SessionLocal = sessionmaker(bind=engine)

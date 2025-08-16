@@ -1,0 +1,452 @@
+[
+  {
+    "id": 11923336,
+    "nome": "3seringa PREENCHIMENTO",
+    "descricao": "Terceira seringa preenchimento, feita no mesmo dias das outras ou no periodo de agora, que Dra esta atendendo. Esse valor é para debito,PIX, credito (não muda)",
+    "categoria": "Médicos",
+    "duracaoEmMinutos": 60,
+    "preco": 1220.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 13341746,
+    "nome": "Adicional crioharmonizacao",
+    "descricao": "para valor adicional a plano vendido apenas",
+    "categoria": "Estética Corporal",
+    "duracaoEmMinutos": 30,
+    "preco": 100.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178730,
+    "nome": "Ampola pressurizada (extra)",
+    "descricao": "sem descrição",
+    "categoria": "Estética Corporal",
+    "duracaoEmMinutos": 60,
+    "preco": 50.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178403,
+    "nome": "Aplicacao enzimas",
+    "descricao": "Procedimento utilizando caneta pressurizada ou agulha nano",
+    "categoria": "Estética Corporal",
+    "duracaoEmMinutos": 30,
+    "preco": 250.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178596,
+    "nome": "Auriculoterapia individual",
+    "descricao": "Auriculoterapia individual Andrea",
+    "categoria": "Fisioterapia",
+    "duracaoEmMinutos": 30,
+    "preco": 75.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178597,
+    "nome": "Auriculoterapia pacote",
+    "descricao": "Pacote com mínimo de 4 sessões",
+    "categoria": "Fisioterapia",
+    "duracaoEmMinutos": 30,
+    "preco": 50.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178339,
+    "nome": "AVALIACAO",
+    "descricao": "sem descrição",
+    "categoria": "Sem categoria",
+    "duracaoEmMinutos": 30,
+    "preco": 0.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178209,
+    "nome": "Avaliacao corporal",
+    "descricao": "Avaliação corporal realizada pela Andrea",
+    "categoria": "Estética Corporal",
+    "duracaoEmMinutos": 30,
+    "preco": 0.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178779,
+    "nome": "Avaliação de composição corporal",
+    "descricao": "Atendimento Emilly",
+    "categoria": "Nutricionista",
+    "duracaoEmMinutos": 30,
+    "preco": 50.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178269,
+    "nome": "Avaliacao facial",
+    "descricao": "Avaliacao facial",
+    "categoria": "Estética Facial",
+    "duracaoEmMinutos": 30,
+    "preco": 0.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178762,
+    "nome": "Avaliação física manual",
+    "descricao": "sem descrição",
+    "categoria": "Sem categoria",
+    "duracaoEmMinutos": 30,
+    "preco": 170.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178379,
+    "nome": "AVALIACAO FISICA NUTRI",
+    "descricao": "sem descrição",
+    "categoria": "Sem categoria",
+    "duracaoEmMinutos": 30,
+    "preco": 50.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 10923983,
+    "nome": "Avaliação Gratuita",
+    "descricao": "avaliação gratuita ",
+    "categoria": "SERVIÇOS GRATUITOS",
+    "duracaoEmMinutos": 30,
+    "preco": 0.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 12896026,
+    "nome": "Bioestimulador Hibrido CRÉDITO",
+    "descricao": "Bioestimulador Hibrido CRÉDITO",
+    "categoria": "Médicos",
+    "duracaoEmMinutos": 60,
+    "preco": 1880.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 12896027,
+    "nome": "Bioestimulador híbrido DÉBITO",
+    "descricao": "Bioestimulador híbrido DÉBITO",
+    "categoria": "Médicos",
+    "duracaoEmMinutos": 60,
+    "preco": 1640.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178402,
+    "nome": "Bioimpedancia",
+    "descricao": "sem descrição",
+    "categoria": "Sem categoria",
+    "duracaoEmMinutos": 30,
+    "preco": 150.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178691,
+    "nome": "Bioimpedância avulsa",
+    "descricao": "sem descrição",
+    "categoria": "Sem categoria",
+    "duracaoEmMinutos": 30,
+    "preco": 100.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178364,
+    "nome": "Botox Masculino CREDITO",
+    "descricao": "sem descrição",
+    "categoria": "Médicos",
+    "duracaoEmMinutos": 30,
+    "preco": 1400.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178437,
+    "nome": "Botox Masculino DEBITO/PIX",
+    "descricao": "sem descrição",
+    "categoria": "Médicos",
+    "duracaoEmMinutos": 30,
+    "preco": 1330.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178438,
+    "nome": "Botox Masculino DINHEIRO",
+    "descricao": "sem descrição",
+    "categoria": "Médicos",
+    "duracaoEmMinutos": 30,
+    "preco": 1300.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178729,
+    "nome": "Caneta Pressurizada",
+    "descricao": "sem descrição",
+    "categoria": "Sem categoria",
+    "duracaoEmMinutos": 60,
+    "preco": 450.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178307,
+    "nome": "Carboxi estrias",
+    "descricao": "Valor máximo aplicado R$150,00\r\nValor mínimo R$100,00",
+    "categoria": "Estética Corporal",
+    "duracaoEmMinutos": 30,
+    "preco": 150.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178241,
+    "nome": "CARBOXI PAPADA",
+    "descricao": "sem descrição",
+    "categoria": "Estética Facial",
+    "duracaoEmMinutos": 30,
+    "preco": 100.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178305,
+    "nome": "Carboxiterapia capilar",
+    "descricao": "sem descrição",
+    "categoria": "Estética Facial",
+    "duracaoEmMinutos": 30,
+    "preco": 120.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178526,
+    "nome": "Carboxiterapia capilar DÉBITO/CRÉDITO",
+    "descricao": "sem descrição",
+    "categoria": "Sem categoria",
+    "duracaoEmMinutos": 30,
+    "preco": 110.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178321,
+    "nome": "Carboxiterapia facial DÉBITO/CRÉDITO",
+    "descricao": "sem descrição",
+    "categoria": "Sem categoria",
+    "duracaoEmMinutos": 30,
+    "preco": 130.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178528,
+    "nome": "Carboxiterapia facial DINHEIRO",
+    "descricao": "sem descrição",
+    "categoria": "Sem categoria",
+    "duracaoEmMinutos": 30,
+    "preco": 110.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178322,
+    "nome": "Carboxiterapia facial+pescoco",
+    "descricao": "sem descrição",
+    "categoria": "Sem categoria",
+    "duracaoEmMinutos": 30,
+    "preco": 165.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178527,
+    "nome": "Carboxiterapia olhos DÉBITO/CRÉDITO",
+    "descricao": "sem descrição",
+    "categoria": "Sem categoria",
+    "duracaoEmMinutos": 30,
+    "preco": 90.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178323,
+    "nome": "Carboxiterapia olhos DINHEIRO",
+    "descricao": "sem descrição",
+    "categoria": "Sem categoria",
+    "duracaoEmMinutos": 30,
+    "preco": 85.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178356,
+    "nome": "Carboxiterapia pernas/abdomen",
+    "descricao": "Aplicação de carboxiterapia em pernas OU abdomen. Valor único",
+    "categoria": "Estética Corporal",
+    "duracaoEmMinutos": 30,
+    "preco": 120.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 13320950,
+    "nome": "CINTA PÓS CRIO",
+    "descricao": "Criolipólise",
+    "categoria": "Sem categoria",
+    "duracaoEmMinutos": 30,
+    "preco": 270.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178662,
+    "nome": "Clareamento íntimo/Foliculite",
+    "descricao": "Clareamento íntimo ou foliculite",
+    "categoria": "Fisioterapia",
+    "duracaoEmMinutos": 45,
+    "preco": 167.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178579,
+    "nome": "Consulta Estética",
+    "descricao": "sem descrição",
+    "categoria": "Estética Facial",
+    "duracaoEmMinutos": 60,
+    "preco": 150.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178602,
+    "nome": "Consulta fisioterapia pélvica",
+    "descricao": "Consulta fisioterapia pélvica",
+    "categoria": "Fisioterapia",
+    "duracaoEmMinutos": 60,
+    "preco": 210.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 12608177,
+    "nome": "Consulta ginecológica",
+    "descricao": "Consulta ginecológica",
+    "categoria": "GINECOLOGIA",
+    "duracaoEmMinutos": 60,
+    "preco": 400.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178308,
+    "nome": "Consulta Medica Dra Geraldine CREDITO/DEBITO/A VISTA",
+    "descricao": "sem descrição",
+    "categoria": "Médicos",
+    "duracaoEmMinutos": 60,
+    "preco": 375.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178777,
+    "nome": "Consulta Nutri Convênio",
+    "descricao": "atualizado março 2025",
+    "categoria": "Estética Corporal",
+    "duracaoEmMinutos": 60,
+    "preco": 70.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178382,
+    "nome": "CONSULTA NUTRICIONISTA",
+    "descricao": "atualizado março 2025 ",
+    "categoria": "Nutricionista",
+    "duracaoEmMinutos": 60,
+    "preco": 290.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178187,
+    "nome": "Corrente russa pernas ou abdomem",
+    "descricao": "sem descrição",
+    "categoria": "Sem categoria",
+    "duracaoEmMinutos": 30,
+    "preco": 50.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 12958887,
+    "nome": "Crio Leidiani Luz",
+    "descricao": "Abdômen e flancos lateral ",
+    "categoria": "Estética Corporal",
+    "duracaoEmMinutos": 300,
+    "preco": 3730.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 12297156,
+    "nome": "Crio Mariana Zardo",
+    "descricao": "3hrs",
+    "categoria": "Estética Corporal",
+    "duracaoEmMinutos": 180,
+    "preco": 625.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 12290474,
+    "nome": "Crioharmonização George",
+    "descricao": "crio abdomen ",
+    "categoria": "Estética Corporal",
+    "duracaoEmMinutos": 720,
+    "preco": 2395.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11507630,
+    "nome": "Crioharmonização Ivonete",
+    "descricao": "Crioharmonização Ivonete",
+    "categoria": "Estética Corporal",
+    "duracaoEmMinutos": 640,
+    "preco": 1445.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 12330779,
+    "nome": "Crioharmonização Sheila",
+    "descricao": "Crioharmonização Sheila 10 hrs",
+    "categoria": "Estética Corporal",
+    "duracaoEmMinutos": 600,
+    "preco": 2237.1,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 11178183,
+    "nome": "Criolipólise",
+    "descricao": "sem descrição",
+    "categoria": "Estética Corporal",
+    "duracaoEmMinutos": 30,
+    "preco": 10.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 13113086,
+    "nome": "Criolipólise Fernanda da Cunha",
+    "descricao": "Corporal",
+    "categoria": "Estética Corporal",
+    "duracaoEmMinutos": 480,
+    "preco": 2568.49,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 13235653,
+    "nome": "Criolipólise Marcia Magred",
+    "descricao": "Coporal ",
+    "categoria": "Estética Corporal",
+    "duracaoEmMinutos": 360,
+    "preco": 2138.0,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 13320985,
+    "nome": "Criolipólise Pamela Regina",
+    "descricao": "Criolipólise ",
+    "categoria": "Estética Corporal",
+    "duracaoEmMinutos": 300,
+    "preco": 2534.17,
+    "visivelParaCliente": true
+  },
+  {
+    "id": 13320954,
+    "nome": "Criolipólise Samille",
+    "descricao": "Criolipólise ",
+    "categoria": "Estética Corporal",
+    "duracaoEmMinutos": 360,
+    "preco": 3800.0,
+    "visivelParaCliente": true
+  }
+]

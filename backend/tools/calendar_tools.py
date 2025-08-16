@@ -1,6 +1,9 @@
 from typing import Dict, Any
-from ..integrations.google_calendar_service import GoogleCalendarService
-from ..integrations.google_sheets_service import GoogleSheetsService
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from integrations.google_calendar_service import GoogleCalendarService
+from integrations.google_sheets_service import GoogleSheetsService
 from .api_tools import APITools
 import logging
 
@@ -172,6 +175,36 @@ class CalendarTools:
             # Importar ferramentas inteligentes
             from .trinks_intelligent_tools import trinks_intelligent_tools
             
+            # MODO THIN: retornar o JSON bruto de disponibilidade por data, sem regras extras
+            try:
+                import json as _json
+                from .api_tools import APITools
+                logger.info("THIN: retornando JSON bruto de disponibilidade Trinks")
+                endpoint = "/agendamentos/profissionais/{data}".replace("{data}", data)
+                params = {
+                    'estabelecimentoId': empresa_config.get('trinks_estabelecimento_id') or empresa_config.get('estabelecimentoId')
+                }
+                raw = APITools().call_api(
+                    api_name="Trinks",
+                    endpoint_path=endpoint,
+                    method="GET",
+                    config=empresa_config.get('trinks_config', empresa_config),
+                    **params
+                )
+                if isinstance(raw, str):
+                    if raw.strip().startswith("Sucesso na operação"):
+                        i = raw.find('{')
+                        result_data = _json.loads(raw[i:]) if i != -1 else {}
+                    else:
+                        result_data = _json.loads(raw)
+                else:
+                    result_data = raw or {}
+                return _json.dumps(result_data, ensure_ascii=False)
+            except Exception as e:
+                logger.warning(f"THIN: falha ao retornar JSON bruto: {e}")
+                import json as _json
+                return _json.dumps({'error': 'thin_mode_failed', 'message': str(e), 'data': []}, ensure_ascii=False)
+
             # Verificar se temos configuração da empresa
             # empresa_config = getattr(self, 'empresa_config', None) # This line is removed as per the edit hint
             
@@ -215,23 +248,70 @@ class CalendarTools:
                         pass
 
                 # 4) Verificar disponibilidade usando regras expandidas e a duração real do serviço
+                # Injetar contexto no config para permitir resolução por nome dentro da tool
+                empresa_config_ctx = dict(empresa_config)
+                empresa_config_ctx["current_context"] = (contexto_reserva or {})
+
+                # Se não temos professional_id e há nome no contexto, tentar resolver agora
+                if not professional_id:
+                    try:
+                        nome_ctx = (contexto_reserva or {}).get("profissional_nome")
+                        if nome_ctx:
+                            # Sanitizar sufixos comuns que grudem ao nome ("para", "pra", "p/")
+                            clean = nome_ctx.strip()
+                            for stop in [" para", " pra", " p/"]:
+                                if clean.lower().endswith(stop):
+                                    clean = clean[: -len(stop)]
+                                    break
+                            # Persistir versão limpa no contexto
+                            (contexto_reserva or {})["profissional_nome"] = clean
+                            # Resolver ID pelo nome (busca lista completa e fuzzy match)
+                            logger.info(f"🔎 Tentando resolver profissional por nome a partir do contexto: {clean}")
+                            resolved = trinks_intelligent_tools.resolve_professional_id_by_name(clean, empresa_config_ctx)
+                            if resolved:
+                                professional_id = resolved
+                                logger.info(f"🎯 profissional_nome no contexto resolvido para ID: {professional_id}")
+                    except Exception:
+                        pass
+
                 availability_result = trinks_intelligent_tools.check_professional_availability(
                     data=data,
                     service_id=str(detected_service_id) if detected_service_id else None,
-                    empresa_config=empresa_config,
+                    empresa_config=empresa_config_ctx,
                     professional_id=str(professional_id) if professional_id else None,
                 )
                 
-                if availability_result.get("available"):
-                    slots = availability_result.get("available_slots", [])
-                    if slots:
-                        slots_info = "\n".join([f"- {slot}" for slot in slots[:10]])
-                        return f"✅ Horários disponíveis no Trinks para {data}:\n{slots_info}"
-                    else:
-                        return f"✅ Trinks está disponível para {data}, mas não há horários específicos configurados"
-                else:
-                    return f"❌ Nenhum horário disponível no Trinks para {data}"
-                    
+                # Retornar JSON estruturado para o agente decidir a apresentação
+                try:
+                    by_prof = availability_result.get("by_professional", [])
+                except Exception:
+                    by_prof = []
+                matched_prof = availability_result.get("matched_professional_id")
+                slots = availability_result.get("available_slots", [])
+                # Salvar última disponibilidade resumida (para validação de reserva)
+                try:
+                    if contexto_reserva is not None:
+                        contexto_reserva.setdefault('ultima_disponibilidade', {})
+                        contexto_reserva['ultima_disponibilidade'] = {
+                            'data': data,
+                            'slots': slots,
+                            'profissional_id': matched_prof
+                        }
+                        if matched_prof and not contexto_reserva.get('profissional_id'):
+                            contexto_reserva['profissional_id'] = matched_prof
+                except Exception:
+                    pass
+                import json as _json
+                payload = {
+                    'api': 'trinks',
+                    'date': data,
+                    'by_professional': by_prof,
+                    'matched_professional_id': matched_prof,
+                    'all_slots': slots,
+                    'available': availability_result.get('available', bool(slots)),
+                }
+                return _json.dumps(payload, ensure_ascii=False)
+
             except Exception as e:
                 logger.warning(f"Erro ao usar ferramentas inteligentes, usando fallback: {e}")
                 # Fallback para método antigo
@@ -307,6 +387,24 @@ class CalendarTools:
             # Validar cliente
             if not cliente or cliente.strip() == '':
                 return "❌ Nome do cliente é obrigatório para fazer a reserva."
+            
+            # Guardrail: validar se o horário pertence à última disponibilidade mostrada
+            try:
+                if contexto_reserva and isinstance(contexto_reserva.get('ultima_disponibilidade'), dict):
+                    last = contexto_reserva['ultima_disponibilidade']
+                    last_date = last.get('data')
+                    last_slots = set(last.get('slots') or [])
+                    if last_date == data and last_slots:
+                        if hora not in last_slots:
+                            exemplos = "\n".join([f"- {s}" for s in list(last_slots)[:10]])
+                            return (
+                                "❌ Esse horário não está entre os disponíveis recentes.\n"
+                                f"Data: {data}\n"
+                                "Escolha um dos horários disponíveis abaixo e me diga qual prefere:\n"
+                                f"{exemplos}"
+                            )
+            except Exception:
+                pass
             
             # Usar API específica ou genérica
             if api_name == "Google Calendar":

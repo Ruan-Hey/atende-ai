@@ -1,8 +1,11 @@
 from typing import Dict, Any
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from ..models import Cliente, Mensagem
-from ..config import Config
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from models import Cliente, Mensagem
+from config import Config
 import logging
 
 logger = logging.getLogger(__name__)

@@ -32,18 +32,21 @@ class APITools:
             # Fallbacks e normalizações para evitar URLs inválidas
             if (not base_url) and ('trinks' in (api_name or '').lower()):
                 base_url = 'https://api.trinks.com/v1'
-            # Garantir esquema
+            # Garantir esquema e barra final
             if base_url and not base_url.startswith(('http://', 'https://')):
                 base_url = 'https://' + base_url.lstrip('/')
-            
-            url = urljoin(base_url, endpoint_path)
+            base_url = base_url.rstrip('/') + '/'
+            # Evitar que urljoin descarte caminho do base_url quando endpoint começa com '/'
+            endpoint_clean = (endpoint_path or '').lstrip('/')
+            url = urljoin(base_url, endpoint_clean)
             
             # Preparar dados da requisição
             headers = self._prepare_headers(config)
+            params = self._prepare_params(kwargs)
             data = self._prepare_data(kwargs, method)
             
             # Fazer a requisição
-            response = self._make_request(method, url, headers, data)
+            response = self._make_request(method, url, headers, params, data)
             
             # Processar resposta
             return self._process_response(response, api_name, endpoint_path)
@@ -94,6 +97,16 @@ class APITools:
         
         return headers
     
+    def _prepare_params(self, kwargs: dict) -> Optional[dict]:
+        """Prepara query params para requisições GET"""
+        if not kwargs:
+            return None
+        params: Dict[str, Any] = {}
+        for key, value in kwargs.items():
+            if value is not None and value != '':
+                params[key] = value
+        return params or None
+    
     def _prepare_data(self, kwargs: dict, method: str) -> Optional[dict]:
         """Prepara dados da requisição"""
         if method.upper() in ['POST', 'PUT', 'PATCH']:
@@ -107,12 +120,12 @@ class APITools:
         
         return None
     
-    def _make_request(self, method: str, url: str, headers: dict, data: Optional[dict]) -> requests.Response:
+    def _make_request(self, method: str, url: str, headers: dict, params: Optional[dict], data: Optional[dict]) -> requests.Response:
         """Faz a requisição HTTP"""
         method = method.upper()
         
         if method == 'GET':
-            return self.session.get(url, headers=headers, timeout=30)
+            return self.session.get(url, headers=headers, params=params, timeout=30)
         elif method == 'POST':
             return self.session.post(url, headers=headers, json=data, timeout=30)
         elif method == 'PUT':

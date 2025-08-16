@@ -9,7 +9,10 @@ import logging
 import re
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta
-from ..agents.api_rules_engine import api_rules_engine
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from agents.api_rules_engine import api_rules_engine
 from .api_tools import APITools
 import requests
 
@@ -276,35 +279,68 @@ class TrinksIntelligentTools:
         except Exception as e:
             logger.error(f"Erro ao buscar profissionais: {e}")
             return {"error": f"Erro na busca de profissionais: {str(e)}"}
-
+    
     def resolve_professional_id_by_name(self, name: str, empresa_config: Dict[str, Any]) -> Optional[str]:
-        """Resolve o ID do profissional pelo nome (match case-insensitive)."""
+        """Resolve o ID do profissional pelo nome fazendo match local sobre a lista completa do estabelecimento."""
         try:
-            endpoint = "/profissionais"
+            logger.info(f"🔎 Resolvendo profissional por nome (lista completa): {name}")
+            endpoint = "profissionais"
+            raw_name = (name or '').strip()
+
+            # Normalização robusta (lowercase + remover acentos + remover títulos)
+            import unicodedata
+            def _norm(txt: str) -> str:
+                txt = (txt or '').lower().strip()
+                txt = txt.replace('dra.', '').replace('dr.', '').replace('dra', '').replace('dr', '')
+                txt = ''.join(c for c in unicodedata.normalize('NFD', txt) if unicodedata.category(c) != 'Mn')
+                return ' '.join(txt.split())
+            target = _norm(raw_name)
+
+            params: Dict[str, Any] = {
+                'estabelecimentoId': empresa_config.get('trinks_estabelecimento_id') or empresa_config.get('estabelecimentoId')
+            }
             result = self.api_tools.call_api(
                 api_name="Trinks",
                 endpoint_path=endpoint,
                 method="GET",
-                config=empresa_config.get('trinks_config', {}),
+                config=empresa_config.get('trinks_config', empresa_config),
+                **params
             )
+
+            # Parse seguro do formato "Sucesso na operação ... {json}"
             import json
-            data = {}
-            if isinstance(result, str):
-                try:
-                    data = json.loads(result)
-                except Exception:
-                    data = {"raw": result}
-            else:
-                data = result or {}
-            items = data.get('data', []) or data.get('items', []) or []
-            name_norm = (name or '').strip().lower()
-            for p in items:
-                pname = (p.get('nome') or '').strip().lower()
-                if name_norm and name_norm in pname:
-                    return str(p.get('id'))
+            if isinstance(result, str) and result.strip().startswith("Sucesso na operação"):
+                brace_idx = result.find('{')
+                if brace_idx != -1:
+                    result = json.loads(result[brace_idx:])
+            elif isinstance(result, str):
+                result = json.loads(result)
+
+            data_list = (result or {}).get('data', []) if isinstance(result, dict) else []
+            if not data_list:
+                logger.info("🔎 Lista de profissionais vazia para o estabelecimento")
+                return None
+
+            # Fuzzy matching local usando difflib
+            from difflib import SequenceMatcher
+            best_id = None
+            best_score = 0.0
+            for p in data_list:
+                pname = _norm(p.get('nome') or '')
+                if not pname:
+                    continue
+                score = SequenceMatcher(None, target, pname).ratio()
+                if score > best_score:
+                    best_score = score
+                    best_id = str(p.get('id')) if p.get('id') is not None else None
+            logger.info(f"🔎 Melhor match para '{raw_name}': id={best_id} score={best_score:.2f}")
+            # Limite mínimo razoável
+            if best_id and best_score >= float(empresa_config.get('matching_min_score', 0.65)):
+                logger.info(f"🎯 Profissional resolvido: {raw_name} -> {best_id}")
+                return best_id
             return None
         except Exception as e:
-            logger.warning(f"Falha ao resolver profissional por nome: {e}")
+            logger.warning(f"Falha ao resolver profissional por nome (lista completa): {e}")
             return None
 
     def _get_working_windows(self, data: str, empresa_config: Dict[str, Any], professional_id: Optional[str]) -> Optional[List[Dict[str, str]]]:
@@ -398,12 +434,31 @@ class TrinksIntelligentTools:
                 except Exception:
                     pass
 
-            available_slots = self._calculate_available_slots(
+            # Se houver nome no contexto mas não houver ID, tentar resolver para ID
+            if not professional_id:
+                ctx = empresa_config.get('current_context') or {}
+                pn = (ctx.get('profissional_nome') or '').strip()
+                if pn:
+                    try:
+                        resolved = self.resolve_professional_id_by_name(pn, empresa_config)
+                        if resolved:
+                            professional_id = str(resolved)
+                            logger.info(f"🎯 profissional_nome no contexto resolvido para ID: {professional_id}")
+                    except Exception:
+                        pass
+
+            detailed = self._calculate_available_slots(
                 data,
                 service_duration,
                 existing_appointments.get('appointments', []),
                 avail_rules,
+                empresa_config, # Passar a configuração da empresa para o cálculo
+                professional_id=professional_id,
+                service_id=service_id,
             )
+            available_slots = detailed.get("available_slots", []) if isinstance(detailed, dict) else detailed
+            matched_professional_id = detailed.get("matched_professional_id") if isinstance(detailed, dict) else None
+            by_professional = detailed.get("by_professional", []) if isinstance(detailed, dict) else []
             
             if available_slots:
                 return {
@@ -412,13 +467,19 @@ class TrinksIntelligentTools:
                     "service_duration": service_duration,
                     "available_slots": available_slots,
                     "count": len(available_slots),
-                    "message": f"Encontrados {len(available_slots)} horários disponíveis para {data} (duração: {service_duration} min)"
+                    "matched_professional_id": matched_professional_id,
+                    "by_professional": by_professional,
+                    "message": (
+                        f"Encontrados {len(available_slots)} horários disponíveis para {data} (duração: {service_duration} min)"
+                        + (" — filtro por profissional aplicado" if (professional_id or (empresa_config.get('current_context') or {}).get('profissional_nome')) else "")
+                    ),
                 }
             else:
                 return {
                     "available": False,
                     "date": data,
                     "service_duration": service_duration,
+                    "matched_professional_id": matched_professional_id,
                     "message": "Nenhum horário disponível encontrado para esta data e duração de serviço"
                 }
             
@@ -519,9 +580,23 @@ class TrinksIntelligentTools:
     
     def _calculate_available_slots(self, data: str, service_duration: int, 
                                   existing_appointments: List[Dict], 
-                                  avail_rules: Dict[str, Any]) -> List[str]:
-        """Calcula slots disponíveis considerando duração real do serviço"""
+                                  avail_rules: Dict[str, Any],
+                                  empresa_config: Dict[str, Any],
+                                  professional_id: Optional[str] = None,
+                                  service_id: Optional[str] = None) -> Dict[str, Any]:
+        """Calcula slots disponíveis considerando duração real do serviço. Retorna {available_slots, matched_professional_id}."""
         try:
+            # PRIMEIRO: Tentar obter horários reais da API Trinks
+            # Precisamos da configuração da empresa, vamos tentar obtê-la do contexto
+            empresa_config = empresa_config # Passar a configuração da empresa para o cálculo
+            
+            detailed = self._get_trinks_real_availability(data, empresa_config, professional_id=professional_id, service_id=service_id)
+            if isinstance(detailed, dict) and detailed.get("available_slots"):
+                logger.info(f"✅ Usando horários reais da API Trinks: {len(detailed['available_slots'])} slots")
+                return detailed
+            
+            # FALLBACK: Lógica interna se API Trinks falhar
+            logger.warning("⚠️ API Trinks não retornou dados, usando lógica interna")
             available_slots = []
             slot_calc = avail_rules.get('slot_calculation', {})
             working_hours = slot_calc.get('working_hours', {})
@@ -548,11 +623,149 @@ class TrinksIntelligentTools:
                 if current_hour >= end_hour:
                     break
             
-            return available_slots
+            return {"available_slots": available_slots, "matched_professional_id": professional_id}
             
         except Exception as e:
             logger.error(f"Erro ao calcular slots disponíveis: {e}")
-            return []
+            return {"available_slots": [], "matched_professional_id": professional_id}
+    
+    def _get_trinks_real_availability(self, data: str, empresa_config: Dict[str, Any], professional_id: Optional[str] = None, service_id: Optional[str] = None) -> Dict[str, Any]:
+        """Obtém horários reais disponíveis da API Trinks e retorna {available_slots, matched_professional_id}."""
+        try:
+            logger.info(f"🔍 _get_trinks_real_availability chamada para data: {data}")
+            logger.info(f"🔍 Configuração da empresa: {empresa_config.keys() if empresa_config else 'None'}")
+            
+            # Verificar se temos configuração da empresa
+            if not empresa_config:
+                logger.warning("Configuração da empresa não encontrada para API Trinks")
+                return {"available_slots": [], "matched_professional_id": None}
+            
+            # Obter regras da API
+            avail_rules = api_rules_engine.get_availability_check_rules(empresa_config)
+            if not avail_rules:
+                logger.warning("Regras de disponibilidade não configuradas")
+                return {"available_slots": [], "matched_professional_id": None}
+            
+            logger.info(f"🔍 Regras obtidas: {avail_rules.keys() if avail_rules else 'None'}")
+            
+            # Endpoint para verificar disponibilidade
+            endpoint = avail_rules.get('api_endpoint', '/agendamentos/profissionais/{data}')
+            endpoint = endpoint.replace('{data}', data)
+            
+            # Parâmetros obrigatórios
+            params = {
+                'estabelecimentoId': empresa_config.get('trinks_estabelecimento_id') or empresa_config.get('estabelecimentoId')
+            }
+            # Filtros opcionais
+            if professional_id:
+                params['profissionalId'] = professional_id
+            if service_id:
+                params['servicoId'] = service_id
+            
+            logger.info(f"🔍 Endpoint: {endpoint}")
+            logger.info(f"🔍 Params: {params}")
+            
+            # Fazer chamada para API Trinks
+            logger.info(f"🔍 Chamando API Trinks: {endpoint} com params: {params}")
+            
+            result = self.api_tools.call_api(
+                api_name="Trinks",
+                endpoint_path=endpoint,
+                method="GET",
+                config=empresa_config.get('trinks_config', empresa_config),
+                **params
+            )
+            
+            logger.info(f"📡 Resposta da API Trinks: {result[:200]}...")
+            
+            # Processar resposta
+            if isinstance(result, str):
+                try:
+                    import json
+                    # Alguns chamadores retornam string com prefixo
+                    # "Sucesso na operação <API> <endpoint>: { ...json... }"
+                    if result.strip().startswith("Sucesso na operação"):
+                        brace_idx = result.find('{')
+                        if brace_idx != -1:
+                            result_json_str = result[brace_idx:]
+                            result_data = json.loads(result_json_str)
+                        else:
+                            logger.error("Resposta de sucesso sem corpo JSON")
+                            return {"available_slots": [], "matched_professional_id": None}
+                    else:
+                        result_data = json.loads(result)
+                except Exception as _:
+                    logger.error("Falha ao fazer parse da resposta JSON da API Trinks")
+                    return {"available_slots": [], "matched_professional_id": None}
+            else:
+                result_data = result
+            
+            # Extrair horários disponíveis
+            available_slots = []
+            matched_professional_id: Optional[str] = None
+            by_professional: List[Dict[str, Any]] = []
+            if result_data and isinstance(result_data, dict):
+                data_list = result_data.get('data', [])
+                if isinstance(data_list, list):
+                    # Montar lista por profissional (independente do filtro)
+                    for profissional in data_list:
+                        try:
+                            pid = str(profissional.get('id')) if profissional.get('id') is not None else None
+                            pname = (profissional.get('nome') or '').strip()
+                            pslots = profissional.get('horariosVagos', [])
+                            if isinstance(pslots, list):
+                                by_professional.append({
+                                    'id': pid,
+                                    'nome': pname,
+                                    'slots': list(pslots)
+                                })
+                        except Exception:
+                            continue
+                    # Se houver professional_id, filtrar diretamente
+                    if professional_id:
+                        for profissional in data_list:
+                            if str(profissional.get('id')) == str(professional_id):
+                                horarios_vagos = profissional.get('horariosVagos', [])
+                                if isinstance(horarios_vagos, list) and horarios_vagos:
+                                    available_slots = list(horarios_vagos)
+                                matched_professional_id = str(profissional.get('id'))
+                                break
+                    else:
+                        # Tentar resolver por nome no contexto
+                        ctx = empresa_config.get('current_context') or {}
+                        prof_name_ctx = (ctx.get('profissional_nome') or '').strip().lower()
+                        if prof_name_ctx:
+                            for profissional in data_list:
+                                pname = (profissional.get('nome') or '').strip().lower()
+                                if prof_name_ctx and prof_name_ctx in pname:
+                                    horarios_vagos = profissional.get('horariosVagos', [])
+                                    if isinstance(horarios_vagos, list) and horarios_vagos:
+                                        available_slots = list(horarios_vagos)
+                                    matched_professional_id = str(profissional.get('id'))
+                                    logger.info(f"✅ Profissional identificado na disponibilidade: {prof_name_ctx} -> {matched_professional_id}")
+                                    break
+                        # Se ainda não filtrou por profissional, agregue geral
+                        # Importante: se o usuário especificou um profissional por nome,
+                        # NÃO agregamos horários de outros profissionais. Mantemos vazio
+                        # para indicar que essa profissional não tem horários.
+                        if not available_slots and not prof_name_ctx:
+                            for profissional in data_list:
+                                horarios_vagos = profissional.get('horariosVagos', [])
+                                if isinstance(horarios_vagos, list) and horarios_vagos:
+                                    available_slots.extend(horarios_vagos)
+                                    logger.info(f"✅ Profissional {profissional.get('nome', 'N/A')}: {len(horarios_vagos)} horários")
+            
+            # Remover duplicatas e ordenar (se vieram)
+            available_slots = sorted(list(set(available_slots)))
+            
+            logger.info(f"🎯 Total de horários disponíveis na API Trinks: {len(available_slots)}")
+            return {"available_slots": available_slots, "matched_professional_id": matched_professional_id, "by_professional": by_professional}
+            
+        except Exception as e:
+            logger.error(f"Erro ao obter disponibilidade real da API Trinks: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return {"available_slots": [], "matched_professional_id": None}
     
     def _convert_appointments_to_occupied_slots(self, appointments: List[Dict]) -> List[Dict]:
         """Converte agendamentos para slots ocupados com início e fim"""
@@ -710,6 +923,117 @@ class TrinksIntelligentTools:
         except Exception as e:
             logger.error(f"Erro ao criar reserva: {e}")
             return {"error": f"Erro na criação: {str(e)}"}
+
+    def list_professionals(self, empresa_config: Dict[str, Any], nome: Optional[str] = None) -> Dict[str, Any]:
+        """Lista profissionais do estabelecimento (opcionalmente filtrando por nome)."""
+        try:
+            params: Dict[str, Any] = {
+                'estabelecimentoId': empresa_config.get('trinks_estabelecimento_id') or empresa_config.get('estabelecimentoId')
+            }
+            if nome:
+                params['nome'] = nome
+            result = self.api_tools.call_api(
+                api_name="Trinks",
+                endpoint_path="profissionais",
+                method="GET",
+                config=empresa_config.get('trinks_config', empresa_config),
+                **params
+            )
+            # Parse seguro
+            data: Any
+            if isinstance(result, str):
+                import json
+                if result.strip().startswith("Sucesso na operação"):
+                    brace_idx = result.find('{')
+                    data = json.loads(result[brace_idx:]) if brace_idx != -1 else {}
+                else:
+                    data = json.loads(result)
+            else:
+                data = result
+            profs = data.get('data') or data.get('items') or []
+            return {"success": True, "professionals": profs}
+        except Exception as e:
+            logger.error(f"Erro ao listar profissionais: {e}")
+            return {"success": False, "error": str(e)}
+
+    def list_services(self, empresa_config: Dict[str, Any], nome: Optional[str] = None) -> Dict[str, Any]:
+        """Lista serviços do estabelecimento (opcionalmente filtrando por nome)."""
+        try:
+            params: Dict[str, Any] = {
+                'estabelecimentoId': empresa_config.get('trinks_estabelecimento_id') or empresa_config.get('estabelecimentoId')
+            }
+            if nome:
+                params['nome'] = nome
+            result = self.api_tools.call_api(
+                api_name="Trinks",
+                endpoint_path="servicos",
+                method="GET",
+                config=empresa_config.get('trinks_config', empresa_config),
+                **params
+            )
+            data: Any
+            if isinstance(result, str):
+                import json
+                if result.strip().startswith("Sucesso na operação"):
+                    brace_idx = result.find('{')
+                    data = json.loads(result[brace_idx:]) if brace_idx != -1 else {}
+                else:
+                    data = json.loads(result)
+            else:
+                data = result
+            servs = data.get('data') or data.get('items') or []
+            return {"success": True, "services": servs}
+        except Exception as e:
+            logger.error(f"Erro ao listar serviços: {e}")
+            return {"success": False, "error": str(e)}
+
+    def get_service_prices(self, empresa_config: Dict[str, Any], servico_id: Optional[str] = None, servico_nome: Optional[str] = None) -> Dict[str, Any]:
+        """Consulta preços de um serviço por id ou nome (heurística simples)."""
+        try:
+            # Se temos id, buscar diretamente; senão listar e filtrar por nome
+            if servico_id:
+                params = {
+                    'estabelecimentoId': empresa_config.get('trinks_estabelecimento_id') or empresa_config.get('estabelecimentoId')
+                }
+                result = self.api_tools.call_api(
+                    api_name="Trinks",
+                    endpoint_path=f"servicos/{servico_id}",
+                    method="GET",
+                    config=empresa_config.get('trinks_config', empresa_config),
+                    **params
+                )
+                import json
+                if isinstance(result, str):
+                    if result.strip().startswith("Sucesso na operação"):
+                        brace_idx = result.find('{')
+                        data = json.loads(result[brace_idx:]) if brace_idx != -1 else {}
+                    else:
+                        data = json.loads(result)
+                else:
+                    data = result
+                item = data.get('data') or data
+                preco = item.get('preco') or item.get('valor')
+                return {"success": True, "price": preco, "currency": item.get('moeda')}
+            # Por nome
+            listed = self.list_services(empresa_config, nome=servico_nome)
+            if not listed.get('success'):
+                return listed
+            servs = listed.get('services', [])
+            chosen = None
+            nome_norm = (servico_nome or '').strip().lower()
+            for s in servs:
+                if nome_norm and nome_norm in (s.get('nome', '').strip().lower()):
+                    chosen = s
+                    break
+            if not chosen and servs:
+                chosen = servs[0]
+            if not chosen:
+                return {"success": False, "error": "Serviço não encontrado"}
+            preco = chosen.get('preco') or chosen.get('valor')
+            return {"success": True, "price": preco, "currency": chosen.get('moeda'), "service": chosen}
+        except Exception as e:
+            logger.error(f"Erro ao consultar preços: {e}")
+            return {"success": False, "error": str(e)}
 
 # Instância global das ferramentas inteligentes
 trinks_intelligent_tools = TrinksIntelligentTools() 

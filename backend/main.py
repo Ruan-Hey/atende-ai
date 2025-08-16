@@ -13,9 +13,9 @@ import time
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from .config import Config
-from .models import WebhookData, MessageResponse, AdminMetrics, EmpresaMetrics, HealthCheck, Base, Empresa, Mensagem, Log, Usuario, gerar_hash_senha, Atendimento, Cliente, Atividade, API, EmpresaAPI
-from .services.services import MetricsService
+from config import Config
+from models import WebhookData, MessageResponse, AdminMetrics, EmpresaMetrics, HealthCheck, Base, Empresa, Mensagem, Log, Usuario, gerar_hash_senha, Atendimento, Cliente, Atividade, API, EmpresaAPI
+from services.services import MetricsService
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from jose import jwt, JWTError
@@ -166,39 +166,7 @@ def health() -> HealthCheck:
     """Health check do sistema"""
     return HealthCheck(status="ok")
 
-@app.get("/api/admin/agent-cache/stats")
-def get_agent_cache_stats(current_user: Usuario = Depends(get_current_superuser)):
-    """Retorna estatísticas do cache de agentes"""
-    try:
-        from .agents.agent_cache import agent_cache
-        stats = agent_cache.get_cache_stats()
-        return {
-            "success": True,
-            "cache_stats": stats
-        }
-    except Exception as e:
-        logger.error(f"Erro ao obter estatísticas do cache: {e}")
-        return {
-            "success": False,
-            "error": str(e)
-        }
-
-@app.post("/api/admin/agent-cache/clear")
-def clear_agent_cache(current_user: Usuario = Depends(get_current_superuser)):
-    """Limpa o cache de agentes"""
-    try:
-        from .agents.agent_cache import agent_cache
-        agent_cache.clear_cache()
-        return {
-            "success": True,
-            "message": "Cache de agentes limpo com sucesso"
-        }
-    except Exception as e:
-        logger.error(f"Erro ao limpar cache: {e}")
-        return {
-            "success": False,
-            "error": str(e)
-        }
+# Endpoints antigos de agent_cache removidos - agora usando SmartAgent
 
 @app.get("/api/admin/metrics")
 def get_admin_metrics(current_user: Usuario = Depends(get_current_superuser)) -> AdminMetrics:
@@ -299,7 +267,7 @@ def get_empresa_clientes(
         use_att_filter = bool(label or from_date or to_date)
         clientes = []
         if use_att_filter:
-            from .models import Atendimento
+            from models import Atendimento
             query = session.query(
                 Atendimento.cliente_id,
                 func.max(Atendimento.data_atendimento).label('ultima_atividade'),
@@ -641,7 +609,7 @@ async def webhook_handler(empresa_slug: str, request: Request):
 
             if is_audio_media and media_url and empresa_config.get('openai_key'):
                 logger.info("Transcrevendo áudio recebido via WhatsApp...")
-                from .integrations.openai_service import OpenAIService
+                from integrations.openai_service import OpenAIService
                 oai = OpenAIService(empresa_config.get('openai_key'))
                 transcript = oai.transcribe_audio(media_url, empresa_config.get('twilio_sid'), empresa_config.get('twilio_token'))
                 if transcript:
@@ -678,22 +646,33 @@ async def webhook_handler(empresa_slug: str, request: Request):
             })
         
         # Se não usar buffer ou se falhar, processar imediatamente
-        # Processar mensagem com LangChain Agent
+        # Processar mensagem com Smart Agent (LangGraph + LangChain)
         try:
-            from .agents.agent_cache import agent_cache
+            # Criar agente inteligente
+            from agents.smart_agent import SmartAgent
             
-            # Obter agente do cache (reutiliza se existir, cria se não existir)
-            whatsapp_agent = agent_cache.get_agent(empresa_slug, wa_id, empresa_config)
+            # Criar novo agente inteligente
+            smart_agent = SmartAgent(empresa_config)
             
             # Processar mensagem
-            result = await whatsapp_agent.process_whatsapp_message(webhook_data, empresa_config)
+            response_message = smart_agent.process_message(webhook_data.get('Body', ''), {
+                'empresa_slug': empresa_slug,
+                'cliente_id': wa_id,
+                'waid': wa_id,  # Adicionar waid para o cache de contexto
+                'empresa_config': empresa_config
+            })
             
-            # Atualizar timestamp de último uso
-            agent_cache.update_last_used(empresa_slug, wa_id)
+            result = {
+                'success': True,
+                'message': response_message
+            }
+            
+            # Log do processamento
+            logger.info(f"Mensagem processada com Smart Agent para {empresa_slug}:{wa_id}")
             
             # Enviar resposta via Twilio
             if result.get('success'):
-                from .integrations.twilio_service import TwilioService
+                from integrations.twilio_service import TwilioService
                 twilio_service = TwilioService(
                     empresa_config.get('twilio_sid'),
                     empresa_config.get('twilio_token'),
@@ -868,7 +847,7 @@ def get_available_slots(date: str = None):
                 raise HTTPException(status_code=404, detail="Empresa TinyTeams não encontrada")
             
             # Buscar configurações da API Google Calendar
-            from .models import API, EmpresaAPI
+            from models import API, EmpresaAPI
             api = session.query(API).filter(API.nome == 'Google Calendar').first()
             if not api:
                 raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
@@ -893,7 +872,7 @@ def get_available_slots(date: str = None):
             }
             
             # Usar Google Calendar Service
-            from .integrations.google_calendar_service import GoogleCalendarService
+            from integrations.google_calendar_service import GoogleCalendarService
             calendar_service = GoogleCalendarService(calendar_config)
             
             # Buscar slots disponíveis
@@ -928,7 +907,7 @@ def get_conversation_history(
             raise HTTPException(status_code=403, detail="Acesso negado a esta empresa")
         
         # Buscar histórico do banco de dados
-        from .services.services import DatabaseService
+        from services.services import DatabaseService
         db_service = DatabaseService()
         all_messages = db_service.get_conversation_history(empresa_obj.id, cliente_id, limit=100)
         
@@ -969,7 +948,7 @@ def schedule_meeting(email: str, name: str, company: str, date_time: str):
                 raise HTTPException(status_code=404, detail="Empresa TinyTeams não encontrada")
             
             # Buscar configurações da API Google Calendar
-            from .models import API, EmpresaAPI
+            from models import API, EmpresaAPI
             api = session.query(API).filter(API.nome == 'Google Calendar').first()
             if not api:
                 raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
@@ -994,7 +973,7 @@ def schedule_meeting(email: str, name: str, company: str, date_time: str):
             }
             
             # Usar Google Calendar Service
-            from .integrations.google_calendar_service import GoogleCalendarService
+            from integrations.google_calendar_service import GoogleCalendarService
             calendar_service = GoogleCalendarService(calendar_config)
             
             # Agendar reunião
@@ -1236,7 +1215,7 @@ def get_empresa_configuracoes(
                 raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
         # Buscar APIs conectadas da empresa
-        from .models import EmpresaAPI, API
+        from models import EmpresaAPI, API
         
         empresa_apis = session.query(EmpresaAPI).filter(
             EmpresaAPI.empresa_id == empresa.id,
@@ -1387,7 +1366,7 @@ def update_empresa_configuracoes(
         
         # Processar configurações de APIs dinamicamente
         # Buscar todas as APIs disponíveis
-        from .models import API, EmpresaAPI
+        from models import API, EmpresaAPI
         
         # Processar campos que começam com 'api_' (formato dinâmico)
         api_configs = {}
@@ -1595,7 +1574,7 @@ async def criar_api(data: dict, current_user: Usuario = Depends(get_current_supe
     """Cria uma nova API"""
     session = SessionLocal()
     try:
-        from .services.api_discovery import APIDiscovery
+        from services.api_discovery import APIDiscovery
         
         # Tentar descobrir API automaticamente
         api_info = None
@@ -1755,7 +1734,7 @@ def get_empresa_apis(empresa_id: int, current_user: Usuario = Depends(get_curren
     session = SessionLocal()
     try:
         # Importar o novo serviço
-        from .services.empresa_api_service import EmpresaAPIService
+        from services.empresa_api_service import EmpresaAPIService
         
         # Buscar APIs ativas usando o novo serviço
         apis = EmpresaAPIService.get_empresa_active_apis(session, empresa_id)
@@ -1785,7 +1764,7 @@ def get_empresa_apis_by_slug(empresa_slug: str, current_user: Usuario = Depends(
                 raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
         # Importar o novo serviço
-        from .services.empresa_api_service import EmpresaAPIService
+        from services.empresa_api_service import EmpresaAPIService
         
         # Buscar APIs ativas
         apis = EmpresaAPIService.get_empresa_active_apis(session, empresa.id)
@@ -1818,7 +1797,7 @@ def update_empresa_api_config(
                 raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
         # Importar o novo serviço
-        from .services.empresa_api_service import EmpresaAPIService
+        from services.empresa_api_service import EmpresaAPIService
         
         # Atualizar configuração da API
         success = EmpresaAPIService.update_empresa_api_config(session, empresa.id, api_name, config)
@@ -1854,7 +1833,7 @@ def deactivate_empresa_api(
                 raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
         # Importar o novo serviço
-        from .services.empresa_api_service import EmpresaAPIService
+        from services.empresa_api_service import EmpresaAPIService
         
         # Desativar API
         success = EmpresaAPIService.deactivate_empresa_api(session, empresa.id, api_name)
@@ -1918,7 +1897,7 @@ async def upload_google_service_account(
         logger.info("Validação dos campos concluída")
         
         # Buscar API Google Calendar
-        from .models import API, EmpresaAPI
+        from models import API, EmpresaAPI
         api = session.query(API).filter(API.nome == 'Google Calendar').first()
         if not api:
             logger.error("API Google Calendar não encontrada")
@@ -2039,7 +2018,7 @@ async def get_google_oauth_url(
                 raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
         # Buscar configuração OAuth2 da empresa
-        from .models import EmpresaAPI, API
+        from models import EmpresaAPI, API
         api = session.query(API).filter(API.nome == 'Google Calendar').first()
         if not api:
             raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
@@ -2127,7 +2106,7 @@ async def google_oauth_callback(
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
         # Buscar configuração da API
-        from .models import EmpresaAPI, API
+        from models import EmpresaAPI, API
         api = session.query(API).filter(API.nome == 'Google Calendar').first()
         if not api:
             raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
@@ -2209,7 +2188,7 @@ async def test_google_oauth_simulation():
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
         # Buscar configuração da API
-        from .models import EmpresaAPI, API
+        from models import EmpresaAPI, API
         api = session.query(API).filter(API.nome == 'Google Calendar').first()
         if not api:
             raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
@@ -2260,7 +2239,7 @@ async def test_google_oauth_config():
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
         # Buscar configuração da API
-        from .models import EmpresaAPI, API
+        from models import EmpresaAPI, API
         api = session.query(API).filter(API.nome == 'Google Calendar').first()
         if not api:
             raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
@@ -2308,7 +2287,7 @@ async def setup_default_service_account():
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
         # Buscar configuração da API
-        from .models import EmpresaAPI, API
+        from models import EmpresaAPI, API
         api = session.query(API).filter(API.nome == 'Google Calendar').first()
         if not api:
             raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
@@ -2377,7 +2356,7 @@ async def test_service_account_status():
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
         # Buscar configuração da API
-        from .models import EmpresaAPI, API
+        from models import EmpresaAPI, API
         api = session.query(API).filter(API.nome == 'Google Calendar').first()
         if not api:
             raise HTTPException(status_code=404, detail="API Google Calendar não encontrada")
@@ -2692,13 +2671,27 @@ async def _debounce_wait_and_process(empresa_slug: str, wa_id: str, empresa_conf
     # Processar a última mensagem recebida
     webhook_data = latest.get('webhook_data', {})
     try:
-        from .agents.agent_cache import agent_cache
-        whatsapp_agent = agent_cache.get_agent(empresa_slug, wa_id, empresa_config)
-        result = await whatsapp_agent.process_whatsapp_message(webhook_data, empresa_config)
-        agent_cache.update_last_used(empresa_slug, wa_id)
+        # Criar agente inteligente
+        from agents.smart_agent import SmartAgent
+        
+        # Criar novo agente inteligente
+        smart_agent = SmartAgent(empresa_config)
+        
+        # Processar mensagem
+        response_message = smart_agent.process_message(webhook_data.get('Body', ''), {
+            'empresa_slug': empresa_slug,
+            'cliente_id': wa_id,
+            'waid': wa_id,  # Adicionar waid para o cache de contexto
+            'empresa_config': empresa_config
+        })
+        
+        result = {
+            'success': True,
+            'message': response_message
+        }
 
         if result.get('success'):
-            from .integrations.twilio_service import TwilioService
+            from integrations.twilio_service import TwilioService
             twilio_service = TwilioService(
                 empresa_config.get('twilio_sid'),
                 empresa_config.get('twilio_token'),
