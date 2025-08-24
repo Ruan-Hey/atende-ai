@@ -81,3 +81,70 @@ class Config:
                             'status': 'ativo'
                         })
         return empresas 
+
+# Configuração de Logging Limpo
+LOGGING_CONFIG = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'clean': {
+            'format': '%(asctime)s | %(levelname)-8s | %(name)-25s | %(message)s',
+            'datefmt': '%H:%M:%S'
+        },
+        'detailed': {
+            'format': '%(asctime)s | %(levelname)-8s | %(name)-25s | %(funcName)s:%(lineno)d | %(message)s',
+            'datefmt': '%H:%M:%S'
+        }
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'level': 'INFO',
+            'formatter': 'clean',
+            'stream': 'ext://sys.stdout'
+        },
+        'file': {
+            'class': 'logging.FileHandler',
+            'level': 'DEBUG',
+            'formatter': 'detailed',
+            'filename': 'app.log',
+            'mode': 'a'
+        }
+    },
+    'loggers': {
+        '': {  # Root logger
+            'level': 'INFO',
+            'handlers': ['console', 'file']
+        },
+        'agents.smart_agent': {
+            'level': 'INFO',
+            'handlers': ['console', 'file'],
+            'propagate': False
+        },
+        'rules.rules_loader': {
+            'level': 'INFO',
+            'handlers': ['console', 'file'],
+            'propagate': False
+        },
+        'tools': {
+            'level': 'INFO',
+            'handlers': ['console', 'file'],
+            'propagate': False
+        },
+        'integrations': {
+            'level': 'INFO',
+            'handlers': ['console', 'file'],
+            'propagate': False
+        },
+        'httpx': {  # Reduzir logs do httpx
+            'level': 'WARNING',
+            'handlers': ['file'],
+            'propagate': False
+        },
+        'uvicorn': {  # Reduzir logs do uvicorn
+            'level': 'WARNING',
+            'handlers': ['file'],
+            'propagate': False
+        }
+    }
+} 

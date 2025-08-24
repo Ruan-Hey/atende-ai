@@ -1,0 +1,103 @@
+# Arquitetura dos Agentes - Atende AI
+
+## Visão Geral
+
+Este documento define a arquitetura dos agentes inteligentes do sistema Atende AI, garantindo escalabilidade, manutenibilidade e separação clara de responsabilidades.
+
+## Componentes Principais
+
+### 1. Smart Agent (Orquestrador)
+- **Responsabilidade**: Coordenação geral, gerenciamento de cache, execução de fluxos
+- **Localização**: `backend/agents/smart_agent.py`
+- **Função**: Orquestra a comunicação entre Rules, Tools e Integrations
+
+### 2. Rules (Definições e Lógica de Negócio)
+- **Responsabilidade**: Definição de fluxos, regras de negócio, parsing de mensagens
+- **Localização**: `backend/rules/trinks_rules.py`
+- **Função**: Define como o sistema deve se comportar em diferentes cenários
+
+### 3. Tools (Execução e Integração)
+- **Responsabilidade**: Execução de ações específicas, integração com APIs externas
+- **Localização**: `backend/tools/trinks_intelligent_tools.py`
+- **Função**: Executa ações concretas baseadas nas definições das Rules
+
+## Estrutura de Cache
+
+### Cache Permanente
+- **Localização**: `SmartAgent._conversation_cache[waid]`
+- **Campos**: Dados que persistem durante toda a conversa
+- **Exemplos**: `profissional_id`, `servico_id`, `data`, `horario`, `procedimento`
+
+### Cache Temporário
+- **Propósito**: Dados que expiram após um número específico de mensagens
+- **Implementação**: Via `cache_instructions` das Tools
+- **Exemplos**: `temp_professional_cache`, `temp_cache_expiry`
+
+### Mecanismo de Persistência
+1. **Tools retornam**: Dados + `cache_instructions`
+2. **Rules definem**: Quais campos são válidos
+3. **Smart Agent executa**: `cache_instructions` e salva no cache global
+4. **Expiração automática**: Cache temporário expira após X mensagens
+
+## Fluxo de Dados
+
+```
+Mensagem → Rules (parsing) → Smart Agent (orquestração) → Tools (execução) → Cache (persistência)
+```
+
+## Regras de Implementação
+
+### ✅ PERMITIDO
+- **Rules**: Definir fluxos e regras de negócio
+- **Tools**: Executar ações e retornar `cache_instructions`
+- **Smart Agent**: Orquestrar e gerenciar cache
+
+### ❌ PROIBIDO
+- **Rules**: Executar ações diretamente
+- **Tools**: Definir regras de negócio
+- **Smart Agent**: Implementar lógica específica de domínio
+
+## Exemplo de Implementação
+
+### Cache Temporário em Tools
+```python
+# Em verificar_disponibilidade
+if len(by_professional) > 1:
+    response_data['temp_professional_cache'] = {...}
+    response_data['temp_cache_expiry'] = 2
+    response_data['cache_instructions'] = {
+        "update_fields": {
+            "temp_professional_cache": response_data['temp_professional_cache'],
+            "temp_cache_expiry": 2
+        }
+    }
+```
+
+### Campos Definidos em Rules
+```python
+# Em detect_intent_and_extract
+"extracted": {
+    "profissional": "nome da pessoa mencionada (se houver)",
+    "temp_professional_cache": "cache temporário de profissionais (se disponível)",
+    "temp_cache_expiry": "contador de expiração do cache (se disponível)"
+}
+```
+
+## Manutenção
+
+- **Cache permanente**: Mantido durante toda a conversa
+- **Cache temporário**: Expira automaticamente após X mensagens
+- **Limpeza manual**: Via `cache_instructions.clear_fields`
+- **Expiração automática**: Implementada no Smart Agent
+
+## Considerações Futuras
+
+Esta arquitetura permite fácil evolução para:
+- Novos tipos de cache temporário
+- Diferentes estratégias de expiração
+- Cache distribuído entre múltiplas instâncias
+- Cache persistente entre sessões
+description:
+globs:
+alwaysApply: false
+---

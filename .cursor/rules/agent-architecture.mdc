@@ -1,0 +1,331 @@
+# 🤖 ARQUITETURA DOS AGENTES - ATENDE AI
+
+## 📋 **VISÃO GERAL**
+
+Este documento define a arquitetura dos agentes inteligentes do sistema Atende AI, estabelecendo regras claras para desenvolvimento, manutenção e evolução.
+
+## 🏗️ **ESTRUTURA FUNDAMENTAL**
+
+### **1. Smart Agent (PLATAFORMA)**
+- **Arquivo:** `agents/smart_agent.py`
+- **Responsabilidade:** Orquestração da conversa e coordenação de APIs
+- **Escopo:** Funciona para QUALQUER empresa automaticamente
+- **Características:** Dinâmico, configurável, escalável
+
+### **2. Rules Engine (REGRAS de cada API)**
+- **Arquivo:** `apis/{api_name}/rules_engine.py`
+- **Responsabilidade:** Definição de regras, fluxos e configurações
+- **Escopo:** Específico para cada API (Trinks, Google, etc.)
+- **Características:** Estático, configurativo, sem lógica de execução
+
+### **3. Tools (EXECUÇÃO de ações)**
+- **Arquivo:** `apis/{api_name}/tools.py`
+- **Responsabilidade:** Execução real de ações e chamadas de API
+- **Escopo:** Específico para cada API
+- **Características:** Executável, funcional, com lógica de negócio
+
+## 🔄 **FLUXO DE EXECUÇÃO**
+
+```
+Usuário → Smart Agent → Rules Engine → Tools → API Externa
+   ↓           ↓            ↓          ↓         ↓
+Mensagem → Orquestração → Regras → Execução → Resultado
+```
+
+### **Detalhamento do Fluxo:**
+
+1. **Usuário envia mensagem** para o sistema
+2. **Smart Agent** recebe e analisa a intenção
+3. **Smart Agent** consulta **Rules Engine** da API ativa
+4. **Smart Agent** chama **Tools** apropriadas
+5. **Tools** executam ações usando as regras
+6. **Resultado** retorna para o usuário
+
+## 📁 **ESTRUTURA DE ARQUIVOS**
+
+```
+agents/
+├── smart_agent.py                    # Agente principal (PLATAFORMA)
+└── base/
+    ├── base_rules_engine.py          # Regras comuns a todas APIs
+    └── base_tools.py                 # Tools comuns a todas APIs
+
+apis/
+├── trinks/
+│   ├── trinks_rules_engine.py       # Regras específicas Trinks
+│   └── trinks_tools.py              # Tools específicas Trinks
+├── google_calendar/
+│   ├── google_calendar_rules_engine.py
+│   └── google_calendar_tools.py
+└── google_sheets/
+    ├── google_sheets_rules_engine.py
+    └── google_sheets_tools.py
+
+empresas/
+├── ginestetica_config.json          # Configuração da empresa
+├── tinyteams_config.json            # Configuração da empresa
+└── panci_piena_config.json          # Configuração da empresa
+```
+
+## 🎯 **REGRAS FUNDAMENTAIS**
+
+### **REGRA 1: Smart Agent é PLATAFORMA**
+- ✅ **NUNCA** criar Smart Agent específico por empresa
+- ✅ **SEMPRE** usar Smart Agent genérico que se adapta
+- ✅ **NUNCA** hardcodar regras de empresa no Smart Agent
+- ✅ **SEMPRE** carregar configurações dinamicamente
+
+### **REGRA 2: Rules Engine é APENAS regras**
+- ✅ **NUNCA** incluir lógica de execução
+- ✅ **SEMPRE** retornar configurações e regras
+- ✅ **NUNCA** fazer chamadas HTTP ou processar dados
+- ✅ **SEMPRE** ser determinístico e previsível
+
+### **REGRA 3: Tools são APENAS execução**
+- ✅ **NUNCA** definir regras ou configurações
+- ✅ **SEMPRE** usar regras do Rules Engine
+- ✅ **NUNCA** tomar decisões de negócio
+- ✅ **SEMPRE** executar ações específicas
+
+### **REGRA 4: Empresas são APENAS configuração**
+- ✅ **NUNCA** criar código específico por empresa
+- ✅ **SEMPRE** usar configurações JSON
+- ✅ **NUNCA** hardcodar dados de empresa
+- ✅ **SEMPRE** carregar dinamicamente
+
+## 🔧 **IMPLEMENTAÇÃO DAS REGRAS**
+
+### **Smart Agent (PLATAFORMA)**
+
+```python
+class SmartAgent:
+    def __init__(self, empresa_config: Dict[str, Any]):
+        self.empresa_config = empresa_config
+        self.api_rules = self._load_api_rules()
+        self.tools = self._load_api_tools()
+    
+    def _load_api_rules(self):
+        # Carrega regras de TODAS as APIs ativas
+        # NUNCA hardcodar regras específicas
+    
+    def _load_api_tools(self):
+        # Carrega tools de TODAS as APIs ativas
+        # NUNCA hardcodar tools específicas
+```
+
+### **Rules Engine (REGRAS)**
+
+```python
+class TrinksRulesEngine:
+    def get_availability_rules(self) -> Dict[str, Any]:
+        # Retorna APENAS regras e configurações
+        # NUNCA executa lógica ou faz chamadas
+        return {
+            "endpoints": ["/agendamentos/servicos/{id}/{data}"],
+            "campos_obrigatorios": ["data"],
+            "duracao_slot_padrao": 30
+        }
+```
+
+### **Tools (EXECUÇÃO)**
+
+```python
+@lc_tool("search_trinks_availability")
+def search_trinks_availability(data: str, servico: str) -> str:
+    # Pega regras do Rules Engine
+    rules = trinks_rules_engine.get_availability_rules()
+    
+    # Executa ação usando as regras
+    endpoint = rules["endpoints"][0].format(id=servico, data=data)
+    response = requests.get(f"{base_url}{endpoint}")
+    
+    # Retorna resultado
+    return process_response(response)
+```
+
+## 🚫 **ANTI-PADRÕES (NUNCA FAZER)**
+
+### **❌ Smart Agent específico por empresa:**
+```python
+# NUNCA FAZER
+class GinesteticaSmartAgent(SmartAgent):
+    def __init__(self):
+        # Regras hardcodadas da Ginestética
+        self.trinks_rules = {...}
+```
+
+### **❌ Rules Engine com lógica:**
+```python
+# NUNCA FAZER
+class TrinksRulesEngine:
+    def validate_slots(self, slots):
+        # Lógica de validação aqui
+        for slot in slots:
+            if not slot.available:
+                return False
+```
+
+### **❌ Tools com regras:**
+```python
+# NUNCA FAZER
+@lc_tool("search_availability")
+def search_availability(data, servico):
+    # Regras hardcodadas aqui
+    endpoint = "/agendamentos/servicos/{id}/{data}"
+    # Lógica de negócio aqui
+```
+
+### **❌ Configuração hardcodada:**
+```python
+# NUNCA FAZER
+class SmartAgent:
+    def __init__(self):
+        # Dados da empresa hardcodados
+        self.empresa = "Ginestética"
+        self.api_key = "abc123"
+```
+
+## ✅ **PADRÕES CORRETOS (SEMPRE FAZER)**
+
+### **✅ Smart Agent genérico:**
+```python
+# SEMPRE FAZER
+class SmartAgent:
+    def __init__(self, empresa_config: Dict[str, Any]):
+        self.empresa_config = empresa_config
+        self.api_rules = self._load_api_rules()
+        self.tools = self._load_api_tools()
+```
+
+### **✅ Rules Engine apenas regras:**
+```python
+# SEMPRE FAZER
+class TrinksRulesEngine:
+    def get_availability_rules(self) -> Dict[str, Any]:
+        return {
+            "endpoints": ["/agendamentos/servicos/{id}/{data}"],
+            "campos_obrigatorios": ["data"]
+        }
+```
+
+### **✅ Tools apenas execução:**
+```python
+# SEMPRE FAZER
+@lc_tool("search_availability")
+def search_availability(data: str, servico: str) -> str:
+    rules = trinks_rules_engine.get_availability_rules()
+    endpoint = rules["endpoints"][0].format(id=servico, data=data)
+    return execute_api_call(endpoint)
+```
+
+### **✅ Configuração dinâmica:**
+```python
+# SEMPRE FAZER
+class SmartAgent:
+    def __init__(self, empresa_config: Dict[str, Any]):
+        self.empresa_config = empresa_config
+        self.api_rules = self._load_api_rules()
+```
+
+## 🔄 **PROCESSO DE EVOLUÇÃO**
+
+### **1. Identificar necessidade de mudança**
+- Qual parte do sistema precisa evoluir?
+- É regra, execução ou orquestração?
+
+### **2. Localizar arquivo correto**
+- **Regras** → Rules Engine da API específica
+- **Execução** → Tools da API específica
+- **Orquestração** → Smart Agent (cuidado!)
+
+### **3. Implementar mudança**
+- **NUNCA** quebrar interface existente
+- **SEMPRE** manter compatibilidade
+- **SEMPRE** testar antes de commitar
+
+### **4. Validar arquitetura**
+- A mudança segue as regras fundamentais?
+- Não criou dependências incorretas?
+- Manteve separação de responsabilidades?
+
+## 📊 **EXEMPLOS DE EVOLUÇÃO**
+
+### **Cenário 1: Nova regra para Trinks**
+- **Arquivo:** `apis/trinks/trinks_rules_engine.py`
+- **Ação:** Adicionar nova regra no dicionário de regras
+- **Validação:** A regra é apenas configuração?
+
+### **Cenário 2: Nova funcionalidade para Google Calendar**
+- **Arquivo:** `apis/google_calendar/google_calendar_tools.py`
+- **Ação:** Adicionar nova @tool
+- **Validação:** A tool usa regras do Rules Engine?
+
+### **Cenário 3: Melhoria na orquestração**
+- **Arquivo:** `agents/smart_agent.py`
+- **Ação:** Melhorar lógica de detecção de intenção
+- **Validação:** Não criou dependências específicas de empresa?
+
+## 🧪 **TESTES DE VALIDAÇÃO**
+
+### **Teste 1: Mudança de empresa**
+```python
+# Deve funcionar sem alterar código
+smart_agent_ginestetica = SmartAgent(ginestetica_config)
+smart_agent_tinyteams = SmartAgent(tinyteams_config)
+```
+
+### **Teste 2: Mudança de API**
+```python
+# Deve funcionar sem alterar Smart Agent
+trinks_rules = TrinksRulesEngine()
+google_rules = GoogleCalendarRulesEngine()
+```
+
+### **Teste 3: Mudança de configuração**
+```python
+# Deve funcionar sem alterar código
+empresa_config["trinks_enabled"] = False
+empresa_config["google_calendar_enabled"] = True
+```
+
+## 📝 **CHECKLIST DE VALIDAÇÃO**
+
+Antes de commitar qualquer mudança, verificar:
+
+- [ ] **Smart Agent** continua funcionando para qualquer empresa?
+- [ ] **Rules Engine** não tem lógica de execução?
+- [ ] **Tools** não têm regras hardcodadas?
+- [ ] **Configurações** são carregadas dinamicamente?
+- [ ] **Interface** existente não foi quebrada?
+- [ ] **Testes** passam para diferentes empresas?
+- [ ] **Arquitetura** foi mantida?
+
+## 🎯 **RESUMO FINAL**
+
+### **Smart Agent = PLATAFORMA**
+- Orquestra conversas
+- Carrega configurações dinamicamente
+- Coordena múltiplas APIs
+
+### **Rules Engine = REGRAS**
+- Define como cada API funciona
+- Configura fluxos e validações
+- NUNCA executa lógica
+
+### **Tools = EXECUÇÃO**
+- Executa ações reais
+- Usa regras do Rules Engine
+- NUNCA define regras
+
+### **Empresas = CONFIGURAÇÃO**
+- JSON com configurações
+- NUNCA código específico
+- Carregamento dinâmico
+
+---
+
+**IMPORTANTE:** Este documento deve ser consultado ANTES de qualquer mudança na arquitetura dos agentes. Seguir estas regras garante que o sistema continue escalável e manutenível.
+description:
+globs:
+alwaysApply: false
+---

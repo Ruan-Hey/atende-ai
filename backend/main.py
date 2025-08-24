@@ -9,8 +9,10 @@ import random
 import asyncio
 import time
 
-# Configurar logging
-logging.basicConfig(level=logging.INFO)
+# Configurar logging limpo
+from config import LOGGING_CONFIG
+import logging.config
+logging.config.dictConfig(LOGGING_CONFIG)
 logger = logging.getLogger(__name__)
 
 from config import Config
@@ -648,17 +650,45 @@ async def webhook_handler(empresa_slug: str, request: Request):
         # Se não usar buffer ou se falhar, processar imediatamente
         # Processar mensagem com Smart Agent (LangGraph + LangChain)
         try:
-            # Criar agente inteligente
-            from agents.smart_agent import SmartAgent
+            # ✅ CACHE GLOBAL de Smart Agents por waid
+            if not hasattr(webhook_handler, '_smart_agents_cache'):
+                webhook_handler._smart_agents_cache = {}
             
-            # Criar novo agente inteligente
-            smart_agent = SmartAgent(empresa_config)
+            # ✅ LIMPEZA PERIÓDICA do cache (evitar vazamento de memória)
+            current_time = time.time()
+            if not hasattr(webhook_handler, '_last_cache_cleanup'):
+                webhook_handler._last_cache_cleanup = current_time
             
-            # Processar mensagem
-            response_message = smart_agent.process_message(webhook_data.get('Body', ''), {
+            # Limpar cache a cada 1 hora (3600 segundos)
+            if current_time - webhook_handler._last_cache_cleanup > 3600:
+                old_cache_size = len(webhook_handler._smart_agents_cache)
+                # Manter apenas agentes ativos nas últimas 24 horas
+                cutoff_time = current_time - 86400  # 24 horas
+                webhook_handler._smart_agents_cache = {
+                    waid: agent for waid, agent in webhook_handler._smart_agents_cache.items()
+                    if hasattr(agent, 'last_activity') and agent.last_activity > cutoff_time
+                }
+                webhook_handler._last_cache_cleanup = current_time
+                logger.info(f"🧹 Cache limpo: {old_cache_size} → {len(webhook_handler._smart_agents_cache)} agentes")
+            
+            # ✅ OBTER Smart Agent EXISTENTE ou criar novo
+            if wa_id in webhook_handler._smart_agents_cache:
+                smart_agent = webhook_handler._smart_agents_cache[wa_id]
+                # ✅ ATUALIZAR atividade do agente
+                smart_agent.last_activity = current_time
+                logger.info(f"🔄 Reutilizando Smart Agent existente para waid {wa_id}")
+            else:
+                from agents.smart_agent import SmartAgent
+                smart_agent = SmartAgent(empresa_config)
+                # ✅ ADICIONAR timestamp de atividade
+                smart_agent.last_activity = current_time
+                webhook_handler._smart_agents_cache[wa_id] = smart_agent
+                logger.info(f"🆕 Criando novo Smart Agent para waid {wa_id}")
+            
+            # ✅ AGORA SIM: Smart Agent tem memória preservada
+            response_message = smart_agent.analyze_and_respond(webhook_data.get('Body', ''), wa_id, {
                 'empresa_slug': empresa_slug,
                 'cliente_id': wa_id,
-                'waid': wa_id,  # Adicionar waid para o cache de contexto
                 'empresa_config': empresa_config
             })
             
@@ -2678,10 +2708,9 @@ async def _debounce_wait_and_process(empresa_slug: str, wa_id: str, empresa_conf
         smart_agent = SmartAgent(empresa_config)
         
         # Processar mensagem
-        response_message = smart_agent.process_message(webhook_data.get('Body', ''), {
+        response_message = smart_agent.analyze_and_respond(webhook_data.get('Body', ''), wa_id, {
             'empresa_slug': empresa_slug,
             'cliente_id': wa_id,
-            'waid': wa_id,  # Adicionar waid para o cache de contexto
             'empresa_config': empresa_config
         })
         
