@@ -1978,7 +1978,13 @@ DADOS DA AÇÃO:
 {json.dumps(tools_data, indent=2, ensure_ascii=False, default=str) if tools_data else 'Nenhum dado de ação'}
 
 INSTRUÇÕES:
-Analise a mensagem do usuário e responda de acordo com o prompt da empresa, considerando o contexto da conversa e as regras de negócio."""
+Analise a mensagem do usuário e responda de acordo com o prompt da empresa, considerando o contexto da conversa e as regras de negócio.
+
+IMPORTANTE - MÚLTIPLAS MENSAGENS:
+Se você receber múltiplas mensagens (como agora), NÃO responda cada uma separadamente.
+Analise tudo junto e dê UMA resposta inteligente que aborde o contexto completo.
+
+EXEMPLO: Se o usuário disser 'Oi' + 'Tudo bem?', responda 'Oi! Tudo bem sim, obrigado! 😊 Como posso te ajudar hoje?'"""
 
         # ✅ UMA CHAMADA LLM que decide tudo
         response = self.llm.invoke([

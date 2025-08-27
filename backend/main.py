@@ -402,7 +402,7 @@ def force_process_buffer(cliente_id: str = None, empresa: str = None):
                 entry['deadline'] = time.time()
                 # criar task isolada para cada alvo
                 empresa_config = entry.get('empresa_config', {})
-                asyncio.create_task(_debounce_wait_and_process(emp, wa, empresa_config))
+                asyncio.create_task(_buffer_wait_and_process(emp, wa, empresa_config))
                 processed += 1
             except Exception as e:
                 logger.error(f"Erro no flush do debounce para {emp}:{wa}: {e}")
@@ -622,29 +622,50 @@ async def webhook_handler(empresa_slug: str, request: Request):
         except Exception as te:
             logger.error(f"Erro ao transcrever áudio: {te}")
         
-        # DEBOUNCE EM MEMÓRIA (substitui buffer em banco)
+        # BUFFER EM MEMÓRIA (acumula mensagens e processa tudo junto)
         if empresa_config.get('usar_buffer', True):
-            # Debounce: atualiza estado e adia o processamento
-            key = _get_debounce_key(empresa_slug, wa_id)
-            deadline = time.time() + DEFAULT_DEBOUNCE_SECONDS
-            entry = debounce_state.get(key) or {}
+            # Buffer: acumula mensagens e adia o processamento
+            key = _get_buffer_key(empresa_slug, wa_id)
+            deadline = time.time() + DEFAULT_BUFFER_SECONDS
+            entry = buffer_state.get(key) or {}
+            
+            # ✅ ACUMULAR mensagens em vez de sobrescrever
+            if 'messages' not in entry:
+                entry['messages'] = []
+            entry['messages'].append(webhook_data)
+            
             entry.update({
                 'deadline': deadline,
-                'webhook_data': webhook_data,
-                'empresa_config': empresa_config
+                'empresa_config': empresa_config,
+                'wa_id': wa_id,
+                'empresa_slug': empresa_slug
             })
-            debounce_state[key] = entry
+            buffer_state[key] = entry
             
-            # Se não houver task ativa, criar uma
-            if not entry.get('timer') or entry['timer'].done():
-                entry['timer'] = asyncio.create_task(_debounce_wait_and_process(empresa_slug, wa_id, empresa_config))
+            logger.info(f"📥 Mensagem adicionada ao buffer para {empresa_slug}:{wa_id}. Total: {len(entry['messages'])} mensagens")
+            
+            # ✅ SEMPRE criar nova task (cancelando a anterior se existir)
+            if entry.get('timer') and not entry['timer'].done():
+                logger.info(f"🔄 Cancelando task anterior para {empresa_slug}:{wa_id}")
+                entry['timer'].cancel()
+            
+            logger.info(f"🔄 Criando nova buffer task para {empresa_slug}:{wa_id}")
+            entry['timer'] = asyncio.create_task(_buffer_wait_and_process(empresa_slug, wa_id, empresa_config))
+            logger.info(f"✅ Buffer task criada para {empresa_slug}:{wa_id} - Status: {entry['timer']._state}")
+            
+            # Verificar se a task foi criada corretamente
+            if entry['timer']._state == 'PENDING':
+                logger.info(f"✅ Task está pendente e será executada")
+            else:
+                logger.warning(f"⚠️ Task não está pendente: {entry['timer']._state}")
             
             return JSONResponse(content={
                 'success': True,
-                'message': 'Mensagem recebida. Vou aguardar alguns segundos para consolidar e responder.',
+                'message': f'Mensagem recebida. Vou aguardar alguns segundos para consolidar e responder. ({len(entry["messages"])} mensagens no buffer)',
                 'empresa': empresa_slug,
                 'cliente_id': wa_id,
-                'debounce_ms': int(DEFAULT_DEBOUNCE_SECONDS * 1000)
+                'buffer_ms': int(DEFAULT_BUFFER_SECONDS * 1000),
+                'buffer_count': len(entry['messages'])
             })
         
         # Se não usar buffer ou se falhar, processar imediatamente
@@ -2674,74 +2695,103 @@ async def generate_oauth_token_get(
             content={"success": False, "message": f"Erro interno: {str(e)}"}
         )
 
-# Estado de debounce em memória por cliente (WaId)
-debounce_state: Dict[Tuple[str, str], Dict[str, Any]] = {}
-# Estrutura: {(empresa_slug, wa_id): { 'timer': asyncio.Task, 'last_message': str, 'webhook_data': dict, 'deadline': float }}
+# Estado de buffer em memória por cliente (WaId)
+buffer_state: Dict[Tuple[str, str], Dict[str, Any]] = {}
+# Estrutura: {(empresa_slug, wa_id): { 'timer': asyncio.Task, 'messages': list, 'deadline': float, 'empresa_config': dict }}
 
-DEFAULT_DEBOUNCE_SECONDS = 8  # pode ser tornado configurável por empresa futuramente
+DEFAULT_BUFFER_SECONDS = 8  # pode ser tornado configurável por empresa futuramente
 
-def _get_debounce_key(empresa_slug: str, wa_id: str) -> Tuple[str, str]:
+def _get_buffer_key(empresa_slug: str, wa_id: str) -> Tuple[str, str]:
     return (empresa_slug, wa_id)
 
-async def _debounce_wait_and_process(empresa_slug: str, wa_id: str, empresa_config: dict):
-    key = _get_debounce_key(empresa_slug, wa_id)
-    entry = debounce_state.get(key)
+async def _buffer_wait_and_process(empresa_slug: str, wa_id: str, empresa_config: dict):
+    logger.info(f"🚀 Buffer task iniciada para {empresa_slug}:{wa_id}")
+    
+    key = _get_buffer_key(empresa_slug, wa_id)
+    entry = buffer_state.get(key)
     if not entry:
+        logger.warning(f"⚠️ Buffer entry não encontrada para {empresa_slug}:{wa_id}")
         return
+    
     deadline = entry.get('deadline', 0)
     now = time.time()
     delay = max(0, deadline - now)
+    
+    logger.info(f"⏰ Buffer aguardando {delay:.1f}s para {empresa_slug}:{wa_id} (deadline: {deadline:.1f}, now: {now:.1f})")
     await asyncio.sleep(delay)
 
     # Verificar se ninguém atualizou a deadline durante a espera
-    latest = debounce_state.get(key)
+    latest = buffer_state.get(key)
     if not latest or latest.get('deadline') != deadline:
+        logger.info(f"🔄 Buffer cancelado para {empresa_slug}:{wa_id} - nova mensagem chegou durante espera")
         return  # houve nova mensagem, cancela este processamento
+    
+    logger.info(f"✅ Buffer expirou para {empresa_slug}:{wa_id} - processando mensagens...")
 
-    # Processar a última mensagem recebida
-    webhook_data = latest.get('webhook_data', {})
+    # ✅ PROCESSAR TODAS AS MENSAGENS ACUMULADAS
+    messages = latest.get('messages', [])
+    logger.info(f"🔄 Buffer expirou para {empresa_slug}:{wa_id}. Processando {len(messages)} mensagens acumuladas")
+    
     try:
-        # Criar agente inteligente
+        # ✅ REUTILIZAR SMART AGENT EXISTENTE ou criar novo
         from agents.smart_agent import SmartAgent
         
-        # Criar novo agente inteligente
+        # ✅ REUTILIZAR SMART AGENT EXISTENTE ou criar novo
+        # Como estamos em uma função async separada, vamos criar um novo Smart Agent
+        # mas ele vai carregar o contexto do cache global automaticamente
         smart_agent = SmartAgent(empresa_config)
+        logger.info(f"🆕 Smart Agent criado para {empresa_slug}:{wa_id} (vai carregar contexto do cache global)")
         
-        # Processar mensagem
-        response_message = smart_agent.analyze_and_respond(webhook_data.get('Body', ''), wa_id, {
+        # ✅ PROCESSAR TODAS AS MENSAGENS JUNTAS (não individualmente!)
+        logger.info(f"📝 Juntando {len(messages)} mensagens para processamento único...")
+        
+        # Juntar todas as mensagens em uma única string
+        combined_message = "\n".join([msg.get('Body', '') for msg in messages])
+        logger.info(f"📝 Mensagem consolidada: {combined_message}")
+        
+        # Processar UMA VEZ com todas as mensagens juntas
+        response_message = smart_agent.analyze_and_respond(combined_message, wa_id, {
             'empresa_slug': empresa_slug,
             'cliente_id': wa_id,
             'empresa_config': empresa_config
         })
         
-        result = {
-            'success': True,
-            'message': response_message
-        }
-
-        if result.get('success'):
-            from integrations.twilio_service import TwilioService
-            twilio_service = TwilioService(
-                empresa_config.get('twilio_sid'),
-                empresa_config.get('twilio_token'),
-                empresa_config.get('twilio_number')
-            )
-            response_message = result.get('message', '')
-            if empresa_config.get('mensagem_quebrada', False) and len(response_message) > 200:
-                parts = _break_long_message(response_message)
-                for i, part in enumerate(parts):
-                    twilio_service.send_whatsapp_message(wa_id, part)
-                    if i < len(parts) - 1:
-                        await asyncio.sleep(0.5)
-            else:
-                twilio_service.send_whatsapp_message(wa_id, response_message)
+        logger.info(f"✅ Resposta única processada: {response_message[:100]}...")
+        
+        # ✅ ENVIAR RESPOSTA ÚNICA (não consolidada)
+        final_response = response_message
+        
+        logger.info(f"📤 Enviando resposta única para {empresa_slug}:{wa_id}")
+        
+        from integrations.twilio_service import TwilioService
+        twilio_service = TwilioService(
+            empresa_config.get('twilio_sid'),
+            empresa_config.get('twilio_token'),
+            empresa_config.get('twilio_number')
+        )
+        
+        # Enviar resposta única
+        if empresa_config.get('mensagem_quebrada', False) and len(final_response) > 200:
+            parts = _break_long_message(final_response)
+            for i, part in enumerate(parts):
+                twilio_service.send_whatsapp_message(wa_id, part)
+                if i < len(parts) - 1:
+                    await asyncio.sleep(0.5)
+            logger.info(f"📤 Resposta única enviada em {len(parts)} partes")
         else:
-            logger.warning(f"Agente retornou falha no debounce para {empresa_slug}:{wa_id}")
+            twilio_service.send_whatsapp_message(wa_id, final_response)
+            logger.info(f"📤 Resposta única enviada com sucesso")
+        
+        logger.info(f"✅ Buffer processado com sucesso para {empresa_slug}:{wa_id}. {len(messages)} mensagens processadas")
+        
     except Exception as e:
-        logger.error(f"Erro no processamento debounce: {e}")
+        logger.error(f"❌ Erro no processamento do buffer para {empresa_slug}:{wa_id}: {e}")
+        import traceback
+        logger.error(f"❌ Traceback completo: {traceback.format_exc()}")
     finally:
-        # Limpar estado
-        debounce_state.pop(key, None)
+        # Limpar estado do buffer
+        buffer_state.pop(key, None)
+        logger.info(f"🧹 Buffer limpo para {empresa_slug}:{wa_id}")
 
 if __name__ == "__main__":
     import uvicorn
