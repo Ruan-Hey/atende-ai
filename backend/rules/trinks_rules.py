@@ -1696,22 +1696,21 @@ INTENÇÕES SUPORTADAS: {', '.join(available_intents) if available_intents else 
 
 FUNÇÃO PRINCIPAL: Analisar a mensagem e retornar APENAS um objeto JSON com intenção, informações extraídas e instruções de cache.
 
+🚨 REGRA CRÍTICA: Se a mensagem atual NÃO mencionar profissional/procedimento, mas a ÚLTIMA MENSAGEM DO BOT contiver esses dados → EXTRAIA DO CONTEXTO ANTERIOR automaticamente.
+
 ESTRUTURA OBRIGATÓRIA:
 {{
   "intent": "<intenção_detectada>",
   "extracted": {{
-    "profissional": "nome da pessoa mencionada (se houver)",
-    "procedimento": "tipo de serviço/procedimento (se houver)",
+    "profissional": "nome da pessoa mencionada (se houver, OU do contexto anterior)",
+    "procedimento": "tipo de serviço/procedimento (se houver, OU do contexto anterior)",
     "data": "data mencionada (converta para YYYY-MM-DD)",
     "horario": "horário mencionado (se houver)",
-    "servico": "tipo de serviço (se houver)",
-    "preferencia_professional": "preferência expressa (se houver)",
+    "profissional_id": "ID do profissional (se resolvido via cache)",
+    "servico_id": "ID do serviço (se resolvido via cache)",
     "cpf": "CPF mencionado (se houver)",
-    "client_id": "ID do cliente mencionado (se houver)",
     "nome": "nome do cliente mencionado (se houver)",
-    "email": "email do cliente mencionado (se houver)",
-    "temp_professional_cache": "cache temporário de profissionais (se disponível no contexto)",
-    "temp_cache_expiry": "contador de expiração do cache (se disponível no contexto)"
+    "email": "email do cliente mencionado (se houver)"
   }},
   "cache_instructions": {{
     "clear_fields": ["lista_de_campos_para_limpar_do_cache"]
@@ -1743,13 +1742,14 @@ CONVERSÃO DE CPF:
 
 REGRAS CRÍTICAS DE PRIORIDADE:
 1. SEMPRE retorne APENAS JSON válido
-2. A MENSAGEM ATUAL TEM PRIORIDADE sobre o contexto anterior
-3. APENAS extraia data caso você tenha seugerido aquele horario anteriormente, nunca extraia data que não verificamos ainda. 
-3. Se a mensagem atual mencionar nova data, use APENAS ela (ignore datas anteriores)
-4. Se a mensagem atual mencionar novo horário, use APENAS ele (ignore horários anteriores)
-5. Se a mensagem atual mencionar novo profissional, use APENAS ele (ignore profissionais anteriores)
-6. Use o contexto apenas para informações NÃO mencionadas na mensagem atual
-7. NUNCA mantenha dados antigos se novos foram explicitamente mencionados
+2. A MENSAGEM ATUAL TEM PRIORIDADE sobre o contexto anterior, MAS se a mensagem atual NÃO mencionar profissional/procedimento e a ÚLTIMA MENSAGEM DO BOT contiver esses dados → EXTRAIA DO CONTEXTO ANTERIOR automaticamente
+3. APENAS extraia data caso você tenha sugerido aquele horário anteriormente, nunca extraia data que não verificamos ainda
+4. Se a mensagem atual mencionar nova data, use APENAS ela (ignore datas anteriores)
+5. Se a mensagem atual mencionar novo horário, use APENAS ele (ignore horários anteriores)
+6. Se a mensagem atual mencionar novo profissional, use APENAS ele (ignore profissionais anteriores)
+7. Use o contexto anterior para informações NÃO mencionadas na mensagem atual, ESPECIALMENTE profissional e procedimento da última mensagem do bot
+8. NUNCA mantenha dados antigos se novos foram explicitamente mencionados
+9. REGRA ESPECIAL: Se a mensagem atual só mencionar data/horário mas NÃO mencionar profissional/procedimento, SEMPRE extraia profissional e procedimento da última mensagem do bot disponível no contexto
 
 REGRAS DE LIMPEZA DE CACHE:
 1. SEMPRE que mencionar NOVO profissional → clear_fields: ["profissional_id", "horario"]
@@ -1759,7 +1759,7 @@ REGRAS DE LIMPEZA DE CACHE:
 5. Se NÃO mencionar mudanças → clear_fields: [] (não limpa nada)
 
 RESOLUÇÃO AUTOMÁTICA DE PROFISSIONAL:
-- Se horário específico for mencionado → use o histórico para tentar identificar qual profissional tem esse horáriom na ultima mensagem do bot!
+- Se horário específico for mencionado → use o histórico para tentar identificar qual profissional tem esse horário na última mensagem do bot!
 - Example: "14:30" → verifique se na ultima mensagem do Bot era listado o nome de algum profissional com 14:30 listado
 - Se encontrar → extraia também o profissional_id correspondente
 
@@ -1771,7 +1771,24 @@ CACHE TEMPORÁRIO DE PROFISSIONAIS:
   - profissional_id: "564031" (Amabile)
 - Cache expira automaticamente após 2 mensagens
 
-EXEMPLO de reoslução automatica de profissioanl:
+EXEMPLO de resolução automática de profissional:
+Histórico: "Amabile: 14:30, 15:00 | Geraldine: 09:30, 10:00"
+Mensagem: "Pode ser as 14:30"
+Resposta: {{
+    "horario": "14:30",
+    "profissional_id": "564031"
+}}
+
+EXEMPLO OBRIGATÓRIO DE USO DO CONTEXTO ANTERIOR:
+- Última mensagem do Bot: "O Laser Lavien é um tratamento incrível... com a Dra. Amabile. Gostaria de agendar?"
+- Mensagem atual do Usuário: "Sim, pode ser dia 01/09"
+- RESULTADO OBRIGATÓRIO: 
+  - profissional: "Dra. Amabile" (extraído do contexto anterior)
+  - procedimento: "Laser Lavien" (extraído do contexto anterior)
+  - data: "2025-09-01" (extraído da mensagem atual)
+  - cache_instructions: {{"clear_fields": ["horario"]}}
+
+EXEMPLO de resolução automática de profissional:
 Histórico: "Amabile: 14:30, 15:00 | Geraldine: 09:30, 10:00"
 Mensagem: "Pode ser as 14:30"
 Resposta: {{

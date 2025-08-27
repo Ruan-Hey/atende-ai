@@ -261,6 +261,18 @@ class SmartAgent:
             context['conversation_history'] = conversation_history
             context['waid'] = waid
             
+            # ✅ NOVO: PASSAR CACHE TEMPORÁRIO como contexto
+            if waid in SmartAgent._conversation_cache:
+                cached_data = SmartAgent._conversation_cache[waid]
+                if 'extracted_data' in cached_data:
+                    extracted_data = cached_data['extracted_data']
+                    
+                    # ✅ PASSAR cache temporário como contexto
+                    if 'temp_professional_cache' in extracted_data:
+                        context['temp_professional_cache'] = extracted_data['temp_professional_cache']
+                        context['temp_cache_expiry'] = extracted_data['temp_cache_expiry']
+                        logger.info(f"🔄 Cache temporário passado para TrinksRules: {len(extracted_data['temp_professional_cache'])} profissionais")
+            
             # ✅ ARQUITETURA UNIFICADA: Detectar intenção e extrair dados em uma única chamada LLM
             parsed_result = self.trinks_rules.detect_intent_and_extract(message, context, self.empresa_config)
             intent = parsed_result.get("intent", "general")
