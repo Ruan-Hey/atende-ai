@@ -707,6 +707,22 @@ async def webhook_handler(empresa_slug: str, request: Request):
                 _smart_agents_cache[wa_id] = smart_agent
                 logger.info(f"🆕 Criando novo Smart Agent para waid {wa_id}")
             
+            # ✅ SALVAR MENSAGEM DO CLIENTE NO BANCO
+            from services.services import DatabaseService
+            db_service = DatabaseService()
+            
+            try:
+                db_service.save_message(
+                    empresa_id=empresa_config.get('empresa_id'),
+                    cliente_id=wa_id,
+                    text=webhook_data.get('Body', ''),
+                    is_bot=False,
+                    cliente_nome=None
+                )
+                logger.info(f"💾 Mensagem do cliente salva no banco: {wa_id}")
+            except Exception as e:
+                logger.error(f"❌ Erro ao salvar mensagem do cliente: {e}")
+            
             # ✅ AGORA SIM: Smart Agent tem memória preservada
             response_message = smart_agent.analyze_and_respond(webhook_data.get('Body', ''), wa_id, {
                 'empresa_slug': empresa_slug,
@@ -756,6 +772,19 @@ async def webhook_handler(empresa_slug: str, request: Request):
                     
                     if twilio_result.get('success'):
                         logger.info(f"Mensagem processada e enviada com sucesso para {empresa_slug}:{wa_id}")
+                        
+                        # ✅ SALVAR RESPOSTA DO BOT NO BANCO
+                        try:
+                            db_service.save_message(
+                                empresa_id=empresa_config.get('empresa_id'),
+                                cliente_id=wa_id,
+                                text=response_message,
+                                is_bot=True,
+                                cliente_nome=None
+                            )
+                            logger.info(f"💾 Resposta do bot salva no banco: {wa_id}")
+                        except Exception as e:
+                            logger.error(f"❌ Erro ao salvar resposta do bot: {e}")
                     else:
                         logger.error(f"Erro ao enviar mensagem via Twilio: {twilio_result.get('error')}")
             
@@ -2783,6 +2812,24 @@ async def _buffer_wait_and_process(empresa_slug: str, wa_id: str, empresa_config
         smart_agent = SmartAgent(empresa_config)
         logger.info(f"🆕 Smart Agent criado para {empresa_slug}:{wa_id} (vai carregar contexto do cache global)")
         
+        # ✅ SALVAR MENSAGENS NO BANCO ANTES DE PROCESSAR
+        from services.services import DatabaseService
+        db_service = DatabaseService()
+        
+        # Salvar cada mensagem do cliente no banco
+        for msg in messages:
+            try:
+                db_service.save_message(
+                    empresa_id=empresa_config.get('empresa_id'),
+                    cliente_id=wa_id,
+                    text=msg.get('Body', ''),
+                    is_bot=False,
+                    cliente_nome=None  # Será extraído automaticamente se disponível
+                )
+                logger.info(f"💾 Mensagem do cliente salva no banco: {wa_id}")
+            except Exception as e:
+                logger.error(f"❌ Erro ao salvar mensagem do cliente: {e}")
+        
         # ✅ PROCESSAR TODAS AS MENSAGENS JUNTAS (não individualmente!)
         logger.info(f"📝 Juntando {len(messages)} mensagens para processamento único...")
         
@@ -2810,6 +2857,19 @@ async def _buffer_wait_and_process(empresa_slug: str, wa_id: str, empresa_config
             empresa_config.get('twilio_token'),
             empresa_config.get('twilio_number')
         )
+        
+        # ✅ SALVAR RESPOSTA DO BOT NO BANCO
+        try:
+            db_service.save_message(
+                empresa_id=empresa_config.get('empresa_id'),
+                cliente_id=wa_id,
+                text=final_response,
+                is_bot=True,
+                cliente_nome=None
+            )
+            logger.info(f"💾 Resposta do bot salva no banco: {wa_id}")
+        except Exception as e:
+            logger.error(f"❌ Erro ao salvar resposta do bot: {e}")
         
         # Enviar resposta única
         if empresa_config.get('mensagem_quebrada', False) and len(final_response) > 200:
