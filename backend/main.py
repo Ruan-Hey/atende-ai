@@ -1260,16 +1260,24 @@ def delete_usuario(
 def clear_conversation_cache(
     empresa_slug: str,
     waid: str,
-    current_user: Usuario = Depends(get_current_superuser)
+    current_user: Usuario = Depends(get_current_user)
 ):
     """Limpa o cache de conversa de um usuário específico"""
     try:
-        # Verificar se a empresa existe
+        # Verificar se a empresa existe e se o usuário tem acesso
         session = SessionLocal()
         try:
             empresa = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
             if not empresa:
                 raise HTTPException(status_code=404, detail="Empresa não encontrada")
+            
+            # Verificar se usuário tem acesso a esta empresa
+            if not current_user.is_superuser:
+                if not current_user.empresa_id:
+                    raise HTTPException(status_code=403, detail="Acesso negado")
+                
+                if current_user.empresa_id != empresa.id:
+                    raise HTTPException(status_code=403, detail="Acesso negado à empresa")
         finally:
             session.close()
         
