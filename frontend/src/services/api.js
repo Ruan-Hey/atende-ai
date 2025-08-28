@@ -97,6 +97,13 @@ class ApiService {
     return this.authenticatedRequest(`/api/admin/empresa/${empresaSlug}/clientes`)
   }
 
+  // Limpar cache de conversa de um usuário
+  async clearConversationCache(empresaSlug, waid) {
+    return this.authenticatedRequest(`/api/admin/conversations/${empresaSlug}/${waid}/clear-cache`, {
+      method: 'POST'
+    })
+  }
+
   // Buscar configurações de uma empresa
   async getEmpresaConfiguracoes(empresaSlug) {
     return this.authenticatedRequest(`/api/empresas/${empresaSlug}/configuracoes`)

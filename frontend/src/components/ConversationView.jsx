@@ -22,11 +22,37 @@ const ConversationView = () => {
   const messagesContainerRef = useRef(null)
   const PAGE_SIZE = 20
 
+  // Estado para feedback de limpeza de cache
+  const [cacheCleared, setCacheCleared] = useState(false)
+  const [clearingCache, setClearingCache] = useState(false)
+
   // Estado para mobile tabs
   const [activeTab, setActiveTab] = useState('conversations') // 'conversations' ou 'messages'
   const [isMobile, setIsMobile] = useState(false)
 
   // Dados fake para demonstração - REMOVIDO, agora usando API real
+
+  // Função para limpar cache da conversa
+  const clearConversationCache = async () => {
+    if (!selectedConversation) return
+    
+    setClearingCache(true)
+    try {
+      await apiService.clearConversationCache(empresa, selectedConversation.cliente_id)
+      setCacheCleared(true)
+      
+      // Resetar feedback após 3 segundos
+      setTimeout(() => setCacheCleared(false), 3000)
+      
+    } catch (error) {
+      console.error('Erro ao limpar cache:', error)
+      // Mostrar erro por 3 segundos
+      setError('Erro ao limpar cache')
+      setTimeout(() => setError(null), 3000)
+    } finally {
+      setClearingCache(false)
+    }
+  }
 
   // Detectar se é mobile
   useEffect(() => {
@@ -333,14 +359,28 @@ const ConversationView = () => {
               </div>
             </div>
             <div className="header-actions">
-              <button className="header-action-btn">
-                <span className="action-icon">ℹ️</span>
+              <button 
+                className="header-action-btn"
+                onClick={clearConversationCache}
+                disabled={clearingCache}
+                title="Limpar cache da conversa"
+              >
+                <span className="action-icon">
+                  {clearingCache ? '⏳' : '🔄'}
+                </span>
               </button>
               <button className="header-action-btn">
                 <span className="action-icon">⋮</span>
               </button>
             </div>
           </div>
+
+          {/* Feedback de limpeza de cache */}
+          {cacheCleared && (
+            <div className="cache-cleared-feedback">
+              ✅ Cache limpo com sucesso para {selectedConversation.nome}!
+            </div>
+          )}
 
           {/* Mensagens */}
           <div className="messages-container" ref={messagesContainerRef}>
@@ -417,6 +457,57 @@ const ConversationView = () => {
       </div>
     </div>
   )
+}
+
+// Estilos CSS inline para o feedback de cache
+const styles = `
+  .cache-cleared-feedback {
+    background: linear-gradient(135deg, #4CAF50, #45a049);
+    color: white;
+    padding: 12px 20px;
+    margin: 10px 0;
+    border-radius: 8px;
+    text-align: center;
+    font-weight: 500;
+    box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+    animation: slideIn 0.3s ease-out;
+  }
+
+  .cache-cleared-feedback::before {
+    content: "✅ ";
+    margin-right: 8px;
+  }
+
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .header-action-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .header-action-btn:not(:disabled):hover {
+    background-color: rgba(0, 0, 0, 0.1);
+  }
+`
+
+// Injetar estilos no head
+if (typeof document !== 'undefined') {
+  const styleId = 'conversation-view-styles'
+  if (!document.getElementById(styleId)) {
+    const styleElement = document.createElement('style')
+    styleElement.id = styleId
+    styleElement.textContent = styles
+    document.head.appendChild(styleElement)
+  }
 }
 
 export default ConversationView 

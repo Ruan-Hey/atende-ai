@@ -36,6 +36,10 @@ engine = create_engine(config.POSTGRES_URL)
 
 SessionLocal = sessionmaker(bind=engine)
 
+# Cache global para Smart Agents (acessível por todos os endpoints)
+_smart_agents_cache = {}
+_last_cache_cleanup = time.time()
+
 def save_log_to_db(session: Session, empresa_id: int, level: str, message: str, details: dict = None):
     # Se não há empresa_id, tentar atribuir à TinyTeams
     if empresa_id is None:
@@ -672,29 +676,26 @@ async def webhook_handler(empresa_slug: str, request: Request):
         # Processar mensagem com Smart Agent (LangGraph + LangChain)
         try:
             # ✅ CACHE GLOBAL de Smart Agents por waid
-            if not hasattr(webhook_handler, '_smart_agents_cache'):
-                webhook_handler._smart_agents_cache = {}
+            global _smart_agents_cache, _last_cache_cleanup
             
             # ✅ LIMPEZA PERIÓDICA do cache (evitar vazamento de memória)
             current_time = time.time()
-            if not hasattr(webhook_handler, '_last_cache_cleanup'):
-                webhook_handler._last_cache_cleanup = current_time
             
             # Limpar cache a cada 1 hora (3600 segundos)
-            if current_time - webhook_handler._last_cache_cleanup > 3600:
-                old_cache_size = len(webhook_handler._smart_agents_cache)
+            if current_time - _last_cache_cleanup > 3600:
+                old_cache_size = len(_smart_agents_cache)
                 # Manter apenas agentes ativos nas últimas 24 horas
                 cutoff_time = current_time - 86400  # 24 horas
-                webhook_handler._smart_agents_cache = {
-                    waid: agent for waid, agent in webhook_handler._smart_agents_cache.items()
+                _smart_agents_cache = {
+                    waid: agent for waid, agent in _smart_agents_cache.items()
                     if hasattr(agent, 'last_activity') and agent.last_activity > cutoff_time
                 }
-                webhook_handler._last_cache_cleanup = current_time
-                logger.info(f"🧹 Cache limpo: {old_cache_size} → {len(webhook_handler._smart_agents_cache)} agentes")
+                _last_cache_cleanup = current_time
+                logger.info(f"🧹 Cache limpo: {old_cache_size} → {len(_smart_agents_cache)} agentes")
             
             # ✅ OBTER Smart Agent EXISTENTE ou criar novo
-            if wa_id in webhook_handler._smart_agents_cache:
-                smart_agent = webhook_handler._smart_agents_cache[wa_id]
+            if wa_id in _smart_agents_cache:
+                smart_agent = _smart_agents_cache[wa_id]
                 # ✅ ATUALIZAR atividade do agente
                 smart_agent.last_activity = current_time
                 logger.info(f"🔄 Reutilizando Smart Agent existente para waid {wa_id}")
@@ -703,7 +704,7 @@ async def webhook_handler(empresa_slug: str, request: Request):
                 smart_agent = SmartAgent(empresa_config)
                 # ✅ ADICIONAR timestamp de atividade
                 smart_agent.last_activity = current_time
-                webhook_handler._smart_agents_cache[wa_id] = smart_agent
+                _smart_agents_cache[wa_id] = smart_agent
                 logger.info(f"🆕 Criando novo Smart Agent para waid {wa_id}")
             
             # ✅ AGORA SIM: Smart Agent tem memória preservada
@@ -1225,6 +1226,46 @@ def delete_usuario(
         return {"message": "Usuário deletado com sucesso"}
     finally:
         session.close()
+
+@app.post("/api/admin/conversations/{empresa_slug}/{waid}/clear-cache")
+def clear_conversation_cache(
+    empresa_slug: str,
+    waid: str,
+    current_user: Usuario = Depends(get_current_superuser)
+):
+    """Limpa o cache de conversa de um usuário específico"""
+    try:
+        # Verificar se a empresa existe
+        session = SessionLocal()
+        try:
+            empresa = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
+            if not empresa:
+                raise HTTPException(status_code=404, detail="Empresa não encontrada")
+        finally:
+            session.close()
+        
+        # Limpar cache do SmartAgent para este waid
+        from agents.smart_agent import SmartAgent
+        if hasattr(SmartAgent, '_conversation_cache') and waid in SmartAgent._conversation_cache:
+            del SmartAgent._conversation_cache[waid]
+            logger.info(f"🧹 Cache do SmartAgent limpo para waid {waid}")
+        
+        # Limpar cache global de agentes do webhook handler
+        global _smart_agents_cache
+        if waid in _smart_agents_cache:
+            del _smart_agents_cache[waid]
+            logger.info(f"🧹 Cache de agentes limpo para waid {waid}")
+        
+        return {
+            "success": True,
+            "message": f"Cache limpo com sucesso para {empresa_slug}:{waid}",
+            "waid": waid,
+            "empresa": empresa_slug
+        }
+        
+    except Exception as e:
+        logger.error(f"Erro ao limpar cache para {empresa_slug}:{waid}: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao limpar cache: {str(e)}")
 
 @app.get("/")
 def root():
