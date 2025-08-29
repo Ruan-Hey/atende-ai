@@ -51,6 +51,24 @@ class SmartAgent:
         if not hasattr(SmartAgent, '_conversation_cache'):
             SmartAgent._conversation_cache = {}
     
+    def _save_log_to_db(self, level: str, message: str, details: dict = None):
+        """Salva log no banco de dados com empresa_id"""
+        try:
+            from main import save_log_to_db
+            from database import SessionLocal
+            
+            empresa_id = self.empresa_config.get('empresa_id')
+            if empresa_id:
+                session = SessionLocal()
+                try:
+                    save_log_to_db(session, empresa_id, level, message, details)
+                finally:
+                    session.close()
+        except Exception as e:
+            # Fallback para logging normal se falhar
+            logger.error(f"Erro ao salvar log no banco: {e}")
+            logger.error(message)
+
     def _setup_tools(self) -> List:
         """Configura as tools disponíveis usando as TrinksRules para executar operações"""
         tools = []
@@ -71,7 +89,9 @@ class SmartAgent:
                 
                 return f"Informação sobre '{key}' não encontrada. Tente: horários, regras, promoções, endereço, telefone."
             except Exception as e:
-                logger.error(f"Erro ao buscar conhecimento: {e}")
+                error_msg = f"Erro ao buscar conhecimento: {e}"
+                logger.error(error_msg)
+                self._save_log_to_db('ERROR', error_msg, {'tool': 'get_business_knowledge', 'key': key})
                 return "Erro ao buscar informações da empresa"
         
         @lc_tool("get_api_rules")
@@ -82,7 +102,9 @@ class SmartAgent:
                 rules = self.trinks_rules.get_api_rules()
                 return f"Regras da API Trinks: Email obrigatório: {rules.get('email_required', False)}, WaId obrigatório: {rules.get('waid_required', True)}"
             except Exception as e:
-                logger.error(f"Erro ao buscar regras da API: {e}")
+                error_msg = f"Erro ao buscar regras da API: {e}"
+                logger.error(error_msg)
+                self._save_log_to_db('ERROR', error_msg, {'tool': 'get_api_rules'})
                 return "Erro ao buscar regras da API"
         
         @lc_tool("get_available_flows")
@@ -102,7 +124,9 @@ class SmartAgent:
                 else:
                     return f"Nenhum fluxo configurado para Trinks"
             except Exception as e:
-                logger.error(f"Erro ao buscar fluxos: {e}")
+                error_msg = f"Erro ao buscar fluxos: {e}"
+                logger.error(error_msg)
+                self._save_log_to_db('ERROR', error_msg, {'tool': 'get_available_flows'})
                 return "Erro ao buscar fluxos disponíveis"
         
         @lc_tool("search_client")

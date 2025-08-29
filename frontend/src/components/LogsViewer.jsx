@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
+import { useParams } from 'react-router-dom'
 import apiService from '../services/api'
 import LoadingSpinner from './LoadingSpinner'
 
 const LogsViewer = () => {
+  const { empresa } = useParams()
   const [logs, setLogs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -11,11 +13,27 @@ const LogsViewer = () => {
   const [filterLevel, setFilterLevel] = useState('all')
 
   useEffect(() => {
+    // Se não for admin, usar empresa da URL
+    if (empresa && !localStorage.getItem('user')?.includes('"is_superuser":true')) {
+      setSelectedEmpresa(empresa)
+    }
+    
+    // Carregar empresas apenas uma vez (não a cada mudança)
     loadEmpresas()
+    
+    // Carregar logs iniciais
     loadLogs()
-    // Atualizar logs a cada 10 segundos
-    const interval = setInterval(loadLogs, 10000)
+    
+    // Atualizar logs a cada 30 segundos (reduzido de 10 para 30)
+    const interval = setInterval(loadLogs, 30000)
     return () => clearInterval(interval)
+  }, [empresa]) // Removido selectedEmpresa e filterLevel das dependências
+
+  // useEffect separado para quando mudar filtros
+  useEffect(() => {
+    if (selectedEmpresa || filterLevel !== 'all') {
+      loadLogs()
+    }
   }, [selectedEmpresa, filterLevel])
 
   const loadEmpresas = async () => {
@@ -116,11 +134,12 @@ const LogsViewer = () => {
             value={selectedEmpresa}
             onChange={(e) => setSelectedEmpresa(e.target.value)}
             className="form-select"
+            disabled={empresa && !localStorage.getItem('user')?.includes('"is_superuser":true')}
           >
             <option value="">Todas as empresas</option>
-            {Array.isArray(empresas) && empresas.map(empresa => (
-              <option key={empresa.slug} value={empresa.slug}>
-                {empresa.nome}
+            {Array.isArray(empresas) && empresas.map(emp => (
+              <option key={emp.slug} value={emp.slug}>
+                {emp.nome}
               </option>
             ))}
           </select>

@@ -107,8 +107,12 @@ const ConfiguracoesEmpresa = () => {
 
   // useEffect separado para carregar APIs SEM afetar os dados da empresa
   useEffect(() => {
+    console.log('🔄 useEffect carregarAPIs executado - selectedEmpresa:', selectedEmpresa)
     if (selectedEmpresa && selectedEmpresa !== 'nova-empresa') {
+      console.log('✅ Chamando carregarAPIs para empresa:', selectedEmpresa)
       carregarAPIs()
+    } else {
+      console.log('❌ Não chamando carregarAPIs - empresa inválida:', selectedEmpresa)
     }
   }, [selectedEmpresa])
 
@@ -208,29 +212,41 @@ const ConfiguracoesEmpresa = () => {
 
   const carregarAPIs = async () => {
     try {
-      const apisResponse = await apiService.getAPIs()
-      setApis(apisResponse.apis || [])
+      console.log('🔍 Carregando APIs para empresa:', selectedEmpresa)
       
       // Buscar empresa para obter o ID
       const empresasResponse = await apiService.listEmpresas()
       const empresa = empresasResponse.empresas?.find(e => e.slug === selectedEmpresa)
+      console.log('🏢 Empresa encontrada:', empresa)
       
       if (empresa) {
         try {
+          // 1. Buscar TODAS as APIs disponíveis no sistema
+          const todasAPIsResponse = await apiService.getAPIs()
+          console.log('📡 Todas as APIs disponíveis:', todasAPIsResponse.apis)
+          setApis(todasAPIsResponse.apis || [])
+          
+          // 2. Buscar APIs conectadas à empresa
           const empresaAPIsResponse = await apiService.getEmpresaAPIs(empresa.id)
-          console.log('APIs da empresa:', empresaAPIsResponse.apis)
-          console.log('Empresa ID:', empresa.id)
-          console.log('Empresa Slug:', empresa.slug)
+          console.log('🔗 APIs da empresa:', empresaAPIsResponse.apis)
+          console.log('🏢 Empresa ID:', empresa.id)
+          console.log('🏢 Empresa Slug:', empresa.slug)
           setEmpresaAPIs(empresaAPIsResponse.apis || [])
           
-          // NÃO mapear aqui - será feito pelo useEffect quando entrar na aba
         } catch (error) {
-          console.error('Erro ao carregar APIs da empresa:', error)
+          console.error('❌ Erro ao carregar APIs:', error)
+          setApis([])
           setEmpresaAPIs([])
         }
+      } else {
+        console.log('⚠️ Empresa não encontrada para slug:', selectedEmpresa)
+        setApis([])
+        setEmpresaAPIs([])
       }
     } catch (error) {
-      console.error('Erro ao carregar APIs:', error)
+      console.error('❌ Erro ao carregar APIs:', error)
+      setApis([])
+      setEmpresaAPIs([])
     }
   }
 
@@ -896,6 +912,9 @@ const ConfiguracoesEmpresa = () => {
                     {section.id === 'conexoes-apis' ? (
                       /* Integrações com accordion */
                       <div className="google-integrations">
+                        {console.log('🔍 Renderizando aba conexoes-apis')}
+                        {console.log('📡 APIs disponíveis para renderização:', apis)}
+                        {console.log('🔗 APIs da empresa:', empresaAPIs)}
                         {/* Lista unificada de APIs */}
                         {apis.filter(api => api.ativo).map(api => {
                           // Verificar se a API está conectada

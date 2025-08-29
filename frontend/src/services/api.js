@@ -198,10 +198,12 @@ class ApiService {
     })
   }
 
-  // APIs - Listar APIs conectadas a uma empresa
+  // APIs - Listar APIs conectadas a uma empresa (por ID)
   async getEmpresaAPIs(empresaId) {
     return this.authenticatedRequest(`/api/admin/empresas/${empresaId}/apis`)
   }
+
+
 
   // Login do usuário
   async login(email, password) {

@@ -100,7 +100,7 @@ function AppRoutes() {
               <ConversationView />
             </ProtectedRoute>
           } />
-          <Route path="/admin/logs" element={
+          <Route path="/admin/:empresa/logs" element={
             <ProtectedRoute>
               <LogsViewer />
             </ProtectedRoute>

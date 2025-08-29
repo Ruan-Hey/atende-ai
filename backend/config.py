@@ -117,22 +117,22 @@ LOGGING_CONFIG = {
             'handlers': ['console', 'file']
         },
         'agents.smart_agent': {
-            'level': 'INFO',
+            'level': 'WARNING',  # Mudado de INFO para WARNING
             'handlers': ['console', 'file'],
             'propagate': False
         },
         'rules.rules_loader': {
-            'level': 'INFO',
+            'level': 'WARNING',  # Mudado de INFO para WARNING
             'handlers': ['console', 'file'],
             'propagate': False
         },
         'tools': {
-            'level': 'INFO',
+            'level': 'WARNING',  # Mudado de INFO para WARNING
             'handlers': ['console', 'file'],
             'propagate': False
         },
         'integrations': {
-            'level': 'INFO',
+            'level': 'WARNING',  # Mudado de INFO para WARNING
             'handlers': ['console', 'file'],
             'propagate': False
         },

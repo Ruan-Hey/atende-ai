@@ -868,7 +868,7 @@ def _break_long_message(message: str, max_length: int = 200) -> List[str]:
 @app.get("/api/logs")
 def get_logs(empresa: str = None, limit: int = 100, level: str = None, exclude_info: bool = True):
     """Retorna logs do sistema do banco de dados"""
-    print("🔍 DEBUG: Função get_logs chamada")
+            # print("🔍 DEBUG: Função get_logs chamada")  # Removido para limpar logs
     session = SessionLocal()
     try:
         # Construir query base
@@ -889,7 +889,7 @@ def get_logs(empresa: str = None, limit: int = 100, level: str = None, exclude_i
         
         # Limitar resultados
         logs_db = query.limit(limit).all()
-        print(f"🔍 DEBUG: {len(logs_db)} logs encontrados no banco")
+        # print(f"🔍 DEBUG: {len(logs_db)} logs encontrados no banco")  # Removido para limpar logs
         
         # Converter para formato da API
         logs = []
@@ -907,7 +907,7 @@ def get_logs(empresa: str = None, limit: int = 100, level: str = None, exclude_i
                 "details": log.details or {}
             })
         
-        print(f"🔍 DEBUG: Retornando {len(logs)} logs")
+        # print(f"🔍 DEBUG: Retornando {len(logs)} logs")  # Removido para limpar logs
         return {"logs": logs}
     except Exception as e:
         print(f"🔍 DEBUG: Erro: {e}")
@@ -1304,6 +1304,27 @@ def clear_conversation_cache(
         logger.error(f"Erro ao limpar cache para {empresa_slug}:{waid}: {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao limpar cache: {str(e)}")
 
+@app.get("/api/admin/code-usage")
+def get_code_usage(current_user: Usuario = Depends(get_current_superuser)):
+    """Retorna relatório de uso de código para identificar código morto"""
+    try:
+        from code_tracker import get_code_usage
+        return get_code_usage()
+    except Exception as e:
+        logger.error(f"Erro ao obter relatório de uso: {e}")
+        return {"error": "Erro ao obter relatório de uso"}
+
+@app.post("/api/admin/code-usage/save-report")
+def save_code_usage_report(current_user: Usuario = Depends(get_current_superuser)):
+    """Salva relatório de uso de código em arquivo"""
+    try:
+        from code_tracker import save_usage_report
+        success = save_usage_report()
+        return {"success": success, "message": "Relatório salvo com sucesso"}
+    except Exception as e:
+        logger.error(f"Erro ao salvar relatório: {e}")
+        return {"error": "Erro ao salvar relatório"}
+
 @app.get("/")
 def root():
     """Endpoint raiz"""
@@ -1368,8 +1389,9 @@ def get_empresa_configuracoes(
             "labels_json": getattr(empresa, 'labels_json', None) or {"labels": [], "min_confidence": 0.6}
         }
         
-        # Log para debug do knowledge_json
-        logger.info(f"📖 Retornando knowledge_json: {config_data['knowledge_json']}")
+        # Log para debug do knowledge_json (resumido)
+        knowledge_items = config_data['knowledge_json'].get('items', [])
+        logger.info(f"📖 Retornando knowledge_json: {len(knowledge_items)} itens de conhecimento")
         
         # Adicionar configurações das APIs conectadas
         for empresa_api in empresa_apis:
@@ -1753,7 +1775,7 @@ async def criar_api(data: dict, current_user: Usuario = Depends(get_current_supe
         session.close()
 
 @app.get("/api/admin/apis")
-def get_apis(current_user: Usuario = Depends(get_current_superuser)):
+def get_apis(current_user: Usuario = Depends(get_current_user)):
     """Lista todas as APIs disponíveis"""
     session = SessionLocal()
     try:
@@ -1858,10 +1880,19 @@ def conectar_api_empresa(
         session.close()
 
 @app.get("/api/admin/empresas/{empresa_id}/apis")
-def get_empresa_apis(empresa_id: int, current_user: Usuario = Depends(get_current_superuser)):
+def get_empresa_apis(empresa_id: int, current_user: Usuario = Depends(get_current_user)):
     """Lista APIs conectadas a uma empresa"""
     session = SessionLocal()
     try:
+        # Verificar se usuário tem acesso à empresa
+        if not current_user.is_superuser:
+            if not current_user.empresa_id:
+                raise HTTPException(status_code=403, detail="Acesso negado")
+            
+            # Usuário não-admin só pode acessar sua própria empresa
+            if current_user.empresa_id != empresa_id:
+                raise HTTPException(status_code=403, detail="Acesso negado à empresa")
+        
         # Importar o novo serviço
         from services.empresa_api_service import EmpresaAPIService
         
