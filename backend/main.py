@@ -3052,32 +3052,70 @@ async def test_notification(
 ):
     """Testa envio de notificação push"""
     try:
-        # Enviar notificação push REAL usando a API nativa
         logger.info(f"🧪 Usuário {current_user.id} testou notificação push")
         
-        # Retornar dados para o frontend criar a notificação REAL
-        return {
-            "message": "✅ Notificação push criada! Verifique o navegador.", 
-            "status": "success",
-            "notification_data": {
-                "title": "🧪 Teste de Notificação Push",
-                "body": "Esta é uma notificação push REAL do Atende AI!",
-                "icon": "/favicon.png",
-                "badge": "/favicon.png",
-                "tag": "test-notification",
-                "data": {
-                    "type": "test",
-                    "timestamp": str(datetime.now()),
-                    "user_id": current_user.id
+        # Importar WebPushService de forma correta
+        import sys
+        import os
+        sys.path.append(os.path.join(os.path.dirname(__file__), 'notifications'))
+        
+        try:
+            from webpush_service import WebPushService
+            webpush_service = WebPushService()
+            
+            # Buscar subscription do usuário
+            from notifications.models import PushSubscription
+            from database import get_db
+            
+            db = next(get_db())
+            user_subscription = db.query(PushSubscription).filter(
+                PushSubscription.user_id == current_user.id
+            ).first()
+            
+            if not user_subscription:
+                logger.warning(f"Usuário {current_user.id} não tem subscription")
+                return {
+                    "message": "⚠️ Ative as notificações primeiro!", 
+                    "status": "warning"
                 }
-            },
-            "details": {
-                "user_id": current_user.id,
-                "test_type": "real_browser_notification",
-                "timestamp": str(datetime.now()),
-                "note": "Frontend deve criar notificação usando Notification API"
+            
+            # Enviar push REAL
+            subscription_info = {
+                "endpoint": user_subscription.endpoint,
+                "keys": {
+                    "p256dh": user_subscription.p256dh_key,
+                    "auth": user_subscription.auth_key
+                }
             }
-        }
+            
+            logger.info(f"🚀 Enviando push REAL para usuário {current_user.id}")
+            
+            result = webpush_service.send_notification(
+                subscription_info=subscription_info,
+                title="🧪 Teste de Notificação Push",
+                message="Esta é uma notificação push REAL do Atende AI!",
+                data={"type": "test", "timestamp": str(datetime.now())}
+            )
+            
+            if result:
+                logger.info(f"✅ Push REAL enviado com sucesso!")
+                return {
+                    "message": "🚀 Push notification REAL enviado!", 
+                    "status": "success"
+                }
+            else:
+                logger.error(f"❌ Falha ao enviar push REAL")
+                return {
+                    "message": "❌ Falha ao enviar push notification", 
+                    "status": "error"
+                }
+                
+        except Exception as push_error:
+            logger.error(f"Erro no push: {push_error}")
+            return {
+                "message": f"❌ Erro no push: {str(push_error)}", 
+                "status": "error"
+            }
             
     except Exception as e:
         logger.error(f"Erro ao testar notificação: {e}")
