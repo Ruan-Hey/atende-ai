@@ -164,9 +164,61 @@ const LogsViewer = () => {
       const response = await apiService.testNotification()
       console.log('📡 Resposta da API:', response)
       
-      if (response.status === 'success') {
-        console.log('✅ Teste bem-sucedido!')
-        alert('✅ Notificação de teste enviada! Verifique se apareceu no navegador.')
+      if (response.status === 'success' && response.notification_data) {
+        console.log('✅ Teste bem-sucedido! Criando notificação REAL...')
+        
+        // Verificar permissões
+        if ('Notification' in window) {
+          console.log('🔍 Status da permissão:', Notification.permission)
+          
+          if (Notification.permission === 'granted') {
+            // Criar notificação REAL com som e vibração
+            const notification = new Notification(
+              response.notification_data.title,
+              {
+                body: response.notification_data.body,
+                icon: response.notification_data.icon,
+                badge: response.notification_data.badge,
+                tag: response.notification_data.tag,
+                data: response.notification_data.data,
+                requireInteraction: true, // Não fecha automaticamente
+                silent: false // Com som
+              }
+            )
+            
+            // Adicionar eventos
+            notification.onshow = () => {
+              console.log('🔔 Notificação EXIBIDA!')
+              // Tocar som
+              const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT')
+              audio.play().catch(e => console.log('Erro ao tocar som:', e))
+            }
+            
+            notification.onclick = () => {
+              console.log('🔔 Notificação CLICADA!')
+              notification.close()
+            }
+            
+            console.log('🔔 Notificação REAL criada:', notification)
+            alert('✅ Notificação push REAL criada! Verifique o canto superior direito do navegador.')
+            
+          } else if (Notification.permission === 'denied') {
+            console.error('❌ Notificações bloqueadas pelo usuário')
+            alert('❌ Notificações bloqueadas! Clique no ícone de cadeado na barra de endereços e permita notificações.')
+          } else {
+            console.log('🔐 Solicitando permissão...')
+            Notification.requestPermission().then(permission => {
+              if (permission === 'granted') {
+                testPushNotification() // Tentar novamente
+              } else {
+                alert('❌ Permissão negada para notificações')
+              }
+            })
+          }
+        } else {
+          console.error('❌ Notificações não suportadas pelo navegador')
+          alert('❌ Seu navegador não suporta notificações push')
+        }
       } else {
         console.error('❌ Falha no teste:', response)
         alert('❌ Falha ao enviar notificação de teste')

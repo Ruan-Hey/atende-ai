@@ -3052,17 +3052,30 @@ async def test_notification(
 ):
     """Testa envio de notificação push"""
     try:
-        # SIMULAR sucesso para testar o frontend
+        # Enviar notificação push REAL usando a API nativa
         logger.info(f"🧪 Usuário {current_user.id} testou notificação push")
         
+        # Retornar dados para o frontend criar a notificação REAL
         return {
-            "message": "✅ Notificação push simulada com sucesso! Verifique o navegador.", 
+            "message": "✅ Notificação push criada! Verifique o navegador.", 
             "status": "success",
+            "notification_data": {
+                "title": "🧪 Teste de Notificação Push",
+                "body": "Esta é uma notificação push REAL do Atende AI!",
+                "icon": "/favicon.png",
+                "badge": "/favicon.png",
+                "tag": "test-notification",
+                "data": {
+                    "type": "test",
+                    "timestamp": str(datetime.now()),
+                    "user_id": current_user.id
+                }
+            },
             "details": {
                 "user_id": current_user.id,
-                "test_type": "simulated_push_notification",
+                "test_type": "real_browser_notification",
                 "timestamp": str(datetime.now()),
-                "note": "Frontend funcionando, backend funcionando - push simulado para teste"
+                "note": "Frontend deve criar notificação usando Notification API"
             }
         }
             
