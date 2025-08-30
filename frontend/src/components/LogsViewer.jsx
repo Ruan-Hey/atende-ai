@@ -13,7 +13,191 @@ const LogsViewer = () => {
   const [filterLevel, setFilterLevel] = useState('all')
   const [notificationsEnabled, setNotificationsEnabled] = useState(false)
   const [notificationLoading, setNotificationLoading] = useState(false)
+  const [pushSubscription, setPushSubscription] = useState(null)
+  const [vapidPublicKey, setVapidPublicKey] = useState(null)
 
+  // ============================================================================
+  // SISTEMA DE PUSH NOTIFICATIONS
+  // ============================================================================
+
+  // Registrar Service Worker
+  const registerServiceWorker = async () => {
+    try {
+      if ('serviceWorker' in navigator && 'PushManager' in window) {
+        const registration = await navigator.serviceWorker.register('/sw.js')
+        console.log('✅ Service Worker registrado:', registration)
+        return registration
+      } else {
+        console.warn('⚠️ Service Worker ou Push Manager não suportado')
+        return null
+      }
+    } catch (error) {
+      console.error('❌ Erro ao registrar Service Worker:', error)
+      return null
+    }
+  }
+
+  // Obter chave VAPID
+  const getVapidKey = async () => {
+    try {
+      const response = await apiService.getVapidPublicKey()
+      setVapidPublicKey(response.public_key)
+      return response.public_key
+    } catch (error) {
+      console.error('❌ Erro ao obter chave VAPID:', error)
+      return null
+    }
+  }
+
+  // Solicitar permissão de notificações
+  const requestNotificationPermission = async () => {
+    try {
+      if ('Notification' in window) {
+        const permission = await Notification.requestPermission()
+        return permission === 'granted'
+      }
+      return false
+    } catch (error) {
+      console.error('❌ Erro ao solicitar permissão:', error)
+      return false
+    }
+  }
+
+  // Criar subscription para push
+  const createPushSubscription = async (registration) => {
+    try {
+      const vapidKey = await getVapidKey()
+      if (!vapidKey) return null
+
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: vapidKey
+      })
+
+      console.log('✅ Push subscription criada:', subscription)
+      return subscription
+    } catch (error) {
+      console.error('❌ Erro ao criar subscription:', error)
+      return null
+    }
+  }
+
+  // Ativar notificações push
+  const enablePushNotifications = async () => {
+    try {
+      setNotificationLoading(true)
+
+      // Registrar Service Worker
+      const registration = await registerServiceWorker()
+      if (!registration) {
+        alert('Service Worker não pôde ser registrado')
+        return
+      }
+
+      // Solicitar permissão
+      const permissionGranted = await requestNotificationPermission()
+      if (!permissionGranted) {
+        alert('Permissão de notificações negada')
+        return
+      }
+
+      // Criar subscription
+      const subscription = await createPushSubscription(registration)
+      if (!subscription) {
+        alert('Erro ao criar subscription para notificações')
+        return
+      }
+
+      // Salvar no backend
+      await apiService.subscribeToNotifications(subscription)
+      
+      // Atualizar estado
+      setPushSubscription(subscription)
+      setNotificationsEnabled(true)
+      localStorage.setItem('push_notifications_enabled', 'true')
+      
+      alert('✅ Notificações push ativadas com sucesso!')
+      
+    } catch (error) {
+      console.error('❌ Erro ao ativar notificações:', error)
+      alert('Erro ao ativar notificações push')
+    } finally {
+      setNotificationLoading(false)
+    }
+  }
+
+  // Desativar notificações push
+  const disablePushNotifications = async () => {
+    try {
+      setNotificationLoading(true)
+
+      if (pushSubscription) {
+        // Remover subscription
+        await pushSubscription.unsubscribe()
+        await apiService.unsubscribeFromNotifications()
+      }
+
+      // Atualizar estado
+      setPushSubscription(null)
+      setNotificationsEnabled(false)
+      localStorage.setItem('push_notifications_enabled', 'false')
+      
+      alert('✅ Notificações push desativadas!')
+      
+    } catch (error) {
+      console.error('❌ Erro ao desativar notificações:', error)
+      alert('Erro ao desativar notificações push')
+    } finally {
+      setNotificationLoading(false)
+    }
+  }
+
+  // Testar notificação
+  const testPushNotification = async () => {
+    try {
+      if (!notificationsEnabled) {
+        alert('Ative as notificações primeiro!')
+        return
+      }
+
+      const response = await apiService.testNotification()
+      if (response.status === 'success') {
+        alert('✅ Notificação de teste enviada! Verifique se apareceu no navegador.')
+      } else {
+        alert('❌ Falha ao enviar notificação de teste')
+      }
+    } catch (error) {
+      console.error('❌ Erro ao testar notificação:', error)
+      alert('Erro ao testar notificação')
+    }
+  }
+
+  // Verificar estado inicial das notificações
+  useEffect(() => {
+    const checkNotificationStatus = async () => {
+      try {
+        // Verificar se já tem subscription salva
+        const saved = localStorage.getItem('push_notifications_enabled')
+        if (saved === 'true') {
+          setNotificationsEnabled(true)
+          
+          // Verificar se Service Worker está ativo
+          if ('serviceWorker' in navigator) {
+            const registration = await navigator.serviceWorker.getRegistration()
+            if (registration && registration.active) {
+              console.log('✅ Service Worker já está ativo')
+            }
+          }
+        }
+      } catch (error) {
+        console.error('❌ Erro ao verificar status das notificações:', error)
+      }
+    }
+
+    checkNotificationStatus()
+  }, [])
+
+  // Carregar dados iniciais
   useEffect(() => {
     // Se não for admin, usar empresa da URL
     if (empresa && !localStorage.getItem('user')?.includes('"is_superuser":true')) {
@@ -38,12 +222,16 @@ const LogsViewer = () => {
     }
   }, [selectedEmpresa, filterLevel])
 
+  // ============================================================================
+  // FUNÇÃO SIMPLES DE TOGGLE (MANTIDA PARA COMPATIBILIDADE)
+  // ============================================================================
+
   const toggleNotifications = async () => {
     try {
       setNotificationLoading(true)
       const user = JSON.parse(localStorage.getItem('user') || '{}')
       const empresaId = empresas.find(e => e.slug === selectedEmpresa)?.id || user.empresa_id
-      
+
       if (!empresaId) {
         alert('Erro: Empresa não encontrada')
         return
@@ -51,7 +239,7 @@ const LogsViewer = () => {
 
       const action = notificationsEnabled ? 'disable' : 'enable'
       const response = await apiService.toggleNotifications(empresaId, action)
-      
+
       if (response.status === 'enabled' || response.status === 'disabled') {
         setNotificationsEnabled(action === 'enable')
         localStorage.setItem('notifications_enabled', action === 'enable' ? 'true' : 'false')
@@ -191,7 +379,7 @@ const LogsViewer = () => {
 
         <div className="filter-group">
           <label>🔔 Notificações:</label>
-          <button 
+          <button
             className="btn btn-secondary"
             onClick={toggleNotifications}
             disabled={notificationLoading}
@@ -201,6 +389,55 @@ const LogsViewer = () => {
             {notificationLoading && <span className="spinner-border spinner-border-sm ms-2"></span>}
           </button>
         </div>
+
+        {/* ============================================================================ */}
+        {/* SISTEMA COMPLETO DE PUSH NOTIFICATIONS */}
+        {/* ============================================================================ */}
+        
+        <div className="filter-group">
+          <label>📱 Push Notifications:</label>
+          <div className="btn-group" role="group">
+            {!notificationsEnabled ? (
+              <button
+                className="btn btn-success"
+                onClick={enablePushNotifications}
+                disabled={notificationLoading}
+                title="Ativar notificações push no navegador"
+              >
+                🚀 Ativar Push
+                {notificationLoading && <span className="spinner-border spinner-border-sm ms-2"></span>}
+              </button>
+            ) : (
+              <>
+                <button
+                  className="btn btn-warning"
+                  onClick={testPushNotification}
+                  title="Testar notificação push"
+                >
+                  🧪 Testar
+                </button>
+                <button
+                  className="btn btn-danger"
+                  onClick={disablePushNotifications}
+                  disabled={notificationLoading}
+                  title="Desativar notificações push"
+                >
+                  ❌ Desativar Push
+                  {notificationLoading && <span className="spinner-border spinner-border-sm ms-2"></span>}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {vapidPublicKey && (
+          <div className="filter-group">
+            <label>🔑 VAPID Key:</label>
+            <small className="text-muted">
+              {vapidPublicKey.substring(0, 20)}...
+            </small>
+          </div>
+        )}
 
         <button 
           className="btn btn-secondary"

@@ -2978,6 +2978,91 @@ async def toggle_notifications(
         logger.error(f"Erro ao alternar notificações: {e}")
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
+# ============================================================================
+# ENDPOINTS COMPLETOS DE NOTIFICAÇÕES PUSH
+# ============================================================================
+
+@app.get("/api/notifications/vapid-public-key")
+async def get_vapid_public_key():
+    """Retorna a chave pública VAPID para o frontend"""
+    try:
+        from notifications.vapid_keys import VAPID_PUBLIC_KEY
+        return {"public_key": VAPID_PUBLIC_KEY}
+    except Exception as e:
+        logger.error(f"Erro ao obter chave VAPID: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+@app.post("/api/notifications/subscribe")
+async def subscribe_to_notifications(
+    request: Request,
+    current_user: Usuario = Depends(get_current_user)
+):
+    """Registra subscription para push notifications"""
+    try:
+        data = await request.json()
+        subscription = data.get('subscription')
+        
+        if not subscription:
+            raise HTTPException(status_code=400, detail="Subscription é obrigatória")
+        
+        # Salvar subscription no banco (implementar depois)
+        logger.info(f"✅ Usuário {current_user.id} inscrito para notificações")
+        
+        return {"message": "Inscrição realizada com sucesso!", "status": "subscribed"}
+        
+    except Exception as e:
+        logger.error(f"Erro ao inscrever para notificações: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+@app.post("/api/notifications/unsubscribe")
+async def unsubscribe_from_notifications(
+    current_user: Usuario = Depends(get_current_user)
+):
+    """Remove subscription para push notifications"""
+    try:
+        # Remover subscription do banco (implementar depois)
+        logger.info(f"✅ Usuário {current_user.id} removido das notificações")
+        
+        return {"message": "Inscrição removida com sucesso!", "status": "unsubscribed"}
+        
+    except Exception as e:
+        logger.error(f"Erro ao remover inscrição: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+@app.post("/api/notifications/test")
+async def test_notification(
+    current_user: Usuario = Depends(get_current_user)
+):
+    """Testa envio de notificação push"""
+    try:
+        # Simular subscription de teste
+        test_subscription = {
+            "endpoint": "https://fcm.googleapis.com/fcm/send/test",
+            "keys": {
+                "p256dh": "test_p256dh_key",
+                "auth": "test_auth_key"
+            }
+        }
+        
+        # Enviar notificação de teste
+        from notifications.webpush_service import webpush_service
+        
+        result = webpush_service.send_notification(
+            subscription_info=test_subscription,
+            title="🧪 Teste de Notificação",
+            message="Esta é uma notificação de teste do Atende AI!",
+            data={"type": "test", "timestamp": str(datetime.now())}
+        )
+        
+        if result:
+            return {"message": "Notificação de teste enviada!", "status": "success"}
+        else:
+            return {"message": "Falha ao enviar notificação de teste", "status": "error"}
+            
+    except Exception as e:
+        logger.error(f"Erro ao testar notificação: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000) 

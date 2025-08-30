@@ -4,187 +4,134 @@ Serviço para Web Push Notifications
 
 import json
 import logging
-from typing import List, Dict, Any, Optional
-from pywebpush import webpush, WebPushException
-from .vapid_keys import VAPID_PRIVATE_KEY, VAPID_CLAIMS, VAPID_HEADERS
-from .models import PushSubscription, NotificationRule, NotificationLog
-from sqlalchemy.orm import Session
+from typing import List, Dict, Optional
+from pywebpush import WebPushException, webpush
+from .vapid_keys import VAPID_PRIVATE_KEY, VAPID_CLAIMS
 
 logger = logging.getLogger(__name__)
 
 class WebPushService:
-    """Serviço para gerenciar web push notifications"""
+    """Serviço para enviar push notifications"""
     
     def __init__(self):
         self.vapid_private_key = VAPID_PRIVATE_KEY
         self.vapid_claims = VAPID_CLAIMS
-        self.vapid_headers = VAPID_HEADERS
     
     def send_notification(
-        self, 
-        subscription: PushSubscription, 
-        titulo: str, 
-        mensagem: str, 
-        dados: Optional[Dict] = None
+        self,
+        subscription_info: Dict,
+        title: str,
+        message: str,
+        data: Optional[Dict] = None
     ) -> bool:
-        """Envia uma notificação para uma subscription específica"""
+        """
+        Envia uma push notification
+        
+        Args:
+            subscription_info: Informações da subscription
+            title: Título da notificação
+            message: Mensagem da notificação
+            data: Dados adicionais
+        
+        Returns:
+            bool: True se enviado com sucesso
+        """
         try:
-            # 🆕 AÇÕES SIMPLES E DIRETAS
-            actions = [
-                {
-                    "action": "view_conversation",
-                    "title": "Ver conversa"
-                },
-                {
-                    "action": "close",
-                    "title": "Fechar"
-                }
-            ]
-            
-            # Preparar payload da notificação simplificado
+            # Preparar payload da notificação
             payload = {
-                "title": titulo,
-                "body": mensagem,
-                "icon": "/favicon.png",
-                "badge": "/favicon.png",
-                "data": dados or {},
-                "actions": actions,
-                "requireInteraction": True,
-                "tag": "atende-ai-error"
+                "title": title,
+                "message": message,
+                "data": data or {}
             }
             
-            # Enviar via pywebpush
+            # Converter para JSON
+            payload_json = json.dumps(payload)
+            
+            # Enviar notificação
             response = webpush(
-                subscription_info={
-                    "endpoint": subscription.endpoint,
-                    "keys": {
-                        "p256dh": subscription.p256dh,
-                        "auth": subscription.auth
-                    }
-                },
-                data=json.dumps(payload),
+                subscription_info=subscription_info,
+                data=payload_json,
                 vapid_private_key=self.vapid_private_key,
-                vapid_claims=self.vapid_claims,
-                content_encoding="aes128gcm"
+                vapid_claims=self.vapid_claims
             )
             
-            logger.info(f"✅ Notificação enviada para {subscription.usuario_id}: {response.status_code}")
+            logger.info(f"✅ Notificação enviada com sucesso: {title}")
             return True
             
         except WebPushException as e:
-            logger.error(f"❌ Erro ao enviar notificação para {subscription.usuario_id}: {e}")
+            logger.error(f"❌ Erro ao enviar notificação: {e}")
             return False
         except Exception as e:
             logger.error(f"❌ Erro inesperado ao enviar notificação: {e}")
             return False
     
     def send_bulk_notifications(
-        self, 
-        subscriptions: List[PushSubscription], 
-        titulo: str, 
-        mensagem: str, 
-        dados: Optional[Dict] = None
+        self,
+        subscriptions: List[Dict],
+        title: str,
+        message: str,
+        data: Optional[Dict] = None
     ) -> Dict[str, int]:
-        """Envia notificações para múltiplas subscriptions"""
-        resultados = {
-            "total": len(subscriptions),
-            "enviados": 0,
-            "falhas": 0
-        }
+        """
+        Envia notificações para múltiplas subscriptions
+        
+        Args:
+            subscriptions: Lista de subscriptions
+            title: Título da notificação
+            message: Mensagem da notificação
+            data: Dados adicionais
+        
+        Returns:
+            Dict com contagem de sucessos e falhas
+        """
+        success_count = 0
+        failure_count = 0
         
         for subscription in subscriptions:
-            if self.send_notification(subscription, titulo, mensagem, dados):
-                resultados["enviados"] += 1
+            if self.send_notification(subscription, title, message, data):
+                success_count += 1
             else:
-                resultados["falhas"] += 1
+                failure_count += 1
         
-        return resultados
-    
-    def get_subscriptions_by_rule(
-        self, 
-        session: Session, 
-        regra: NotificationRule
-    ) -> List[PushSubscription]:
-        """Busca subscriptions baseado na regra de notificação"""
-        subscriptions = []
+        result = {
+            "success": success_count,
+            "failure": failure_count,
+            "total": len(subscriptions)
+        }
         
-        try:
-            # Filtrar por tipo de destinatário
-            if "admin" in regra.destinatarios:
-                # Buscar subscriptions de usuários admin (sem join, usando subquery)
-                from models import Usuario
-                admin_user_ids = session.query(Usuario.id).filter(Usuario.is_superuser == True).subquery()
-                admin_subs = session.query(PushSubscription).filter(
-                    PushSubscription.usuario_id.in_(admin_user_ids),
-                    PushSubscription.ativo == True
-                ).all()
-                subscriptions.extend(admin_subs)
-            
-            if "empresa" in regra.destinatarios and regra.empresa_id:
-                # Buscar subscriptions de usuários de empresa específica
-                empresa_subs = session.query(PushSubscription).filter(
-                    PushSubscription.empresa_id == regra.empresa_id,
-                    PushSubscription.ativo == True
-                ).all()
-                subscriptions.extend(empresa_subs)
-            
-            if "todos" in regra.destinatarios:
-                # Buscar todas as subscriptions ativas
-                todas_subs = session.query(PushSubscription).filter(
-                    PushSubscription.ativo == True
-                ).all()
-                subscriptions.extend(todas_subs)
-            
-            # Remover duplicatas (usuário pode ter múltiplas subscriptions)
-            seen = set()
-            unique_subscriptions = []
-            for sub in subscriptions:
-                if sub.usuario_id not in seen:
-                    seen.add(sub.usuario_id)
-                    unique_subscriptions.append(sub)
-            
-            return unique_subscriptions
-            
-        except Exception as e:
-            logger.error(f"❌ Erro ao buscar subscriptions: {e}")
-            return []
+        logger.info(f"📊 Notificações em lote: {result}")
+        return result
     
-    def execute_notification_rule(
-        self, 
-        session: Session, 
-        regra: NotificationRule, 
-        titulo: str, 
-        mensagem: str, 
-        dados_contexto: Optional[Dict] = None
-    ) -> Dict[str, Any]:
-        """Executa uma regra de notificação específica"""
-        try:
-            # Buscar subscriptions baseado na regra
-            subscriptions = self.get_subscriptions_by_rule(session, regra)
-            
-            if not subscriptions:
-                logger.warning(f"⚠️ Nenhuma subscription encontrada para regra: {regra.nome}")
-                return {"enviados": 0, "falhas": 0, "total": 0}
-            
-            # Enviar notificações
-            resultados = self.send_bulk_notifications(subscriptions, titulo, mensagem, dados_contexto)
-            
-            # Log da execução
-            log = NotificationLog(
-                rule_id=regra.id,
-                empresa_id=dados_contexto.get('empresa_id') if dados_contexto else None,
-                usuario_id=None,  # Será preenchido se necessário
-                titulo=titulo,
-                mensagem=mensagem,
-                dados=dados_contexto,
-                status='enviado' if resultados["enviados"] > 0 else 'falha'
-            )
-            session.add(log)
-            session.commit()
-            
-            logger.info(f"✅ Regra '{regra.nome}' executada: {resultados['enviados']}/{resultados['total']} enviados")
-            return resultados
-            
-        except Exception as e:
-            logger.error(f"❌ Erro ao executar regra '{regra.nome}': {e}")
-            return {"enviados": 0, "falhas": 0, "total": 0}
+    def send_agent_error_notification(
+        self,
+        subscriptions: List[Dict],
+        empresa_nome: str,
+        error_message: str,
+        error_details: Dict
+    ) -> Dict[str, int]:
+        """
+        Envia notificação específica para erro de agente
+        
+        Args:
+            subscriptions: Lista de subscriptions
+            empresa_nome: Nome da empresa
+            error_message: Mensagem de erro
+            error_details: Detalhes do erro
+        
+        Returns:
+            Dict com contagem de sucessos e falhas
+        """
+        title = f"🚨 Erro no Agente - {empresa_nome}"
+        message = error_message
+        
+        data = {
+            "type": "agent_error",
+            "empresa": empresa_nome,
+            "error_details": error_details,
+            "timestamp": error_details.get("timestamp")
+        }
+        
+        return self.send_bulk_notifications(subscriptions, title, message, data)
+
+# Instância global do serviço
+webpush_service = WebPushService()

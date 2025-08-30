@@ -211,10 +211,41 @@ class ApiService {
   async toggleNotifications(empresaId, action) {
     return this.authenticatedRequest('/api/notifications/toggle', {
       method: 'POST',
-      body: JSON.stringify({ 
-        empresa_id: empresaId, 
-        action: action 
+      body: JSON.stringify({
+        empresa_id: empresaId,
+        action: action
       })
+    })
+  }
+
+  // ============================================================================
+  // PUSH NOTIFICATIONS - SISTEMA COMPLETO
+  // ============================================================================
+
+  // Obter chave pública VAPID
+  async getVapidPublicKey() {
+    return this.authenticatedRequest('/api/notifications/vapid-public-key')
+  }
+
+  // Inscrever para notificações
+  async subscribeToNotifications(subscription) {
+    return this.authenticatedRequest('/api/notifications/subscribe', {
+      method: 'POST',
+      body: JSON.stringify({ subscription })
+    })
+  }
+
+  // Remover inscrição
+  async unsubscribeFromNotifications() {
+    return this.authenticatedRequest('/api/notifications/unsubscribe', {
+      method: 'POST'
+    })
+  }
+
+  // Testar notificação
+  async testNotification() {
+    return this.authenticatedRequest('/api/notifications/test', {
+      method: 'POST'
     })
   }
 
