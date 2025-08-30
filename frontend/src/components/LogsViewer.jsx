@@ -104,9 +104,13 @@ const LogsViewer = () => {
       await apiService.subscribeToNotifications(subscription)
       
       // Atualizar estado
+      console.log('🔄 Atualizando estado...')
       setPushSubscription(subscription)
       setNotificationsEnabled(true)
       localStorage.setItem('push_notifications_enabled', 'true')
+      
+      console.log('✅ Estado atualizado - notificationsEnabled:', true)
+      console.log('✅ Estado atualizado - pushSubscription:', subscription)
       
       alert('✅ Notificações push ativadas com sucesso!')
       
@@ -147,19 +151,29 @@ const LogsViewer = () => {
   // Testar notificação
   const testPushNotification = async () => {
     try {
+      console.log('🧪 Iniciando teste de notificação...')
+      console.log('🔍 Estado notificationsEnabled:', notificationsEnabled)
+      
       if (!notificationsEnabled) {
+        console.error('❌ Notificações não estão ativadas')
         alert('Ative as notificações primeiro!')
         return
       }
 
+      console.log('📡 Chamando API de teste...')
       const response = await apiService.testNotification()
+      console.log('📡 Resposta da API:', response)
+      
       if (response.status === 'success') {
+        console.log('✅ Teste bem-sucedido!')
         alert('✅ Notificação de teste enviada! Verifique se apareceu no navegador.')
       } else {
+        console.error('❌ Falha no teste:', response)
         alert('❌ Falha ao enviar notificação de teste')
       }
     } catch (error) {
       console.error('❌ Erro ao testar notificação:', error)
+      console.error('Stack trace:', error.stack)
       alert('Erro ao testar notificação')
     }
   }
@@ -170,8 +184,11 @@ const LogsViewer = () => {
       try {
         // Verificar se já tem subscription salva
         const saved = localStorage.getItem('push_notifications_enabled')
+        console.log('🔍 Estado salvo no localStorage:', saved)
+        
         if (saved === 'true') {
           setNotificationsEnabled(true)
+          console.log('✅ Estado restaurado do localStorage')
           
           // Verificar se Service Worker está ativo
           if ('serviceWorker' in navigator) {
@@ -188,6 +205,11 @@ const LogsViewer = () => {
 
     checkNotificationStatus()
   }, [])
+
+  // Log sempre que o estado mudar
+  useEffect(() => {
+    console.log('🔄 Estado notificationsEnabled mudou para:', notificationsEnabled)
+  }, [notificationsEnabled])
 
   // Carregar dados iniciais
   useEffect(() => {

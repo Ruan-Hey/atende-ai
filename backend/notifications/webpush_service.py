@@ -6,7 +6,14 @@ import json
 import logging
 from typing import List, Dict, Optional
 from pywebpush import WebPushException, webpush
-from .vapid_keys import VAPID_PRIVATE_KEY, VAPID_CLAIMS
+try:
+    from .vapid_keys import VAPID_PRIVATE_KEY, VAPID_CLAIMS
+except ImportError:
+    # Fallback para import absoluto
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(__file__))
+    from vapid_keys import VAPID_PRIVATE_KEY, VAPID_CLAIMS
 
 logger = logging.getLogger(__name__)
 
