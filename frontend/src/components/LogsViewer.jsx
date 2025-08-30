@@ -14,7 +14,7 @@ const LogsViewer = () => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false)
   const [notificationLoading, setNotificationLoading] = useState(false)
   const [pushSubscription, setPushSubscription] = useState(null)
-  const [vapidPublicKey, setVapidPublicKey] = useState(null)
+
 
   // ============================================================================
   // SISTEMA DE PUSH NOTIFICATIONS
@@ -37,17 +37,7 @@ const LogsViewer = () => {
     }
   }
 
-  // Obter chave VAPID
-  const getVapidKey = async () => {
-    try {
-      const response = await apiService.getVapidPublicKey()
-      setVapidPublicKey(response.public_key)
-      return response.public_key
-    } catch (error) {
-      console.error('❌ Erro ao obter chave VAPID:', error)
-      return null
-    }
-  }
+
 
   // Solicitar permissão de notificações
   const requestNotificationPermission = async () => {
@@ -66,7 +56,9 @@ const LogsViewer = () => {
   // Criar subscription para push
   const createPushSubscription = async (registration) => {
     try {
-      const vapidKey = await getVapidKey()
+      const response = await apiService.getVapidPublicKey()
+      const vapidKey = response.public_key
+      
       if (!vapidKey) return null
 
       const subscription = await registration.pushManager.subscribe({
@@ -222,36 +214,9 @@ const LogsViewer = () => {
     }
   }, [selectedEmpresa, filterLevel])
 
-  // ============================================================================
-  // FUNÇÃO SIMPLES DE TOGGLE (MANTIDA PARA COMPATIBILIDADE)
-  // ============================================================================
 
-  const toggleNotifications = async () => {
-    try {
-      setNotificationLoading(true)
-      const user = JSON.parse(localStorage.getItem('user') || '{}')
-      const empresaId = empresas.find(e => e.slug === selectedEmpresa)?.id || user.empresa_id
 
-      if (!empresaId) {
-        alert('Erro: Empresa não encontrada')
-        return
-      }
 
-      const action = notificationsEnabled ? 'disable' : 'enable'
-      const response = await apiService.toggleNotifications(empresaId, action)
-
-      if (response.status === 'enabled' || response.status === 'disabled') {
-        setNotificationsEnabled(action === 'enable')
-        localStorage.setItem('notifications_enabled', action === 'enable' ? 'true' : 'false')
-        alert(response.message)
-      }
-    } catch (error) {
-      console.error('Erro ao alternar notificações:', error)
-      alert('Erro ao configurar notificações')
-    } finally {
-      setNotificationLoading(false)
-    }
-  }
 
   const loadEmpresas = async () => {
     try {
@@ -377,34 +342,22 @@ const LogsViewer = () => {
           </select>
         </div>
 
-        <div className="filter-group">
-          <label>🔔 Notificações:</label>
-          <button
-            className="btn btn-secondary"
-            onClick={toggleNotifications}
-            disabled={notificationLoading}
-            style={{ minWidth: '120px' }}
-          >
-            {notificationsEnabled ? 'Desativar' : 'Ativar'}
-            {notificationLoading && <span className="spinner-border spinner-border-sm ms-2"></span>}
-          </button>
-        </div>
-
         {/* ============================================================================ */}
-        {/* SISTEMA COMPLETO DE PUSH NOTIFICATIONS */}
+        {/* SISTEMA DE PUSH NOTIFICATIONS */}
         {/* ============================================================================ */}
         
         <div className="filter-group">
-          <label>📱 Push Notifications:</label>
+          <label>🔔 Notificações Push:</label>
           <div className="btn-group" role="group">
             {!notificationsEnabled ? (
               <button
-                className="btn btn-success"
+                className="btn btn-secondary"
                 onClick={enablePushNotifications}
                 disabled={notificationLoading}
                 title="Ativar notificações push no navegador"
+                style={{ minWidth: '120px' }}
               >
-                🚀 Ativar Push
+                {notificationsEnabled ? 'Desativar' : 'Ativar'}
                 {notificationLoading && <span className="spinner-border spinner-border-sm ms-2"></span>}
               </button>
             ) : (
@@ -417,27 +370,19 @@ const LogsViewer = () => {
                   🧪 Testar
                 </button>
                 <button
-                  className="btn btn-danger"
+                  className="btn btn-secondary"
                   onClick={disablePushNotifications}
                   disabled={notificationLoading}
                   title="Desativar notificações push"
+                  style={{ minWidth: '120px' }}
                 >
-                  ❌ Desativar Push
+                  Desativar
                   {notificationLoading && <span className="spinner-border spinner-border-sm ms-2"></span>}
                 </button>
               </>
             )}
           </div>
         </div>
-
-        {vapidPublicKey && (
-          <div className="filter-group">
-            <label>🔑 VAPID Key:</label>
-            <small className="text-muted">
-              {vapidPublicKey.substring(0, 20)}...
-            </small>
-          </div>
-        )}
 
         <button 
           className="btn btn-secondary"

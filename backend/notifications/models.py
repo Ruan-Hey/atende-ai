@@ -5,7 +5,7 @@ Modelos para Web Push Notifications
 from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from models import Base
+from ..models import Base
 
 class PushSubscription(Base):
     """Modelo para armazenar subscriptions de web push"""
