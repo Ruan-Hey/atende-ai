@@ -41,6 +41,10 @@ class ApiService {
 
   // Métricas de uma empresa específica
   async getEmpresaMetrics(empresaSlug) {
+    if (!empresaSlug) {
+      console.error('❌ getEmpresaMetrics: empresaSlug é undefined ou vazio:', empresaSlug)
+      throw new Error('Slug da empresa é obrigatório')
+    }
     return this.authenticatedRequest(`/api/admin/empresa/${empresaSlug}`)
   }
 
@@ -203,7 +207,16 @@ class ApiService {
     return this.authenticatedRequest(`/api/admin/empresas/${empresaId}/apis`)
   }
 
-
+  // Notificações - Alternar (simples)
+  async toggleNotifications(empresaId, action) {
+    return this.authenticatedRequest('/api/notifications/toggle', {
+      method: 'POST',
+      body: JSON.stringify({ 
+        empresa_id: empresaId, 
+        action: action 
+      })
+    })
+  }
 
   // Login do usuário
   async login(email, password) {

@@ -44,7 +44,7 @@ const Sidebar = ({ isOpen = false, isMobile = false, onClose }) => {
             )}
             {!user?.is_superuser && user?.empresa_slug && (
               <li>
-                <Link to={`/admin/${user.empresa_slug}`} className={location.pathname.includes('/admin/') ? 'active' : ''}>
+                <Link to={`/admin/empresa/${user.empresa_slug}`} className={location.pathname.includes('/admin/empresa/') ? 'active' : ''}>
                   <svg className="icon" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10z"/>
                   </svg>
@@ -102,7 +102,7 @@ const Sidebar = ({ isOpen = false, isMobile = false, onClose }) => {
             {/* Configurações sempre visível */}
             <li>
               <Link 
-                to={user?.is_superuser ? "/admin/tinyteams/configuracoes" : `/admin/${user?.empresa_slug}/configuracoes`} 
+                to={user?.is_superuser ? "/admin/empresa/tinyteams/configuracoes" : `/admin/empresa/${user?.empresa_slug}/configuracoes`} 
                 className={location.pathname.includes('/configuracoes') ? 'active' : ''}
               >
                 <svg className="icon" viewBox="0 0 24 24" fill="currentColor">
@@ -113,7 +113,7 @@ const Sidebar = ({ isOpen = false, isMobile = false, onClose }) => {
             </li>
             <li>
               <Link 
-                to={user?.is_superuser ? "/admin/logs" : `/admin/${user?.empresa_slug}/logs`} 
+                to={user?.is_superuser ? "/admin/empresa/tinyteams/logs" : `/admin/empresa/${user?.empresa_slug}/logs`} 
                 className={location.pathname.includes('/logs') ? 'active' : ''}
               >
                 <svg className="icon" viewBox="0 0 24 24" fill="currentColor">

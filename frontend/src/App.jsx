@@ -80,31 +80,6 @@ function AppRoutes() {
               <AdminDashboard />
             </ProtectedRoute>
           } />
-          <Route path="/admin/:empresa" element={
-            <ProtectedRoute>
-              <EmpresaDashboard />
-            </ProtectedRoute>
-          } />
-          <Route path="/conversation/:empresa" element={
-            <ProtectedRoute>
-              <ConversationView />
-            </ProtectedRoute>
-          } />
-          <Route path="/conversation/:empresa/:clienteId" element={
-            <ProtectedRoute>
-              <ConversationView />
-            </ProtectedRoute>
-          } />
-          <Route path="/admin/:empresa/conversation/:conversationId" element={
-            <ProtectedRoute>
-              <ConversationView />
-            </ProtectedRoute>
-          } />
-          <Route path="/admin/:empresa/logs" element={
-            <ProtectedRoute>
-              <LogsViewer />
-            </ProtectedRoute>
-          } />
           <Route path="/admin/nova-empresa" element={
             <ProtectedRoute>
               <NovaEmpresa />
@@ -120,9 +95,34 @@ function AppRoutes() {
               <APIManager />
             </ProtectedRoute>
           } />
-          <Route path="/admin/:empresa/configuracoes" element={
+          <Route path="/admin/empresa/:empresa" element={
+            <ProtectedRoute>
+              <EmpresaDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/empresa/:empresa/logs" element={
+            <ProtectedRoute>
+              <LogsViewer />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/empresa/:empresa/conversation/:conversationId" element={
+            <ProtectedRoute>
+              <ConversationView />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/empresa/:empresa/configuracoes" element={
             <ProtectedRoute>
               <ConfiguracoesEmpresa />
+            </ProtectedRoute>
+          } />
+          <Route path="/conversation/:empresa" element={
+            <ProtectedRoute>
+              <ConversationView />
+            </ProtectedRoute>
+          } />
+          <Route path="/conversation/:empresa/:clienteId" element={
+            <ProtectedRoute>
+              <ConversationView />
             </ProtectedRoute>
           } />
           <Route path="/" element={

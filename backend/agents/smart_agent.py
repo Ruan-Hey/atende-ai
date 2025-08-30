@@ -62,12 +62,113 @@ class SmartAgent:
                 session = SessionLocal()
                 try:
                     save_log_to_db(session, empresa_id, level, message, details)
+                    
+                    # 🔔 NOTIFICAÇÃO AUTOMÁTICA para erros críticos
+                    if level == 'ERROR':
+                        self._send_error_notification(session, message, details, empresa_id)
+                        
                 finally:
                     session.close()
         except Exception as e:
             # Fallback para logging normal se falhar
             logger.error(f"Erro ao salvar log no banco: {e}")
             logger.error(message)
+    
+    def _send_error_notification(self, session, message: str, details: dict, empresa_id: int):
+        """Envia notificação push para erros do agente - VERSÃO SIMPLIFICADA"""
+        try:
+            from notifications.webpush_service import WebPushService
+            from notifications.models import NotificationRule
+            
+            # Buscar regra de notificação para erros do agente
+            regra = session.query(NotificationRule).filter(
+                NotificationRule.tipo == 'agente_error',
+                NotificationRule.ativo == True
+            ).first()
+            
+            if regra:
+                # 🆕 DADOS BÁSICOS - SEM CONSULTAS COMPLEXAS
+                waid = details.get('waid')
+                empresa_slug = self.empresa_config.get('slug', '')
+                
+                # 🆕 ROTA SIMPLES - SÓ EMPRESA + WAID
+                rota_conversa = f"/conversation/{empresa_slug}/{waid}" if waid else ""
+                
+                # Notificação básica
+                titulo = f"🚨 Erro no Agente - {self.empresa_config.get('nome', 'Empresa')}"
+                mensagem = f"Erro: {message[:100]}..."
+                
+                # Dados contexto simplificados
+                dados_contexto = {
+                    'empresa_id': empresa_id,
+                    'empresa_slug': empresa_slug,
+                    'rota_conversa': rota_conversa,
+                    'waid': waid,
+                    'tipo_erro': 'agente_error'
+                }
+                
+                # Executar regra de notificação
+                webpush_service = WebPushService()
+                webpush_service.execute_notification_rule(
+                    session, regra, titulo, mensagem, dados_contexto
+                )
+                
+                logger.info(f"🔔 Notificação de erro enviada para regra: {regra.nome}")
+            else:
+                logger.info("ℹ️ Nenhuma regra de notificação configurada para erros do agente")
+                
+        except Exception as e:
+            logger.error(f"❌ Erro ao enviar notificação: {e}")
+    
+    async def _force_trinks_error(self):
+        """Força erro no fluxo Trinks para teste"""
+        try:
+            # Simular erro no fluxo de agendamento sem service_id
+            error_msg = "Erro no fluxo Trinks: service_id não fornecido para agendamento"
+            error_details = {
+                'tool': 'trinks_booking',
+                'error_type': 'missing_service_id',
+                'user_message': 'Quero agendar um horário para amanhã às 14h'
+            }
+            
+            # Salvar erro no banco (vai disparar notificação)
+            from main import save_log_to_db
+            from database import SessionLocal
+            
+            session = SessionLocal()
+            try:
+                save_log_to_db(session, self.empresa_config.get('empresa_id'), 'ERROR', error_msg, error_details)
+                logger.info("🔔 Erro Trinks forçado - notificação deveria ter sido enviada!")
+            finally:
+                session.close()
+                
+        except Exception as e:
+            logger.error(f"❌ Erro ao forçar erro Trinks: {e}")
+    
+    async def _force_agent_error(self):
+        """Força erro geral no agente para teste"""
+        try:
+            # Simular erro geral do agente
+            error_msg = "Erro geral no agente: falha na execução da ferramenta"
+            error_details = {
+                'tool': 'general_execution',
+                'error_type': 'tool_execution_failure',
+                'context': 'test_forced_error'
+            }
+            
+            # Salvar erro no banco (vai disparar notificação)
+            from main import save_log_to_db
+            from database import SessionLocal
+            
+            session = SessionLocal()
+            try:
+                save_log_to_db(session, self.empresa_config.get('empresa_id'), 'ERROR', error_msg, error_details)
+                logger.info("🔔 Erro do agente forçado - notificação deveria ter sido enviada!")
+            finally:
+                session.close()
+                
+        except Exception as e:
+            logger.error(f"❌ Erro ao forçar erro do agente: {e}")
 
     def _setup_tools(self) -> List:
         """Configura as tools disponíveis usando as TrinksRules para executar operações"""

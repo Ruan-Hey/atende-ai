@@ -11,6 +11,8 @@ const LogsViewer = () => {
   const [selectedEmpresa, setSelectedEmpresa] = useState('')
   const [empresas, setEmpresas] = useState([])
   const [filterLevel, setFilterLevel] = useState('all')
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false)
+  const [notificationLoading, setNotificationLoading] = useState(false)
 
   useEffect(() => {
     // Se não for admin, usar empresa da URL
@@ -35,6 +37,33 @@ const LogsViewer = () => {
       loadLogs()
     }
   }, [selectedEmpresa, filterLevel])
+
+  const toggleNotifications = async () => {
+    try {
+      setNotificationLoading(true)
+      const user = JSON.parse(localStorage.getItem('user') || '{}')
+      const empresaId = empresas.find(e => e.slug === selectedEmpresa)?.id || user.empresa_id
+      
+      if (!empresaId) {
+        alert('Erro: Empresa não encontrada')
+        return
+      }
+
+      const action = notificationsEnabled ? 'disable' : 'enable'
+      const response = await apiService.toggleNotifications(empresaId, action)
+      
+      if (response.status === 'enabled' || response.status === 'disabled') {
+        setNotificationsEnabled(action === 'enable')
+        localStorage.setItem('notifications_enabled', action === 'enable' ? 'true' : 'false')
+        alert(response.message)
+      }
+    } catch (error) {
+      console.error('Erro ao alternar notificações:', error)
+      alert('Erro ao configurar notificações')
+    } finally {
+      setNotificationLoading(false)
+    }
+  }
 
   const loadEmpresas = async () => {
     try {
@@ -158,6 +187,19 @@ const LogsViewer = () => {
             <option value="warning">Apenas Avisos</option>
             <option value="info">Todas as Informações</option>
           </select>
+        </div>
+
+        <div className="filter-group">
+          <label>🔔 Notificações:</label>
+          <button 
+            className="btn btn-secondary"
+            onClick={toggleNotifications}
+            disabled={notificationLoading}
+            style={{ minWidth: '120px' }}
+          >
+            {notificationsEnabled ? 'Desativar' : 'Ativar'}
+            {notificationLoading && <span className="spinner-border spinner-border-sm ms-2"></span>}
+          </button>
         </div>
 
         <button 

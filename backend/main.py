@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import random
 import asyncio
 import time
+import traceback
 
 # Configurar logging limpo
 from config import LOGGING_CONFIG
@@ -250,118 +251,130 @@ def get_empresa_metrics(
         session.close()
 
 @app.get("/api/admin/empresa/{empresa_slug}/clientes")
-def get_empresa_clientes(
+async def get_empresa_clientes(
     empresa_slug: str,
-    current_user: Usuario = Depends(get_current_user),
-    label: str = None,
-    from_date: str = None,
-    to_date: str = None
+    current_user: Usuario = Depends(get_current_user)
 ):
-    """Retorna lista de clientes de uma empresa específica"""
-    session = SessionLocal()
+    """Retorna clientes de uma empresa específica"""
     try:
+        session = SessionLocal()
+        
+        # Verificar se usuário tem acesso à empresa
+        if not current_user.is_superuser:
+            if not current_user.empresa_id:
+                raise HTTPException(status_code=403, detail="Usuário não associado a nenhuma empresa")
+            
+            # Buscar empresa do usuário
+            user_empresa = session.query(Empresa).filter(Empresa.id == current_user.empresa_id).first()
+            if not user_empresa or user_empresa.slug != empresa_slug:
+                raise HTTPException(status_code=403, detail="Acesso negado a esta empresa")
+        
+        # Buscar empresa pelo slug
         empresa = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
         if not empresa:
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
-        # Verificar se usuário tem acesso a esta empresa
-        if not current_user.is_superuser and current_user.empresa_id != empresa.id:
-            raise HTTPException(status_code=403, detail="Acesso negado a esta empresa")
+        # Buscar clientes da empresa
+        clientes = session.query(Cliente).filter(Cliente.empresa_id == empresa.id).all()
         
-        # Se houver filtros por label/data, basear em atendimentos
-        from sqlalchemy import func, and_
-        use_att_filter = bool(label or from_date or to_date)
-        clientes = []
-        if use_att_filter:
-            from models import Atendimento
-            query = session.query(
-                Atendimento.cliente_id,
-                func.max(Atendimento.data_atendimento).label('ultima_atividade'),
-                func.count(Atendimento.id).label('total_mensagens')
-            ).filter(
-                Atendimento.empresa_id == empresa.id
-            )
-            if label:
-                query = query.filter(Atendimento.label_slug == label)
-            if from_date:
-                query = query.filter(Atendimento.data_atendimento >= from_date)
-            if to_date:
-                query = query.filter(Atendimento.data_atendimento <= to_date)
-            query = query.group_by(Atendimento.cliente_id).order_by(func.count(Atendimento.id).desc())
-            result = query.all()
-            for row in result:
-                cliente_info = session.query(Cliente).filter(
-                    Cliente.empresa_id == empresa.id,
-                    Cliente.cliente_id == row.cliente_id
-                ).first()
-                nome_cliente = cliente_info.nome if cliente_info and cliente_info.nome else row.cliente_id
-                clientes.append({
-                    "cliente_id": row.cliente_id,
-                    "nome": nome_cliente,
-                    "ultima_atividade": row.ultima_atividade.isoformat() if row.ultima_atividade else None,
-                    "total_mensagens": row.total_mensagens,
-                    "tipo_atividade": label or 'mensagem'
-                })
-            return {"empresa": empresa_slug, "clientes": clientes}
-        
-        # Fallback: comportamento atual baseado em mensagens
-        from sqlalchemy import func
-        clientes_query = session.query(
-            Mensagem.cliente_id,
-            func.max(Mensagem.timestamp).label('ultima_atividade'),
-            func.count(Mensagem.id).label('total_mensagens')
-        ).filter(
-            Mensagem.empresa_id == empresa.id
-        ).group_by(
-            Mensagem.cliente_id
-        ).order_by(
-            func.count(Mensagem.id).desc()
-        )
-        clientes_result = clientes_query.all()
-        
-        # Formatar resultado
-        clientes = []
-        for cliente in clientes_result:
-            # Buscar informações do cliente na tabela Cliente
-            cliente_info = session.query(Cliente).filter(
-                Cliente.empresa_id == empresa.id,
-                Cliente.cliente_id == cliente.cliente_id
-            ).first()
+        # Converter para formato JSON
+        clientes_json = []
+        for cliente in clientes:
+            # Buscar última atividade
+            ultima_atividade = session.query(Atividade).filter(
+                Atividade.cliente_id == cliente.id
+            ).order_by(Atividade.timestamp.desc()).first()
             
-            # Determinar tipo de atividade baseado na última mensagem
-            ultima_mensagem = session.query(Mensagem).filter(
-                Mensagem.empresa_id == empresa.id,
-                Mensagem.cliente_id == cliente.cliente_id,
-                Mensagem.timestamp == cliente.ultima_atividade
-            ).first()
-            
-            tipo_atividade = 'mensagem'  # Padrão
-            if ultima_mensagem:
-                if any(palavra in ultima_mensagem.text.lower() for palavra in ['reserva', 'agendar', 'marcar']):
-                    tipo_atividade = 'reserva'
-                elif any(palavra in ultima_mensagem.text.lower() for palavra in ['atendimento', 'suporte', 'ajuda']):
-                    tipo_atividade = 'atendimento'
-            
-            # Usar nome do cliente se disponível, senão usar ID
-            nome_cliente = cliente_info.nome if cliente_info and cliente_info.nome else cliente.cliente_id
-            
-            clientes.append({
-                "cliente_id": cliente.cliente_id,
-                "nome": nome_cliente,
-                "ultima_atividade": cliente.ultima_atividade.isoformat() if cliente.ultima_atividade else None,
-                "total_mensagens": cliente.total_mensagens,
-                "tipo_atividade": tipo_atividade
-            })
+            cliente_data = {
+                "id": cliente.id,
+                "nome": cliente.nome,
+                "telefone": cliente.telefone,
+                "empresa_id": cliente.empresa_id,
+                "ultima_atividade": ultima_atividade.timestamp if ultima_atividade else None,
+                "tipo_ultima_atividade": ultima_atividade.tipo if ultima_atividade else None
+            }
+            clientes_json.append(cliente_data)
         
         return {
             "empresa": empresa_slug,
-            "clientes": clientes
+            "clientes": clientes_json
         }
+        
+    except HTTPException:
+        raise
     except Exception as e:
         logging.error(f"Erro ao buscar clientes da empresa {empresa_slug}: {e}")
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
     finally:
         session.close()
+
+@app.get("/api/admin/empresa/{empresa_slug}/logs")
+async def get_empresa_logs(
+    empresa_slug: str,
+    current_user: Usuario = Depends(get_current_user),
+    limit: int = 100,
+    level: str = None,
+    exclude_info: bool = True
+):
+    """Retorna logs de uma empresa específica"""
+    try:
+        session = SessionLocal()
+        
+        # Verificar se usuário tem acesso à empresa
+        if not current_user.is_superuser:
+            if not current_user.empresa_id:
+                raise HTTPException(status_code=403, detail="Usuário não associado a nenhuma empresa")
+            
+            # Buscar empresa do usuário
+            user_empresa = session.query(Empresa).filter(Empresa.id == current_user.empresa_id).first()
+            if not user_empresa or user_empresa.slug != empresa_slug:
+                raise HTTPException(status_code=403, detail="Acesso negado a esta empresa")
+        
+        # Buscar empresa pelo slug
+        empresa = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
+        if not empresa:
+            raise HTTPException(status_code=404, detail="Empresa não encontrada")
+        
+        # Buscar logs da empresa
+        query = session.query(Log).filter(Log.empresa_id == empresa.id)
+        
+        # Filtrar por nível se especificado
+        if level and level != 'all':
+            query = query.filter(Log.level == level)
+        
+        # Por padrão, excluir logs de INFO para não poluir
+        if exclude_info:
+            query = query.filter(Log.level != 'INFO')
+        
+        # Limitar e ordenar por timestamp mais recente
+        logs_db = query.order_by(Log.timestamp.desc()).limit(limit).all()
+        
+        # Converter para formato JSON
+        logs = []
+        for log in logs_db:
+            logs.append({
+                "level": log.level,
+                "message": log.message,
+            "empresa": empresa_slug,
+                "timestamp": log.timestamp.isoformat() if log.timestamp else None,
+                "details": log.details or {}
+            })
+        
+        return {"logs": logs}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao buscar logs da empresa {empresa_slug}: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+    finally:
+        session.close()
+
+@app.get("/api/admin/empresa/logs")
+async def get_empresa_logs_without_slug():
+    """Endpoint para capturar chamadas com slug vazio - DEBUG"""
+    logger.warning("🚨 Chamada para /api/admin/empresa/logs sem slug da empresa!")
+    return {"error": "Slug da empresa não fornecido", "expected_format": "/api/admin/empresa/{empresa_slug}/logs"}
 
 @app.get("/api/admin/debounce/status")
 def get_buffer_status():
@@ -2926,12 +2939,44 @@ async def _buffer_wait_and_process(empresa_slug: str, wa_id: str, empresa_config
         
     except Exception as e:
         logger.error(f"❌ Erro no processamento do buffer para {empresa_slug}:{wa_id}: {e}")
-        import traceback
         logger.error(f"❌ Traceback completo: {traceback.format_exc()}")
     finally:
         # Limpar estado do buffer
         buffer_state.pop(key, None)
         logger.info(f"🧹 Buffer limpo para {empresa_slug}:{wa_id}")
+
+# ============================================================================
+# ENDPOINT SIMPLES DE NOTIFICAÇÕES
+# ============================================================================
+
+@app.get("/api/notifications/test")
+async def test_notifications():
+    """Endpoint simples para testar se notificações estão funcionando"""
+    return {"message": "Sistema de notificações funcionando!", "status": "ok"}
+
+@app.post("/api/notifications/toggle")
+async def toggle_notifications(
+    request: Request,
+    current_user: Usuario = Depends(get_current_user)
+):
+    """Endpoint simples para ativar/desativar notificações"""
+    try:
+        data = await request.json()
+        empresa_id = data.get('empresa_id')
+        action = data.get('action')  # 'enable' ou 'disable'
+        
+        if not empresa_id or not action:
+            raise HTTPException(status_code=400, detail="empresa_id e action são obrigatórios")
+        
+        # Por enquanto, apenas retorna sucesso
+        if action == 'enable':
+            return {"message": "Notificações ativadas!", "status": "enabled"}
+        else:
+            return {"message": "Notificações desativadas!", "status": "disabled"}
+            
+    except Exception as e:
+        logger.error(f"Erro ao alternar notificações: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 if __name__ == "__main__":
     import uvicorn

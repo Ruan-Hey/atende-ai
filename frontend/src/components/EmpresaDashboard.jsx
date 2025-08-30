@@ -4,12 +4,32 @@ import apiService from '../services/api'
 import LoadingSpinner from './LoadingSpinner'
 
 const EmpresaDashboard = () => {
-  const { empresa } = useParams()
+  const params = useParams()
   const navigate = useNavigate()
   
-  // Normalizar o slug da empresa para minúsculas
-  const empresaSlug = empresa.toLowerCase()
+  const { empresa } = params
   
+  // Normalizar o slug da empresa para minúsculas
+  const empresaSlug = empresa ? empresa.toLowerCase() : null
+  
+  // Se não tiver empresa, mostrar erro
+  if (!empresa || !empresaSlug) {
+    return (
+      <div className="dashboard">
+        <div className="dashboard-header">
+          <h1 className="dashboard-title">Erro</h1>
+          <p className="dashboard-subtitle" style={{ color: 'red' }}>
+            Slug da empresa não encontrado na URL. 
+            <br />
+            URL atual: {window.location.pathname}
+            <br />
+            Parâmetros: {JSON.stringify(params)}
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   const [empresaData, setEmpresaData] = useState({
     nome: empresa,
     atendimentos: 0,
@@ -48,7 +68,9 @@ const EmpresaDashboard = () => {
   }, [empresaSlug])
 
   useEffect(() => {
-    loadEmpresaData()
+    if (empresaSlug) {
+      loadEmpresaData()
+    }
   }, [empresaSlug, loadEmpresaData])
 
   const getEmpresaDisplayName = (empresaSlug) => {
