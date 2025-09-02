@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 from config import Config
 from models import WebhookData, MessageResponse, AdminMetrics, EmpresaMetrics, HealthCheck, Base, Empresa, Mensagem, Log, Usuario, gerar_hash_senha, Atendimento, Cliente, Atividade, API, EmpresaAPI
 from services.services import MetricsService
+from services.email_service import email_service
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from jose import jwt, JWTError
@@ -37,9 +38,137 @@ engine = create_engine(config.POSTGRES_URL)
 
 SessionLocal = sessionmaker(bind=engine)
 
+# Função para obter sessão do banco
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
 # Cache global para Smart Agents (acessível por todos os endpoints)
 _smart_agents_cache = {}
 _last_cache_cleanup = time.time()
+
+# ============================================================================
+# FUNÇÕES DE NOTIFICAÇÃO POR EMAIL
+# ============================================================================
+
+def send_smart_agent_error_notification(error_details: dict, empresa_id: Optional[int] = None, conversation_url: Optional[str] = None):
+    """
+    Envia notificação de erro do Smart Agent para todos os usuários que ativaram notificações
+    
+    Args:
+        error_details: Detalhes do erro
+        empresa_id: ID da empresa (opcional)
+        conversation_url: URL da conversa que deu erro (opcional)
+    """
+    try:
+        db = next(get_db())
+        
+        try:
+            # Tentar consulta com flags (se colunas existirem)
+            query = db.query(Usuario).filter(
+                Usuario.email.isnot(None)
+            )
+            # Apenas usuários com notificações ativas, se as colunas existirem
+            try:
+                query = query.filter(
+                    Usuario.notifications_enabled == True,
+                    Usuario.smart_agent_error_notifications == True,
+                )
+            except Exception:
+                # Se as colunas não existirem, seguimos sem esse filtro
+                pass
+
+            # Filtro por empresa: somente admins OU usuários da empresa específica
+            if empresa_id is not None:
+                query = query.filter(
+                    (Usuario.empresa_id == empresa_id) | (Usuario.is_superuser == True)
+                )
+
+            users = query.all()
+            target_emails = [u.email for u in users if getattr(u, 'email', None)]
+        except Exception as query_error:
+            # Fallback: colunas podem não existir ainda. Buscar apenas emails existentes.
+            logger.warning(f"Colunas de notificação ausentes; usando fallback. Detalhe: {query_error}")
+            try:
+                # Garantir que a transação anterior seja revertida
+                db.rollback()
+                if empresa_id is not None:
+                    rows = db.execute(text("SELECT email FROM usuarios WHERE email IS NOT NULL AND (empresa_id = :empresa_id OR is_superuser = true)"), {"empresa_id": empresa_id}).fetchall()
+                else:
+                    rows = db.execute(text("SELECT email FROM usuarios WHERE email IS NOT NULL")).fetchall()
+                target_emails = [r[0] for r in rows]
+            except Exception as raw_err:
+                logger.error(f"Falha no fallback de emails: {raw_err}")
+                target_emails = []
+
+        logger.info(f"📧 Enviando notificação de erro do Smart Agent para {len(target_emails)} usuários")
+        
+        # Buscar nome da empresa se empresa_id foi fornecido
+        empresa_nome = "TinyTeams"  # fallback
+        if empresa_id:
+            try:
+                empresa = db.query(Empresa).filter(Empresa.id == empresa_id).first()
+                if empresa:
+                    empresa_nome = empresa.nome or empresa.slug or "TinyTeams"
+            except Exception:
+                pass
+        
+        # Adicionar informações extras ao error_details
+        enhanced_error_details = error_details.copy()
+        enhanced_error_details['empresa_nome'] = empresa_nome
+        enhanced_error_details['conversation_url'] = conversation_url or 'N/A'
+        
+        # Validação simples de email
+        valid_emails = [e for e in target_emails if isinstance(e, str) and '@' in e]
+
+        for email in valid_emails:
+            try:
+                success = email_service.send_smart_agent_error_notification(email, enhanced_error_details)
+                if success:
+                    logger.info(f"✅ Notificação enviada para: {email}")
+                else:
+                    logger.error(f"❌ Falha ao enviar notificação para: {email}")
+            except Exception as e:
+                logger.error(f"❌ Erro ao enviar notificação para {email}: {e}")
+        
+        db.close()
+        
+    except Exception as e:
+        logger.error(f"❌ Erro geral ao enviar notificações de Smart Agent: {e}")
+
+def send_webhook_error_notification(error_details: dict):
+    """
+    Envia notificação de erro crítico do Webhook para o admin
+    
+    Args:
+        error_details: Detalhes do erro crítico
+    """
+    try:
+        db = next(get_db())
+        
+        # Buscar o usuário admin (superuser)
+        admin = db.query(Usuario).filter(Usuario.is_superuser == True).first()
+        
+        if not admin or not admin.email:
+            logger.error("❌ Admin não encontrado ou sem email")
+            return
+        
+        logger.info(f"📧 Enviando notificação crítica de Webhook para admin: {admin.email}")
+        
+        success = email_service.send_webhook_error_notification(admin.email, error_details)
+        
+        if success:
+            logger.info(f"✅ Notificação crítica enviada para admin: {admin.email}")
+        else:
+            logger.error(f"❌ Falha ao enviar notificação crítica para admin: {admin.email}")
+        
+        db.close()
+        
+    except Exception as e:
+        logger.error(f"❌ Erro geral ao enviar notificação crítica de Webhook: {e}")
 
 def save_log_to_db(session: Session, empresa_id: int, level: str, message: str, details: dict = None):
     # Se não há empresa_id, tentar atribuir à TinyTeams
@@ -2949,171 +3078,186 @@ async def _buffer_wait_and_process(empresa_slug: str, wa_id: str, empresa_config
 # ENDPOINT SIMPLES DE NOTIFICAÇÕES
 # ============================================================================
 
-@app.get("/api/notifications/test")
-async def test_notifications():
-    """Endpoint simples para testar se notificações estão funcionando"""
-    return {"message": "Sistema de notificações funcionando!", "status": "ok"}
+# Endpoint removido - migrado para email
 
-@app.post("/api/notifications/toggle")
-async def toggle_notifications(
+# Endpoint removido - migrado para email
+
+# ============================================================================
+# ENDPOINTS DE PUSH NOTIFICATION REMOVIDOS - MIGRADO PARA EMAIL
+# ============================================================================
+
+# Endpoint removido - migrado para email
+
+# Endpoint removido - migrado para email
+
+# ============================================================================
+# ENDPOINTS DE CONFIGURAÇÃO DE NOTIFICAÇÕES
+# ============================================================================
+
+@app.get("/api/notifications/settings")
+async def get_notification_settings(
+    current_user: Usuario = Depends(get_current_user)
+):
+    """Retorna as configurações de notificação do usuário"""
+    try:
+        return {
+            "notifications_enabled": current_user.notifications_enabled,
+            "smart_agent_error_notifications": current_user.smart_agent_error_notifications,
+            "user_email": current_user.email
+        }
+    except Exception as e:
+        logger.error(f"Erro ao obter configurações de notificação: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+@app.post("/api/notifications/settings")
+async def update_notification_settings(
     request: Request,
     current_user: Usuario = Depends(get_current_user)
 ):
-    """Endpoint simples para ativar/desativar notificações"""
+    """Atualiza as configurações de notificação do usuário"""
     try:
         data = await request.json()
-        empresa_id = data.get('empresa_id')
-        action = data.get('action')  # 'enable' ou 'disable'
         
-        if not empresa_id or not action:
-            raise HTTPException(status_code=400, detail="empresa_id e action são obrigatórios")
+        db = next(get_db())
+        user = db.query(Usuario).filter(Usuario.id == current_user.id).first()
         
-        # Por enquanto, apenas retorna sucesso
-        if action == 'enable':
-            return {"message": "Notificações ativadas!", "status": "enabled"}
-        else:
-            return {"message": "Notificações desativadas!", "status": "disabled"}
-            
+        if not user:
+            raise HTTPException(status_code=404, detail="Usuário não encontrado")
+        
+        # Atualizar configurações
+        if 'notifications_enabled' in data:
+            user.notifications_enabled = data['notifications_enabled']
+        
+        if 'smart_agent_error_notifications' in data:
+            user.smart_agent_error_notifications = data['smart_agent_error_notifications']
+        
+        db.commit()
+        db.close()
+        
+        logger.info(f"✅ Configurações de notificação atualizadas para usuário {current_user.id}")
+        
+        return {
+            "message": "Configurações atualizadas com sucesso!",
+            "status": "success",
+            "settings": {
+                "notifications_enabled": user.notifications_enabled,
+                "smart_agent_error_notifications": user.smart_agent_error_notifications
+            }
+        }
+        
     except Exception as e:
-        logger.error(f"Erro ao alternar notificações: {e}")
+        logger.error(f"Erro ao atualizar configurações de notificação: {e}")
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 # ============================================================================
-# ENDPOINTS COMPLETOS DE NOTIFICAÇÕES PUSH
+# ENDPOINTS DE TESTE DAS REGRAS DE EMAIL
 # ============================================================================
 
-@app.get("/api/notifications/vapid-public-key")
-async def get_vapid_public_key():
-    """Retorna a chave pública VAPID para o frontend"""
-    try:
-        # Importar de forma mais direta
-        import sys
-        import os
-        
-        # Adicionar o diretório notifications ao path
-        notifications_path = os.path.join(os.path.dirname(__file__), 'notifications')
-        if notifications_path not in sys.path:
-            sys.path.insert(0, notifications_path)
-        
-        from vapid_keys import VAPID_PUBLIC_KEY
-        
-        if not VAPID_PUBLIC_KEY:
-            # Se não houver chave, gerar uma nova
-            from vapid_keys import generate_vapid_keys
-            _, public_key = generate_vapid_keys()
-            return {"public_key": public_key}
-        
-        return {"public_key": VAPID_PUBLIC_KEY}
-    except Exception as e:
-        logger.error(f"Erro ao obter chave VAPID: {e}")
-        # Retornar uma chave de teste em caso de erro
-        return {"public_key": "test_public_key_for_debugging"}
-
-@app.post("/api/notifications/subscribe")
-async def subscribe_to_notifications(
-    request: Request,
-    current_user: Usuario = Depends(get_current_user)
-):
-    """Registra subscription para push notifications"""
-    try:
-        data = await request.json()
-        subscription = data.get('subscription')
-        
-        if not subscription:
-            raise HTTPException(status_code=400, detail="Subscription é obrigatória")
-        
-        # Salvar subscription no banco (implementar depois)
-        logger.info(f"✅ Usuário {current_user.id} inscrito para notificações")
-        
-        return {"message": "Inscrição realizada com sucesso!", "status": "subscribed"}
-        
-    except Exception as e:
-        logger.error(f"Erro ao inscrever para notificações: {e}")
-        raise HTTPException(status_code=500, detail="Erro interno do servidor")
-
-@app.post("/api/notifications/unsubscribe")
-async def unsubscribe_from_notifications(
-    current_user: Usuario = Depends(get_current_user)
-):
-    """Remove subscription para push notifications"""
-    try:
-        # Remover subscription do banco (implementar depois)
-        logger.info(f"✅ Usuário {current_user.id} removido das notificações")
-        
-        return {"message": "Inscrição removida com sucesso!", "status": "unsubscribed"}
-        
-    except Exception as e:
-        logger.error(f"Erro ao remover inscrição: {e}")
-        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+# ============================================================================
+# (REMOVIDOS) ENDPOINTS TEMPORÁRIOS DE TESTE
+# - Foram substituídos por um script dedicado em backend/scripts/test_trinks_error.py
+# ============================================================================
 
 @app.post("/api/notifications/test")
 async def test_notification(
     current_user: Usuario = Depends(get_current_user)
 ):
-    """Testa envio de notificação push"""
+    """Testa envio de notificação por email"""
     try:
-        logger.info(f"🧪 Usuário {current_user.id} testou notificação push")
+        logger.info(f"🧪 Usuário {current_user.id} testou notificação por email")
         
-        # Importar WebPushService de forma correta
-        import sys
-        import os
-        sys.path.append(os.path.join(os.path.dirname(__file__), 'notifications'))
-        
+        # NOTIFICAÇÃO POR EMAIL REAL - USANDO GMAIL
         try:
-            from webpush_service import WebPushService
-            webpush_service = WebPushService()
-            
-            # Buscar subscription do usuário
-            from notifications.models import PushSubscription
-            from database import get_db
+            # Buscar dados do usuário
+            # get_db já está importado no topo do arquivo
+            import smtplib
+            from email.mime.text import MIMEText
+            from email.mime.multipart import MIMEMultipart
+            from datetime import datetime
             
             db = next(get_db())
-            user_subscription = db.query(PushSubscription).filter(
-                PushSubscription.user_id == current_user.id
-            ).first()
+            user = db.query(Usuario).filter(Usuario.id == current_user.id).first()
             
-            if not user_subscription:
-                logger.warning(f"Usuário {current_user.id} não tem subscription")
+            if not user or not user.email:
+                logger.warning(f"Usuário {current_user.id} não tem email")
                 return {
-                    "message": "⚠️ Ative as notificações primeiro!", 
+                    "message": "⚠️ Usuário não tem email cadastrado!", 
                     "status": "warning"
                 }
             
-            # Enviar push REAL
-            subscription_info = {
-                "endpoint": user_subscription.endpoint,
-                "keys": {
-                    "p256dh": user_subscription.p256dh_key,
-                    "auth": user_subscription.auth_key
-                }
-            }
+            # Configuração do email (SEU GMAIL)
+            sender_email = "tinyteams.app@gmail.com"  # Seu email
+            sender_password = "vins jvxh rrjn ysgn"   # Sua senha de app Gmail
             
-            logger.info(f"🚀 Enviando push REAL para usuário {current_user.id}")
+            # Criar mensagem
+            msg = MIMEMultipart()
+            msg['From'] = sender_email
+            msg['To'] = user.email
+            msg['Subject'] = "🧪 Teste de Notificação - Atende AI"
             
-            result = webpush_service.send_notification(
-                subscription_info=subscription_info,
-                title="🧪 Teste de Notificação Push",
-                message="Esta é uma notificação push REAL do Atende AI!",
-                data={"type": "test", "timestamp": str(datetime.now())}
-            )
+            body = f"""
+            Olá {user.email}!
             
-            if result:
-                logger.info(f"✅ Push REAL enviado com sucesso!")
+            Esta é uma notificação de teste do TinyTeams.
+            
+            ✅ Sistema funcionando perfeitamente!
+            📅 Data/Hora: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+            
+            Abraços,
+            Equipe Atende AI
+            """
+            
+            msg.attach(MIMEText(body, 'plain'))
+            
+            # Enviar email REAL
+            logger.info(f"📧 Enviando email REAL para: {user.email}")
+            
+            try:
+                # Configurar SMTP Gmail
+                server = smtplib.SMTP('smtp.gmail.com', 587)
+                server.starttls()  # Ativar TLS
+                server.login(sender_email, sender_password)
+                
+                # Enviar email
+                text = msg.as_string()
+                server.sendmail(sender_email, user.email, text)
+                server.quit()
+                
+                logger.info(f"✅ Email REAL enviado com sucesso para: {user.email}")
+                
                 return {
-                    "message": "🚀 Push notification REAL enviado!", 
-                    "status": "success"
+                    "message": "📧 Email REAL enviado com sucesso!", 
+                    "status": "success",
+                    "details": {
+                        "user_id": current_user.id,
+                        "user_email": user.email,
+                        "sender_email": sender_email,
+                        "notification_type": "email_real",
+                        "timestamp": str(datetime.now())
+                    }
                 }
-            else:
-                logger.error(f"❌ Falha ao enviar push REAL")
+                
+            except smtplib.SMTPAuthenticationError:
+                logger.error("❌ Erro de autenticação Gmail - configure senha de app")
                 return {
-                    "message": "❌ Falha ao enviar push notification", 
+                    "message": "❌ Erro: Configure senha de app Gmail!", 
+                    "status": "error",
+                    "details": {
+                        "error": "SMTP Authentication Error",
+                        "solution": "Configure senha de app Gmail"
+                    }
+                }
+            except Exception as smtp_error:
+                logger.error(f"❌ Erro SMTP: {smtp_error}")
+                return {
+                    "message": f"❌ Erro ao enviar email: {str(smtp_error)}", 
                     "status": "error"
                 }
                 
-        except Exception as push_error:
-            logger.error(f"Erro no push: {push_error}")
+        except Exception as email_error:
+            logger.error(f"Erro no email: {email_error}")
             return {
-                "message": f"❌ Erro no push: {str(push_error)}", 
+                "message": f"❌ Erro no email: {str(email_error)}", 
                 "status": "error"
             }
             
