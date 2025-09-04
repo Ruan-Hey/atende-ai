@@ -137,7 +137,7 @@ const ConfiguracoesEmpresa = () => {
         const primeiraEmpresa = empresasList[0].slug
         setSelectedEmpresa(primeiraEmpresa)
         // Atualizar a URL para a primeira empresa
-        navigate(`/admin/${primeiraEmpresa}/configuracoes`, { replace: true })
+        navigate(`/admin/empresa/${primeiraEmpresa}/configuracoes`, { replace: true })
       }
     } catch (error) {
       console.error('Erro ao carregar empresas:', error)
@@ -856,7 +856,7 @@ const ConfiguracoesEmpresa = () => {
               setSelectedEmpresa(empresaSlug)
               if (empresaSlug) {
                 // Atualizar a URL para a empresa selecionada
-                navigate(`/admin/${empresaSlug}/configuracoes`, { replace: true })
+                navigate(`/admin/empresa/${empresaSlug}/configuracoes`, { replace: true })
               }
             }}
             className="empresa-select"

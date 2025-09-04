@@ -21,13 +21,14 @@ from models import WebhookData, MessageResponse, AdminMetrics, EmpresaMetrics, H
 from services.services import MetricsService
 from services.email_service import email_service
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker, Session, load_only
 from jose import jwt, JWTError
 from passlib.hash import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 
 from typing import Optional, List, Dict, Tuple, Any
+from sqlalchemy.exc import ProgrammingError
 
 # Configurações
 config = Config()
@@ -207,11 +208,34 @@ async def get_current_user(token: str = Depends(OAuth2PasswordBearer(tokenUrl="a
     
     session = SessionLocal()
     try:
-        user = session.query(Usuario).filter(Usuario.email == email).first()
-        if user is None:
-            logger.error(f"User not found for email: {email}")
-            raise credentials_exception
-        return user
+        try:
+            user = session.query(Usuario).filter(Usuario.email == email).first()
+            if user is None:
+                logger.error(f"User not found for email: {email}")
+                raise credentials_exception
+            return user
+        except ProgrammingError as pe:
+            # Limpar transação abortada antes do fallback
+            try:
+                session.rollback()
+            except Exception:
+                pass
+            # Banco antigo sem colunas novas (notifications_*). Fallback para SELECT manual mínimo.
+            logger.warning(f"Fallback get_current_user (schema antigo): {pe}")
+            row = session.execute(text(
+                "SELECT id, email, is_superuser, empresa_id FROM usuarios WHERE email = :email LIMIT 1"
+            ), {"email": email}).fetchone()
+            if not row:
+                raise credentials_exception
+
+            class SimpleUser:
+                def __init__(self, id, email, is_superuser, empresa_id):
+                    self.id = id
+                    self.email = email
+                    self.is_superuser = bool(is_superuser)
+                    self.empresa_id = empresa_id
+
+            return SimpleUser(row[0], row[1], row[2], row[3])
     except Exception as e:
         logger.error(f"Database error in get_current_user: {e}")
         raise credentials_exception
@@ -239,9 +263,20 @@ async def get_current_company_user(current_user: Usuario = Depends(get_current_u
 app = FastAPI(title="Atende Ai Backend", version="1.0.0")
 
 # CORS para desenvolvimento local
+# CORS: não usar "*" com credentials; listar origens conhecidas de dev/prod
+allowed_origins = [
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5175",
+    "https://app.tinyteams.app",
+    "https://tinyteams.app",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -406,23 +441,49 @@ async def get_empresa_clientes(
         # Buscar clientes da empresa
         clientes = session.query(Cliente).filter(Cliente.empresa_id == empresa.id).all()
         
-        # Converter para formato JSON
+        # Converter para formato JSON (compatível com o frontend ConversationView)
         clientes_json = []
         for cliente in clientes:
-            # Buscar última atividade
-            ultima_atividade = session.query(Atividade).filter(
-                Atividade.cliente_id == cliente.id
-            ).order_by(Atividade.timestamp.desc()).first()
-            
-            cliente_data = {
-                "id": cliente.id,
-                "nome": cliente.nome,
-                "telefone": cliente.telefone,
-                "empresa_id": cliente.empresa_id,
-                "ultima_atividade": ultima_atividade.timestamp if ultima_atividade else None,
-                "tipo_ultima_atividade": ultima_atividade.tipo if ultima_atividade else None
-            }
-            clientes_json.append(cliente_data)
+            try:
+                # Buscar última atividade (correlacionando pelo cliente_id STRING, não pelo id interno)
+                ultima_atividade = None
+                try:
+                    ultima_atividade = session.query(Atividade).filter(
+                        Atividade.cliente_id == cliente.cliente_id
+                    ).order_by(Atividade.timestamp.desc()).first()
+                except Exception as _e:
+                    logger.warning(f"Falha ao obter última atividade para cliente {cliente.cliente_id}: {_e}")
+
+                # Contar mensagens deste cliente (para UI)
+                total_mensagens = 0
+                try:
+                    total_mensagens = session.query(Mensagem).filter(
+                        Mensagem.empresa_id == cliente.empresa_id,
+                        Mensagem.cliente_id == cliente.cliente_id
+                    ).count()
+                except Exception as _e:
+                    logger.warning(f"Falha ao contar mensagens para cliente {cliente.cliente_id}: {_e}")
+
+                cliente_data = {
+                    "id": cliente.id,
+                    "cliente_id": cliente.cliente_id,  # WhatsApp ID usado no frontend
+                    "nome": cliente.nome,
+                    # telefone não existe no modelo Cliente; manter compatibilidade com null
+                    "telefone": None,
+                    "empresa_id": cliente.empresa_id,
+                    # Normalizar timestamp para string ISO
+                    "ultima_atividade": (ultima_atividade.timestamp.isoformat() if ultima_atividade and hasattr(ultima_atividade.timestamp, 'isoformat') else (ultima_atividade.timestamp if ultima_atividade else None)),
+                    # Chave esperada pelo frontend
+                    "tipo_atividade": (ultima_atividade.tipo if ultima_atividade else None),
+                    "total_mensagens": total_mensagens
+                }
+                # Manter campo antigo para compatibilidade, se necessário
+                if ultima_atividade:
+                    cliente_data["tipo_ultima_atividade"] = ultima_atividade.tipo
+
+                clientes_json.append(cliente_data)
+            except Exception as row_e:
+                logger.warning(f"Ignorando cliente {getattr(cliente,'cliente_id', 'N/A')} por erro ao montar payload: {row_e}")
         
         return {
             "empresa": empresa_slug,
@@ -1250,20 +1311,48 @@ def erros_24h():
 def login(form_data: OAuth2PasswordRequestForm = Depends()):
     session = SessionLocal()
     try:
-        user = session.query(Usuario).filter(Usuario.email == form_data.username).first()
-        if not user or not bcrypt.verify(form_data.password, user.senha_hash):
+        # Primeiro tenta via ORM
+        try:
+            user = session.query(Usuario).filter(Usuario.email == form_data.username).first()
+            senha_hash = user.senha_hash if user else None
+            user_id = user.id if user else None
+            user_email = user.email if user else None
+            is_superuser = bool(user.is_superuser) if user else False
+            empresa_id = user.empresa_id if user else None
+        except ProgrammingError as pe:
+            # Limpar transação abortada antes do fallback
+            try:
+                session.rollback()
+            except Exception:
+                pass
+            # Fallback para bancos sem colunas novas (schema antigo)
+            logger.warning(f"Fallback login (schema antigo): {pe}")
+            row = session.execute(text(
+                "SELECT id, email, senha_hash, is_superuser, empresa_id FROM usuarios WHERE email = :email LIMIT 1"
+            ), {"email": form_data.username}).fetchone()
+            user = None
+            if row:
+                user_id, user_email, senha_hash, is_superuser, empresa_id = row
+            else:
+                senha_hash = None
+                user_id = None
+                user_email = None
+                is_superuser = False
+                empresa_id = None
+
+        if not senha_hash or not bcrypt.verify(form_data.password, senha_hash):
             # Log de tentativa de login falhada
             save_log_to_db(session, None, 'WARNING', f'Tentativa de login falhada para {form_data.username}')
             raise HTTPException(status_code=401, detail="Credenciais inválidas")
         
         # Log de login bem-sucedido
-        save_log_to_db(session, user.empresa_id, 'INFO', f'Login bem-sucedido para {user.email}')
+        save_log_to_db(session, empresa_id, 'INFO', f'Login bem-sucedido para {user_email}')
         
         data = {
-            "sub": user.email, 
-            "is_superuser": user.is_superuser, 
-            "empresa_id": user.empresa_id,
-            "user_id": user.id
+            "sub": user_email, 
+            "is_superuser": bool(is_superuser), 
+            "empresa_id": empresa_id,
+            "user_id": user_id
         }
         token = jwt.encode(data, config.SECRET_KEY, algorithm=config.ALGORITHM)
         
@@ -1271,10 +1360,10 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
             "access_token": token, 
             "token_type": "bearer",
             "user": {
-                "id": user.id,
-                "email": user.email,
-                "is_superuser": user.is_superuser,
-                "empresa_id": user.empresa_id
+                "id": user_id,
+                "email": user_email,
+                "is_superuser": bool(is_superuser),
+                "empresa_id": empresa_id
             }
         }
     finally:

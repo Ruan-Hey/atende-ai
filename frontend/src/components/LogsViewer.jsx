@@ -279,8 +279,8 @@ const LogsViewer = () => {
   const loadLogs = async () => {
     try {
       setLoading(true)
-      // Por padrão, excluir logs de INFO para não poluir
-      const excludeInfo = filterLevel === 'all' || filterLevel === 'error' || filterLevel === 'warning'
+      // Ajuste: quando filterLevel === 'all', NÃO excluir INFO
+      const excludeInfo = filterLevel !== 'all' && filterLevel !== 'info'
       const response = await apiService.getLogs(selectedEmpresa || null, 100, filterLevel, excludeInfo)
       // Garantir que sempre temos um array
       const logsArray = Array.isArray(response?.logs) ? response.logs : []

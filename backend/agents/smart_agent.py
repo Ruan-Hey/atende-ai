@@ -549,7 +549,11 @@ class SmartAgent:
             
         except Exception as e:
             logger.error(f"Erro ao processar mensagem: {e}")
-            return "Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente."
+            return self._generate_response_with_company_prompt(
+                "erro_geral",
+                {'error': f"Erro ao processar mensagem: {str(e)}", 'context': context},
+                context
+            )
     
     
     
@@ -570,7 +574,11 @@ class SmartAgent:
             
         except Exception as e:
             logger.error(f"Erro ao gerar resposta geral: {e}")
-            return "Olá! Como posso ajudar você hoje?"
+            return self._generate_response_with_company_prompt(
+                "erro_geral",
+                {'error': f"Erro ao gerar resposta geral: {str(e)}", 'context': context},
+                context
+            )
     
     def get_conversation_summary(self) -> Dict[str, Any]:
         """Retorna um resumo do estado atual da conversa"""
@@ -1167,7 +1175,11 @@ class SmartAgent:
             
             # Se precisa perguntar algo ao usuário, retornar a pergunta
             if resultado.get('status') in ['perguntar_cpf', 'perguntar_nome']:
-                return resultado.get('message', 'Preciso de mais informações para continuar')
+                return self._generate_response_with_company_prompt(
+                    "perguntar_dados",
+                    {'message': resultado.get('message', 'Preciso de mais informações para continuar'), 'context': context},
+                    context
+                )
             
             # Se houve erro, retornar mensagem de erro
             if resultado.get('status') == 'erro':
@@ -1210,7 +1222,11 @@ class SmartAgent:
         """Executa cancelamento de reserva"""
         try:
             if not data.get('data'):
-                return "Preciso saber a data da consulta para cancelar."
+                return self._generate_response_with_company_prompt(
+                    "cancelar_consulta",
+                    {'error': "Dados insuficientes para cancelamento", 'missing_fields': ['data'], 'context': context},
+                    context
+                )
             
             # Usar prompt da empresa para formatar resposta
             return self._generate_response_with_company_prompt(
@@ -1221,13 +1237,21 @@ class SmartAgent:
             
         except Exception as e:
             logger.error(f"Erro ao cancelar reserva: {e}")
-            return "Desculpe, não consegui cancelar a reserva no momento."
+            return self._generate_response_with_company_prompt(
+                "cancelar_consulta",
+                {'error': f"Erro ao cancelar reserva: {str(e)}", 'context': context},
+                context
+            )
     
     def _execute_reservation_reschedule(self, data: Dict[str, Any], context: Dict[str, Any]) -> str:
         """Executa reagendamento de reserva"""
         try:
             if not data.get('data_atual') or not data.get('nova_data'):
-                return "Desculpe, preciso saber a data atual e a nova data para reagendar."
+                return self._generate_response_with_company_prompt(
+                    "reagendar_consulta",
+                    {'error': "Dados insuficientes para reagendamento", 'missing_fields': ['data_atual', 'nova_data'], 'context': context},
+                    context
+                )
             
             # Usar prompt da empresa para formatar resposta
             return self._generate_response_with_company_prompt(
@@ -1238,7 +1262,11 @@ class SmartAgent:
             
         except Exception as e:
             logger.error(f"Erro ao reagendar reserva: {e}")
-            return "Desculpe, não consegui reagendar a reserva no momento."
+            return self._generate_response_with_company_prompt(
+                "reagendar_consulta",
+                {'error': f"Erro ao reagendar reserva: {str(e)}", 'context': context},
+                context
+            )
     
     def _call_trinks_api(self, endpoint: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Chama API Trinks real"""
@@ -1606,56 +1634,9 @@ RESPONDA APENAS em JSON válido."""
             enriched_context
         )
     
-    def _generate_fallback_response(self, action_type: str, data: Dict[str, Any]) -> str:
-        """Gera resposta de fallback quando o prompt da empresa falha"""
-        
-        if action_type == "verificar_disponibilidade":
-            professional = data.get('profissional', data.get('professional', 'Profissional'))
-            date = data.get('data', data.get('date', 'Data'))
-            horarios = data.get('horarios_disponiveis', data.get('disponibilidade', []))
-            intervalos = data.get('intervalos', [])
-            
-            if horarios or intervalos:
-                response = f"✅ Horários disponíveis para {professional}:\n\n"
-                
-                if horarios:
-                    response += "🕐 Horários específicos:\n"
-                    for horario in horarios:
-                        response += f"• {horario}\n"
-                    response += "\n"
-                
-                if intervalos:
-                    response += "⏰ Intervalos disponíveis:\n"
-                    for intervalo in intervalos:
-                        response += f"• {intervalo.get('inicio', '')} - {intervalo.get('fim', '')}\n"
-                
-                response += f"\n📅 Data: {date}"
-                return response
-            else:
-                return f"Infelizmente a {professional} não tem horários disponíveis para {date}."
-        
-        elif action_type == "perguntar_preferencia_profissional":
-            servico = data.get('servico', 'serviço')
-            data_str = data.get('data', 'data')
-            profissionais_count = data.get('profissionais_disponiveis', 0)
-            return f"Perfeito! Encontrei o serviço '{servico}' e {profissionais_count} profissionais disponíveis para {data_str}. Tem algum profissional específico em mente, ou posso mostrar a disponibilidade de todos?"
-        
-        elif action_type == "perguntar_procedimento":
-            profissional = data.get('profissional', 'profissional')
-            data_str = data.get('data', 'data')
-            return f"Perfeito! Encontrei a {profissional} disponível para {data_str}. Qual procedimento você gostaria de agendar?"
-        
-        elif action_type == "agendar_consulta":
-            return f"Perfeito! Vou agendar sua consulta com {data.get('profissional', 'profissional')} para {data.get('data', 'data')} às {data.get('horario', 'horário')}."
-        
-        elif action_type == "cancelar_consulta":
-            return f"Vou cancelar sua consulta de {data.get('data', 'data')}. Confirma o cancelamento?"
-        
-        elif action_type == "reagendar_consulta":
-            return f"Vou reagendar sua consulta de {data.get('data_atual', 'data atual')} para {data.get('nova_data', 'nova data')}."
-        
-        else:
-            return f"Ação '{action_type}' processada com sucesso." 
+    # ✅ MÉTODO REMOVIDO: _generate_fallback_response
+    # Agora todos os erros são enviados para o LLM da empresa através do fluxo normal
+    # O prompt da empresa deve ser configurado para responder adequadamente a erros 
     
     # ✅ MÉTODO REMOVIDO: _get_conversation_state nunca foi usado
     
@@ -2151,7 +2132,11 @@ EXEMPLO: Se o usuário disser 'Oi' + 'Tudo bem?', responda 'Oi! Tudo bem sim, ob
         
         else:
             logger.warning("⚠️ Nenhuma API ativa detectada")
-            return "Desculpe, não consegui processar sua solicitação. Entre em contato com o suporte."
+            return self._generate_response_with_company_prompt(
+                "erro_sistema",
+                {'error': "Nenhuma API ativa detectada", 'context': context},
+                context
+            )
 
     def analyze_and_respond(self, message: str, waid: str, context: Dict[str, Any] = None) -> str:
         """Método principal que analisa e decide o caminho"""

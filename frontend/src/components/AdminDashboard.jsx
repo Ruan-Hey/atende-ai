@@ -180,7 +180,7 @@ const AdminDashboard = () => {
               <tr
                 key={empresa.slug}
                 style={{ cursor: 'pointer' }}
-                onClick={() => navigate(`/admin/${empresa.slug}`)}
+                onClick={() => navigate(`/admin/empresa/${empresa.slug}`)}
                 title="Ver painel da empresa"
               >
                 <td>{empresa.nome}</td>
