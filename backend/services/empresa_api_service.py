@@ -1,4 +1,4 @@
-from ..models import Empresa, API, EmpresaAPI
+from models import Empresa, API, EmpresaAPI
 from sqlalchemy.orm import Session
 from typing import Dict, List, Optional, Any
 import logging

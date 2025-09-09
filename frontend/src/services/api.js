@@ -202,6 +202,62 @@ class ApiService {
     })
   }
 
+  // ===============================
+  // Lembretes (EmpresaReminder)
+  // ===============================
+  async getEmpresaReminders(empresaSlug) {
+    return this.authenticatedRequest(`/api/admin/empresa/${empresaSlug}/reminders`)
+  }
+
+  async listEmpresaReminders(empresaSlug) {
+    return this.authenticatedRequest(`/api/admin/empresa/${empresaSlug}/reminders/all`)
+  }
+
+  async updateEmpresaReminders(empresaSlug, data) {
+    return this.authenticatedRequest(`/api/admin/empresa/${empresaSlug}/reminders`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async createEmpresaReminder(empresaSlug, data) {
+    return this.authenticatedRequest(`/api/admin/empresa/${empresaSlug}/reminders`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async updateEmpresaReminder(empresaSlug, reminderId, data) {
+    return this.authenticatedRequest(`/api/admin/empresa/${empresaSlug}/reminders/${reminderId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async deleteEmpresaReminder(empresaSlug, reminderId) {
+    return this.authenticatedRequest(`/api/admin/empresa/${empresaSlug}/reminders/${reminderId}`, {
+      method: 'DELETE'
+    })
+  }
+
+  async previewEmpresaReminders(empresaSlug, reminderId = null) {
+    const query = reminderId ? `?reminder_id=${encodeURIComponent(reminderId)}` : ''
+    return this.authenticatedRequest(`/api/admin/empresa/${empresaSlug}/reminders/preview${query}`, {
+      method: 'POST'
+    })
+  }
+
+  async runNowEmpresaReminders(empresaSlug, reminderId = null) {
+    const query = reminderId ? `?reminder_id=${encodeURIComponent(reminderId)}` : ''
+    return this.authenticatedRequest(`/api/admin/empresa/${empresaSlug}/reminders/run-now${query}`, {
+      method: 'POST'
+    })
+  }
+
+  async getEmpresaReminderOptions(empresaSlug) {
+    return this.authenticatedRequest(`/api/admin/empresa/${empresaSlug}/reminders/options`)
+  }
+
   // APIs - Listar APIs conectadas a uma empresa (por ID)
   async getEmpresaAPIs(empresaId) {
     return this.authenticatedRequest(`/api/admin/empresas/${empresaId}/apis`)

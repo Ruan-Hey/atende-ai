@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, HTTPException, Request, Query, Depends, UploadFile, File
+from fastapi import FastAPI, HTTPException, Request, Query, Depends, UploadFile, File, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import logging
@@ -9,6 +9,7 @@ import random
 import asyncio
 import time
 import traceback
+import pytz
 
 # Configurar logging limpo
 from config import LOGGING_CONFIG
@@ -17,7 +18,7 @@ logging.config.dictConfig(LOGGING_CONFIG)
 logger = logging.getLogger(__name__)
 
 from config import Config
-from models import WebhookData, MessageResponse, AdminMetrics, EmpresaMetrics, HealthCheck, Base, Empresa, Mensagem, Log, Usuario, gerar_hash_senha, Atendimento, Cliente, Atividade, API, EmpresaAPI
+from models import WebhookData, MessageResponse, AdminMetrics, EmpresaMetrics, HealthCheck, Base, Empresa, Mensagem, Log, Usuario, gerar_hash_senha, Atendimento, Cliente, Atividade, API, EmpresaAPI, EmpresaReminder
 from services.services import MetricsService
 from services.email_service import email_service
 from sqlalchemy import create_engine, text
@@ -284,6 +285,429 @@ app.add_middleware(
 
 # Instanciar serviços
 metrics_service = MetricsService()
+
+# ============================================================================
+# LEMBRETES (EmpresaReminder) - ADMIN
+# ============================================================================
+
+def _compute_next_run_at(timezone_str: str, send_time_local: str):
+    tz = pytz.timezone(timezone_str or 'America/Sao_Paulo')
+    now = datetime.now(tz)
+    try:
+        hh, mm = (send_time_local or '11:00').split(':')
+        target = now.replace(hour=int(hh), minute=int(mm), second=0, microsecond=0)
+        if target <= now:
+            target = target + timedelta(days=1)
+        return target.astimezone(pytz.utc).replace(tzinfo=None)
+    except Exception:
+        target = now.replace(hour=11, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        return target.astimezone(pytz.utc).replace(tzinfo=None)
+
+
+def _serialize_reminder(rem: EmpresaReminder) -> dict:
+    return {
+        "id": rem.id,
+        "enabled": bool(rem.enabled),
+        "provider": rem.provider or "Trinks",
+        "timezone": rem.timezone or "America/Sao_Paulo",
+        "send_time_local": rem.send_time_local or "11:00",
+        "lead_days": rem.lead_days or 1,
+        "twilio_template_sid": rem.twilio_template_sid or "",
+        "twilio_variable_order": rem.twilio_variable_order or ["name","time","professional"],
+        "dedupe_strategy": rem.dedupe_strategy or "first_slot_per_day",
+    }
+
+@app.get("/api/admin/empresa/{empresa_slug}/reminders/all")
+def list_empresa_reminders(empresa_slug: str, current_user: Usuario = Depends(get_current_user)):
+    session = SessionLocal()
+    try:
+        empresa = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
+        if not empresa:
+            raise HTTPException(status_code=404, detail="Empresa não encontrada")
+        if not current_user.is_superuser and current_user.empresa_id != empresa.id:
+            raise HTTPException(status_code=403, detail="Acesso negado a esta empresa")
+        rems = session.query(EmpresaReminder).filter(EmpresaReminder.empresa_id == empresa.id).order_by(EmpresaReminder.id.asc()).all()
+        return {"items": [_serialize_reminder(r) for r in rems]}
+    finally:
+        session.close()
+
+# Alias com barra final
+@app.get("/api/admin/empresa/{empresa_slug}/reminders/all/")
+def list_empresa_reminders_alias(empresa_slug: str, current_user: Usuario = Depends(get_current_user)):
+    return list_empresa_reminders(empresa_slug, current_user)
+
+@app.post("/api/admin/empresa/{empresa_slug}/reminders")
+def create_empresa_reminder(empresa_slug: str, data: dict, current_user: Usuario = Depends(get_current_user)):
+    session = SessionLocal()
+    try:
+        empresa = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
+        if not empresa:
+            raise HTTPException(status_code=404, detail="Empresa não encontrada")
+        if not current_user.is_superuser and current_user.empresa_id != empresa.id:
+            raise HTTPException(status_code=403, detail="Acesso negado a esta empresa")
+        rem = EmpresaReminder(
+            empresa_id=empresa.id,
+            enabled=bool(data.get("enabled", False)),
+            provider=data.get("provider") or "Trinks",
+            timezone=data.get("timezone") or "America/Sao_Paulo",
+            send_time_local=data.get("send_time_local") or "11:00",
+            lead_days=int(data.get("lead_days") or 1),
+            twilio_template_sid=data.get("twilio_template_sid") or "",
+            twilio_variable_order=data.get("twilio_variable_order") or ["name","time","professional"],
+            dedupe_strategy=data.get("dedupe_strategy") or "first_slot_per_day",
+        )
+        if rem.enabled:
+            rem.next_run_at = _compute_next_run_at(rem.timezone, rem.send_time_local)
+        session.add(rem)
+        session.commit()
+        session.refresh(rem)
+        return _serialize_reminder(rem)
+    finally:
+        session.close()
+
+@app.put("/api/admin/empresa/{empresa_slug}/reminders/{reminder_id}")
+def update_empresa_reminder(empresa_slug: str, reminder_id: int, data: dict, current_user: Usuario = Depends(get_current_user)):
+    session = SessionLocal()
+    try:
+        empresa = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
+        if not empresa:
+            raise HTTPException(status_code=404, detail="Empresa não encontrada")
+        if not current_user.is_superuser and current_user.empresa_id != empresa.id:
+            raise HTTPException(status_code=403, detail="Acesso negado a esta empresa")
+        rem = session.query(EmpresaReminder).filter(EmpresaReminder.id == reminder_id, EmpresaReminder.empresa_id == empresa.id).first()
+        if not rem:
+            raise HTTPException(status_code=404, detail="Lembrete não encontrado")
+        # Atualiza
+        for field in ("enabled","provider","timezone","send_time_local","lead_days","twilio_template_sid","twilio_variable_order","dedupe_strategy"):
+            if field in data:
+                setattr(rem, field, data[field])
+        # Types
+        try:
+            rem.lead_days = int(rem.lead_days or 1)
+        except Exception:
+            rem.lead_days = 1
+        # Recalcula next_run
+        rem.next_run_at = _compute_next_run_at(rem.timezone, rem.send_time_local) if rem.enabled else None
+        session.commit()
+        session.refresh(rem)
+        return _serialize_reminder(rem)
+    finally:
+        session.close()
+
+@app.delete("/api/admin/empresa/{empresa_slug}/reminders/{reminder_id}")
+def delete_empresa_reminder(empresa_slug: str, reminder_id: int, current_user: Usuario = Depends(get_current_user)):
+    session = SessionLocal()
+    try:
+        empresa = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
+        if not empresa:
+            raise HTTPException(status_code=404, detail="Empresa não encontrada")
+        if not current_user.is_superuser and current_user.empresa_id != empresa.id:
+            raise HTTPException(status_code=403, detail="Acesso negado a esta empresa")
+        rem = session.query(EmpresaReminder).filter(EmpresaReminder.id == reminder_id, EmpresaReminder.empresa_id == empresa.id).first()
+        if not rem:
+            raise HTTPException(status_code=404, detail="Lembrete não encontrado")
+        session.delete(rem)
+        session.commit()
+        return {"success": True}
+    finally:
+        session.close()
+
+@app.get("/api/admin/empresa/{empresa_slug}/reminders")
+def get_empresa_reminders(empresa_slug: str, current_user: Usuario = Depends(get_current_user)):
+    session = SessionLocal()
+    try:
+        # Verificar acesso
+        empresa = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
+        if not empresa:
+            raise HTTPException(status_code=404, detail="Empresa não encontrada")
+        if not current_user.is_superuser and current_user.empresa_id != empresa.id:
+            raise HTTPException(status_code=403, detail="Acesso negado a esta empresa")
+
+        # Carregar ou defaults
+        rem = session.query(EmpresaReminder).filter(EmpresaReminder.empresa_id == empresa.id).first()
+        if not rem:
+            data = {
+                "enabled": False,
+                "provider": "Trinks",
+                "timezone": "America/Sao_Paulo",
+                "send_time_local": "11:00",
+                "lead_days": 1,
+                "twilio_template_sid": "",
+                "twilio_variable_order": ["name","time","professional"],
+                "dedupe_strategy": "first_slot_per_day",
+            }
+            return data
+
+        return {
+            "enabled": bool(rem.enabled),
+            "provider": rem.provider or "Trinks",
+            "timezone": rem.timezone or "America/Sao_Paulo",
+            "send_time_local": rem.send_time_local or "11:00",
+            "lead_days": rem.lead_days or 1,
+            "twilio_template_sid": rem.twilio_template_sid or "",
+            "twilio_variable_order": rem.twilio_variable_order or ["name","time","professional"],
+            "dedupe_strategy": rem.dedupe_strategy or "first_slot_per_day",
+        }
+    finally:
+        session.close()
+
+
+@app.put("/api/admin/empresa/{empresa_slug}/reminders")
+def update_empresa_reminders(empresa_slug: str, configuracoes: dict, current_user: Usuario = Depends(get_current_user)):
+    session = SessionLocal()
+    try:
+        # Verificar acesso
+        empresa = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
+        if not empresa:
+            raise HTTPException(status_code=404, detail="Empresa não encontrada")
+        if not current_user.is_superuser and current_user.empresa_id != empresa.id:
+            raise HTTPException(status_code=403, detail="Acesso negado a esta empresa")
+
+        rem = session.query(EmpresaReminder).filter(EmpresaReminder.empresa_id == empresa.id).first()
+        if not rem:
+            rem = EmpresaReminder(empresa_id=empresa.id)
+            session.add(rem)
+
+        # Atualizar campos
+        if "enabled" in configuracoes:
+            rem.enabled = bool(configuracoes["enabled"])
+        if "provider" in configuracoes:
+            rem.provider = configuracoes["provider"] or "Trinks"
+        if "timezone" in configuracoes:
+            rem.timezone = configuracoes["timezone"] or "America/Sao_Paulo"
+        if "send_time_local" in configuracoes:
+            rem.send_time_local = configuracoes["send_time_local"] or "11:00"
+        if "lead_days" in configuracoes:
+            try:
+                rem.lead_days = int(configuracoes["lead_days"]) if configuracoes["lead_days"] is not None else 1
+            except Exception:
+                rem.lead_days = 1
+        if "twilio_template_sid" in configuracoes:
+            rem.twilio_template_sid = configuracoes["twilio_template_sid"] or ""
+        if "twilio_variable_order" in configuracoes:
+            rem.twilio_variable_order = configuracoes["twilio_variable_order"] or ["name","time","professional"]
+        if "dedupe_strategy" in configuracoes:
+            rem.dedupe_strategy = configuracoes["dedupe_strategy"] or "first_slot_per_day"
+
+        # Recalcular próximo agendamento
+        rem.next_run_at = _compute_next_run_at(rem.timezone, rem.send_time_local) if rem.enabled else None
+
+        session.commit()
+
+        return {
+            "enabled": bool(rem.enabled),
+            "provider": rem.provider,
+            "timezone": rem.timezone,
+            "send_time_local": rem.send_time_local,
+            "lead_days": rem.lead_days,
+            "twilio_template_sid": rem.twilio_template_sid,
+            "twilio_variable_order": rem.twilio_variable_order,
+            "dedupe_strategy": rem.dedupe_strategy,
+        }
+    finally:
+        session.close()
+
+
+@app.get("/api/admin/empresa/{empresa_slug}/reminders/options")
+def get_empresa_reminder_options(empresa_slug: str, current_user: Usuario = Depends(get_current_user)):
+    session = SessionLocal()
+    try:
+        empresa = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
+        if not empresa:
+            raise HTTPException(status_code=404, detail="Empresa não encontrada")
+        if not current_user.is_superuser and current_user.empresa_id != empresa.id:
+            raise HTTPException(status_code=403, detail="Acesso negado a esta empresa")
+        return {
+            "providers": ["Trinks"],
+            "placeholders": ["name","time","professional"]
+        }
+    finally:
+        session.close()
+
+
+@app.post("/api/admin/empresa/{empresa_slug}/reminders/preview")
+def preview_empresa_reminders(empresa_slug: str, reminder_id: int = Query(None), current_user: Usuario = Depends(get_current_user)):
+    session = SessionLocal()
+    try:
+        # Acesso
+        empresa = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
+        if not empresa:
+            raise HTTPException(status_code=404, detail="Empresa não encontrada")
+        if not current_user.is_superuser and current_user.empresa_id != empresa.id:
+            raise HTTPException(status_code=403, detail="Acesso negado a esta empresa")
+
+        if reminder_id is not None:
+            rem = session.query(EmpresaReminder).filter(
+                EmpresaReminder.empresa_id == empresa.id,
+                EmpresaReminder.id == reminder_id
+            ).first()
+        else:
+            rem = session.query(EmpresaReminder).filter(EmpresaReminder.empresa_id == empresa.id).order_by(EmpresaReminder.id.asc()).first()
+        # Preview deve funcionar mesmo com lembretes desativados
+        if not rem:
+            # Defaults para preview
+            class _RemObj:
+                timezone = 'America/Sao_Paulo'
+                lead_days = 1
+                twilio_variable_order = ["name","time","professional"]
+            rem = _RemObj()
+
+        # Obter config da Trinks
+        from services.unified_config_service import get_trinks_config
+        trinks_cfg = get_trinks_config(session, empresa.id)
+        if not trinks_cfg:
+            return {"items": []}
+
+        empresa_config = {
+            'empresa_id': empresa.id,
+            'empresa_slug': empresa.slug,
+            # Passar config crua e normalizada
+            'trinks_config': trinks_cfg,
+            'trinks_base_url': trinks_cfg.get('base_url'),
+            'trinks_api_key': trinks_cfg.get('api_key'),
+            'trinks_estabelecimento_id': trinks_cfg.get('estabelecimento_id'),
+            'openai_config': {}
+        }
+
+        # Janela de tempo
+        from services.trinks_provider import TrinksProvider
+        provider = TrinksProvider(empresa_config)
+        # Reusar lógica de janela do worker
+        tz = pytz.timezone(rem.timezone or 'America/Sao_Paulo')
+        now = datetime.now(tz)
+        target = (now + timedelta(days=rem.lead_days or 1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        start_iso = target.isoformat()
+        end_iso = (target + timedelta(days=1)).isoformat()
+
+        appointments = provider.list_appointments_range(start_iso, end_iso)
+
+        # Deduplicar por cliente pegando primeiro horário
+        by_client = {}
+        for ap in appointments:
+            cliente_id = str((ap.get('cliente') or {}).get('id') or ap.get('clienteId') or '')
+            if not cliente_id:
+                continue
+            inicio = ap.get('dataHoraInicio') or ''
+            current = by_client.get(cliente_id)
+            if not current or (inicio and inicio < current.get('dataHoraInicio', '')):
+                by_client[cliente_id] = ap
+
+        items = []
+        # Buscar corpo do template Twilio para gerar preview
+        preview_text = ''
+        try:
+            from sqlalchemy.orm import sessionmaker
+            from config import Config
+            from integrations.twilio_service import TwilioService
+            engine = create_engine(Config.POSTGRES_URL)
+            SLocal = sessionmaker(bind=engine)
+            s2 = SLocal()
+            try:
+                emp = s2.query(Empresa).filter(Empresa.id == empresa.id).first()
+                if emp and getattr(rem, 'twilio_template_sid', None):
+                    tw = TwilioService(emp.twilio_sid or '', emp.twilio_token or '', (emp.twilio_number or '').lstrip('+'))
+                    ft = tw.fetch_template_text(rem.twilio_template_sid)
+                    if ft.get('success'):
+                        preview_text = ft.get('text') or ''
+            finally:
+                s2.close()
+        except Exception:
+            preview_text = ''
+        if by_client:
+            from integrations.trinks_service import TrinksService
+            ts = TrinksService(empresa_config)
+            order = rem.twilio_variable_order or ["name","time","professional"]
+            for cliente_id, ap in by_client.items():
+                inicio = ap.get('dataHoraInicio') or ''
+                prof = (ap.get('profissional') or {}).get('nome') or ''
+                try:
+                    # Converter horário para HH:MM no timezone
+                    if inicio.endswith('Z'):
+                        dt = datetime.fromisoformat(inicio.replace('Z', '+00:00'))
+                    else:
+                        dt = datetime.fromisoformat(inicio)
+                    local_dt = dt.astimezone(tz)
+                    hhmm = local_dt.strftime('%H:%M')
+                except Exception:
+                    hhmm = ''
+
+                cli = ts.get_client(cliente_id)
+                name_full = (cli.get('nome') or (cli.get('data') or {}).get('nome') or '').strip()
+                # Usar apenas o primeiro nome para a saudação
+                first_name = name_full.split()[0] if name_full else ''
+                # Telefone para preview (normalizado)
+                try:
+                    from services.services import DatabaseService
+                    phone_raw = (cli.get('telefone') or (cli.get('data') or {}).get('telefone') or '')
+                    phone = DatabaseService.normalize_phone_br(phone_raw)
+                except Exception:
+                    phone = ''
+
+                # Mapear variáveis na ordem
+                values = {'name': first_name or '', 'time': hhmm or '', 'professional': prof or ''}
+                variables = {str(i+1): values.get(order[i], '') for i in range(min(3, len(order)))}
+
+                # Montar mensagem de preview substituindo {{1}}, {{2}}, {{3}}
+                message_preview = preview_text
+                if message_preview:
+                    try:
+                        for idx in range(1, 4):
+                            message_preview = message_preview.replace(f"{{{{{idx}}}}}", variables.get(str(idx), ''))
+                    except Exception:
+                        pass
+
+                items.append({
+                    'phone': phone,
+                    'name': first_name,
+                    'time': hhmm,
+                    'professional': prof,
+                    'variables': variables,
+                    'message_preview': message_preview
+                })
+
+        return {"items": items}
+    finally:
+        session.close()
+
+
+@app.post("/api/admin/empresa/{empresa_slug}/reminders/run-now")
+def run_now_empresa_reminders(empresa_slug: str, reminder_id: int = Query(None), current_user: Usuario = Depends(get_current_user)):
+    session = SessionLocal()
+    try:
+        empresa = session.query(Empresa).filter(Empresa.slug == empresa_slug).first()
+        if not empresa:
+            raise HTTPException(status_code=404, detail="Empresa não encontrada")
+        if not current_user.is_superuser and current_user.empresa_id != empresa.id:
+            raise HTTPException(status_code=403, detail="Acesso negado a esta empresa")
+
+        if reminder_id is not None:
+            rem = session.query(EmpresaReminder).filter(
+                EmpresaReminder.empresa_id == empresa.id,
+                EmpresaReminder.id == reminder_id
+            ).first()
+        else:
+            rem = session.query(EmpresaReminder).filter(EmpresaReminder.empresa_id == empresa.id).order_by(EmpresaReminder.id.asc()).first()
+        if not rem or not rem.enabled:
+            return {"success": False, "message": "Lembretes desativados ou não configurados"}
+
+        # Construir cfg para o worker
+        cfg = {
+            'empresa_id': empresa.id,
+            'empresa_slug': empresa.slug,
+            'timezone': rem.timezone or 'America/Sao_Paulo',
+            'send_time_local': rem.send_time_local or '11:00',
+            'lead_days': rem.lead_days or 1,
+            'provider': rem.provider or 'Trinks',
+            'twilio_template_sid': rem.twilio_template_sid or '',
+            'twilio_variable_order': rem.twilio_variable_order or ["name","time","professional"],
+            'dedupe_strategy': rem.dedupe_strategy or 'first_slot_per_day',
+        }
+
+        from services.confirmation_worker import run_company_confirmation
+        run_company_confirmation(empresa.id, empresa.slug, cfg)
+        return {"success": True}
+    finally:
+        session.close()
 
 # Inicializar engine do banco
 # engine = create_engine(Config.POSTGRES_URL)
@@ -1373,17 +1797,42 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
 def get_usuarios(current_user: Usuario = Depends(get_current_superuser)):
     session = SessionLocal()
     try:
-        usuarios = session.query(Usuario).all()
-        return [
-            {
-                "id": u.id,
-                "email": u.email,
-                "is_superuser": u.is_superuser,
-                "empresa_id": u.empresa_id,
-                "created_at": u.created_at.isoformat() if u.created_at else None
-            }
-            for u in usuarios
-        ]
+        try:
+            # Caminho padrão (schema novo)
+            usuarios = session.query(Usuario).all()
+            return [
+                {
+                    "id": u.id,
+                    "email": u.email,
+                    "is_superuser": u.is_superuser,
+                    "empresa_id": u.empresa_id,
+                    "created_at": u.created_at.isoformat() if getattr(u, "created_at", None) else None,
+                }
+                for u in usuarios
+            ]
+        except ProgrammingError as pe:
+            # Fallback para bancos antigos sem colunas novas (notifications_*)
+            try:
+                session.rollback()
+            except Exception:
+                pass
+            rows = session.execute(text(
+                "SELECT id, email, is_superuser, empresa_id, created_at FROM usuarios"
+            )).fetchall()
+            users = []
+            for r in rows:
+                try:
+                    created = r[4].isoformat() if r[4] else None
+                except Exception:
+                    created = None
+                users.append({
+                    "id": r[0],
+                    "email": r[1],
+                    "is_superuser": bool(r[2]),
+                    "empresa_id": r[3],
+                    "created_at": created,
+                })
+            return users
     finally:
         session.close()
 
@@ -1653,9 +2102,18 @@ def get_empresa_configuracoes(
             elif api.nome == "OpenAI":
                 config_data['openai_key'] = config.get('openai_key')
             elif api.nome == "Trinks":
-                empresa_config['trinks_api_key'] = config.get('api_key')
-                empresa_config['trinks_base_url'] = config.get('base_url')
-                empresa_config['trinks_estabelecimento_id'] = config.get('estabelecimento_id')
+                # Normalização defensiva de chaves da Trinks para o painel
+                api_key = config.get('api_key') or config.get('key')
+                base_url = config.get('base_url') or config.get('url_base') or config.get('url')
+                if base_url and not str(base_url).startswith(('http://', 'https://')):
+                    base_url = f"https://{str(base_url).lstrip('/')}"
+                empresa_config['trinks_api_key'] = api_key
+                empresa_config['trinks_base_url'] = base_url
+                empresa_config['trinks_estabelecimento_id'] = (
+                    config.get('estabelecimento_id')
+                    or config.get('estabelecimentoId')
+                    or config.get('estabelecimento')
+                )
             elif api.nome == "Chatwoot":
                 config_data['chatwoot_token'] = config.get('chatwoot_token')
                 config_data['chatwoot_inbox_id'] = config.get('chatwoot_inbox_id')

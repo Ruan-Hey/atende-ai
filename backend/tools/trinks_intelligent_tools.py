@@ -6,6 +6,7 @@ CORRIGIDO PARA PRODUÇÃO - Considera duração do serviço
 """
 
 import logging
+import json
 import re
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta
@@ -16,6 +17,12 @@ from rules.trinks_rules import TrinksRules
 from .api_tools import APITools
 import requests
 from langchain.schema import SystemMessage, HumanMessage, AIMessage
+try:
+    from dateutil import parser as dtparser
+    from dateutil import tz as dttz
+except Exception:
+    dtparser = None
+    dttz = None
 import math
 from difflib import SequenceMatcher
 
@@ -735,6 +742,78 @@ class TrinksIntelligentTools:
         except Exception as e:
             logger.error(f"Erro ao buscar agendamentos existentes: {e}")
             return {"error": f"Erro na busca: {str(e)}"}
+
+    def list_appointments_range(self, start_iso: str, end_iso: str, empresa_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Lista agendamentos no intervalo [start, end).
+        Preferência: chamada única com dataInicio/dataFim; fallback: por dia."""
+        try:
+            import requests
+            from datetime import datetime, timedelta
+            if dtparser is None:
+                raise RuntimeError("dateutil não disponível para parsing de datas")
+
+            safe_base_url = (
+                empresa_config.get('trinks_base_url')
+                or (empresa_config.get('trinks_config', {}) or {}).get('base_url')
+                or 'https://api.trinks.com/v1'
+            )
+            headers = {
+                'X-API-KEY': empresa_config.get("trinks_api_key", ""),
+                'estabelecimentoId': empresa_config.get('trinks_estabelecimento_id', ''),
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            }
+
+            # 1) Tentar range nativo
+            params = {
+                'dataInicio': start_iso,
+                'dataFim': end_iso
+            }
+            resp = requests.get(f"{safe_base_url}/agendamentos", headers=headers, params=params, timeout=30)
+            if resp.status_code == 200:
+                payload = resp.json() if resp.content else {}
+                data_list = (payload or {}).get('data', [])
+                return {'success': True, 'data': data_list}
+            logger.warning(f"Trinks range fetch dataInicio/dataFim -> {resp.status_code}; fallback por dia")
+
+            # 2) Fallback: por dia + filtro por horário
+            start_dt = dtparser.isoparse(start_iso)
+            end_dt = dtparser.isoparse(end_iso)
+            def _ensure_aware(dt):
+                try:
+                    if dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None:
+                        tzinfo = dttz.gettz('America/Sao_Paulo') if dttz else None
+                        if tzinfo is not None:
+                            return dt.replace(tzinfo=tzinfo)
+                except Exception:
+                    pass
+                return dt
+            start_dt = _ensure_aware(start_dt)
+            end_dt = _ensure_aware(end_dt)
+
+            day = start_dt
+            results = []
+            while day < end_dt:
+                day_str = day.strftime('%Y-%m-%d')
+                r = requests.get(f"{safe_base_url}/agendamentos", headers=headers, params={'data': day_str}, timeout=30)
+                if r.status_code == 200:
+                    for ap in (r.json() or {}).get('data', []) or []:
+                        inicio = ap.get('dataHoraInicio')
+                        if not inicio:
+                            continue
+                        try:
+                            ap_dt = _ensure_aware(dtparser.isoparse(inicio))
+                        except Exception:
+                            continue
+                        if start_dt <= ap_dt < end_dt:
+                            results.append(ap)
+                else:
+                    logger.warning(f"Trinks range day fetch {day_str} -> {r.status_code}")
+                day = day + timedelta(days=1)
+            return {'success': True, 'data': results}
+        except Exception as e:
+            logger.error(f"Erro em list_appointments_range: {e}")
+            return {'success': False, 'error': str(e)}
     
     def _calculate_available_slots(self, data: str, service_duration: int, 
                                   existing_appointments: List[Dict], 

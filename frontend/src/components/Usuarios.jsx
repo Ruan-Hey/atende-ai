@@ -101,7 +101,7 @@ const Usuarios = () => {
   };
 
   if (loading) {
-    return <LoadingSpinner type="content" />;
+    return <LoadingSpinner type="page" />;
   }
 
   return (

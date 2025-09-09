@@ -395,6 +395,7 @@ body {
 /* Main content */
 .main-content {
   flex: 1;
+  position: relative;
   margin-left: 280px;
   padding: 2rem;
   background: #f8f9fa;
@@ -1885,49 +1886,39 @@ body {
 
 /* Container do loader para páginas com sidebar */
 .page-loader-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
-  width: 100%;
-  background: white;
+  position: fixed;
+  left: 280px; /* alinha ao conteúdo fora da sidebar */
+  right: 0;
+  top: 0;
+  bottom: 0;
+  display: grid;
+  place-items: center; /* centraliza X e Y */
+  background: transparent;
+  pointer-events: none;
+  z-index: 9999;
 }
-
+  
 /* Container do loader para área de conteúdo */
 .content-loader-container {
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 100vh;
-  width: calc(100vw - 280px); /* Desktop: largura total menos a sidebar (280px) */
-  min-height: 400px;
-  background: #f8f9fa; /* Cor de fundo cinza para combinar com o tema */
-  position: fixed;
-  top: 0;
-  left: 280px; /* Desktop: posiciona após a sidebar */
-  right: 0;
-  bottom: 0;
+}
+
+.inline-loader-container {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
 }
 
 /* Mobile: ajusta para tela cheia sem sidebar */
 @media (max-width: 768px) {
-  .content-loader-container {
-    width: 100vw;
-    left: 0;
-    top: 60px; /* Considera a navbar mobile */
-    height: calc(100vh - 60px);
+  .page-loader-container {
+    left: 0; /* sem sidebar no mobile */
   }
 }
 
-/* Container do loader para páginas com sidebar */
-.page-loader-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
-  width: 100%;
-  background: white;
-}
+/* (removido bloco duplicado de page-loader-container que causava largura incorreta) */
 
 /* Estado de carregamento da aplicação */
 .app-loading {

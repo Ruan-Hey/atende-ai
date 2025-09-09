@@ -187,5 +187,39 @@ API.empresas = relationship("EmpresaAPI", back_populates="api")
 if hasattr(Empresa, 'buffer_messages'):
     delattr(Empresa, 'buffer_messages')
 
+class EmpresaReminder(Base):
+    __tablename__ = 'empresa_reminders'
+    id = Column(Integer, primary_key=True)
+    empresa_id = Column(Integer, ForeignKey('empresas.id'), nullable=False, index=True)
+    enabled = Column(Boolean, default=False)
+    provider = Column(String(50), default='Trinks')
+    timezone = Column(String(64), default='America/Sao_Paulo')
+    send_time_local = Column(String(8), nullable=False)  # HH:MM
+    lead_days = Column(Integer, default=1)
+    twilio_template_sid = Column(String(255), nullable=False)
+    twilio_variable_order = Column(JSON, nullable=True)  # ex.: ["name","time","professional"]
+    dedupe_strategy = Column(String(64), default='first_slot_per_day')
+    next_run_at = Column(TIMESTAMP, nullable=True)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+
+    empresa = relationship('Empresa')
+
+class Notification(Base):
+    __tablename__ = 'notifications'
+    id = Column(Integer, primary_key=True)
+    empresa_id = Column(Integer, ForeignKey('empresas.id'), nullable=False, index=True)
+    tipo = Column(String(50), nullable=False)  # ex.: 'confirmacao'
+    appointment_id = Column(String(100), nullable=False)
+    execution_date = Column(String(10), nullable=False)  # YYYY-MM-DD (dia do agendamento)
+    to_number = Column(String(32), nullable=False)
+    variables = Column(JSON, nullable=True)
+    message_sid = Column(String(64), nullable=True)
+    status = Column(String(32), nullable=True)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+
+    empresa = relationship('Empresa')
+    __table_args__ = (UniqueConstraint('empresa_id', 'tipo', 'appointment_id', 'execution_date', name='_uniq_notification'),)
+
 def gerar_hash_senha(senha: str) -> str:
     return bcrypt.hash(senha) 

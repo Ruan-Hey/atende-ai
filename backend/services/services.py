@@ -2,11 +2,12 @@ import json
 import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
+import re
 
 from config import Config
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
-from models import Mensagem, Cliente, Atendimento, Atividade, Empresa
+from models import Mensagem, Cliente, Atendimento, Atividade, Empresa, EmpresaReminder, Notification
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,88 @@ class DatabaseService:
     def __init__(self):
         self.engine = create_engine(Config.POSTGRES_URL)
         self.SessionLocal = sessionmaker(bind=self.engine)
+
+    def get_active_reminders(self) -> List[Dict[str, Any]]:
+        """Retorna configurações ativas de lembretes por empresa"""
+        session = self.SessionLocal()
+        try:
+            from sqlalchemy.orm import Session as SASession
+            s: SASession = session
+            rows = s.query(EmpresaReminder, Empresa).join(Empresa, EmpresaReminder.empresa_id == Empresa.id).filter(
+                EmpresaReminder.enabled == True,
+                Empresa.status == 'ativo'
+            ).all()
+            configs = []
+            for rem, emp in rows:
+                configs.append({
+                    'empresa_id': rem.empresa_id,
+                    'empresa_slug': emp.slug,
+                    'timezone': rem.timezone or 'America/Sao_Paulo',
+                    'send_time_local': rem.send_time_local,
+                    'lead_days': rem.lead_days or 1,
+                    'provider': rem.provider or 'Trinks',
+                    'twilio_template_sid': rem.twilio_template_sid,
+                    'twilio_variable_order': rem.twilio_variable_order or ["name","time","professional"],
+                    'dedupe_strategy': rem.dedupe_strategy or 'first_slot_per_day',
+                })
+            return configs
+        except Exception as e:
+            logger.error(f"Erro ao listar lembretes ativos: {e}")
+            return []
+        finally:
+            session.close()
+
+    def save_bot_message(self, empresa_id: int, cliente_id: str, text: str, cliente_nome: Optional[str] = None):
+        """Salva mensagem do bot para compor conversation_history com o SmartAgent"""
+        return self.save_message(empresa_id=empresa_id, cliente_id=cliente_id, text=text, is_bot=True, cliente_nome=cliente_nome)
+
+    @staticmethod
+    def normalize_phone_br(phone: str) -> str:
+        """Normaliza telefone para E.164 BR (+55...)."""
+        if not phone:
+            return ''
+        digits = re.sub(r"\D+", "", str(phone))
+        if not digits:
+            return ''
+        if not digits.startswith('55'):
+            digits = '55' + digits
+        return f"+{digits}"
+
+    def record_notification(self, empresa_id: int, tipo: str, appointment_id: str, execution_date: str, to_number: str, variables: Dict[str, Any], message_sid: Optional[str], status: Optional[str]) -> Optional[int]:
+        """Registra envio de notificação com idempotência"""
+        session = self.SessionLocal()
+        try:
+            note = Notification(
+                empresa_id=empresa_id,
+                tipo=tipo,
+                appointment_id=appointment_id,
+                execution_date=execution_date,
+                to_number=to_number,
+                variables=variables,
+                message_sid=message_sid,
+                status=status,
+            )
+            session.add(note)
+            session.commit()
+            session.refresh(note)
+            return note.id
+        except Exception as e:
+            session.rollback()
+            # Pode ser duplicidade (idempotência); apenas logar
+            logger.warning(f"Não foi possível registrar notificação (possível duplicado): {e}")
+            try:
+                # Buscar registro existente para idempotência
+                existing = session.query(Notification).filter(
+                    Notification.empresa_id == empresa_id,
+                    Notification.tipo == tipo,
+                    Notification.appointment_id == appointment_id,
+                    Notification.execution_date == execution_date,
+                ).first()
+                return existing.id if existing else None
+            except Exception:
+                return None
+        finally:
+            session.close()
     
     def save_message(self, empresa_id: int, cliente_id: str, text: str, is_bot: bool = False, cliente_nome: str = None):
         """Salva mensagem no banco de dados e atualiza informações do cliente"""

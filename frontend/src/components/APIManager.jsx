@@ -147,7 +147,7 @@ const APIManager = () => {
   }
 
   if (loading) {
-    return <LoadingSpinner type="content" />;
+    return <LoadingSpinner type="page" />;
   }
 
   if (error) {

@@ -333,7 +333,7 @@ const LogsViewer = () => {
   })
 
   if (loading && logs.length === 0) {
-    return <LoadingSpinner type="content" />
+    return <LoadingSpinner type="page" />
   }
 
   if (error) {

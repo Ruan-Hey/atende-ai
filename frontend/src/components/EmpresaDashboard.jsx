@@ -122,7 +122,7 @@ const EmpresaDashboard = () => {
   }
 
   if (loading) {
-    return <LoadingSpinner type="content" />
+    return <LoadingSpinner type="page" />
   }
 
   if (error) {

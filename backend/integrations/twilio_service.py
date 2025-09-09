@@ -82,10 +82,9 @@ class TwilioService:
                 'ContentSid': template_sid
             }
             
-            # Adicionar parâmetros se fornecidos
+            # Adicionar parâmetros se fornecidos (ContentVariables é um JSON ÚNICO)
             if parameters:
-                for key, value in parameters.items():
-                    data[f'ContentVariables'] = json.dumps({key: value})
+                data['ContentVariables'] = json.dumps(parameters)
             
             response = requests.post(
                 url,
@@ -108,3 +107,40 @@ class TwilioService:
                 'success': False,
                 'error': str(e)
             } 
+
+    def fetch_template_text(self, template_sid: str) -> Dict[str, Any]:
+        """Busca o conteúdo do template (ContentSid) na Twilio Content API e retorna o corpo de WhatsApp.
+        Retorna {success, text}.
+        """
+        try:
+            # Twilio Content API (v1)
+            url = f"https://content.twilio.com/v1/Content/{template_sid}"
+            resp = requests.get(url, auth=(self.account_sid, self.auth_token))
+            if resp.status_code != 200:
+                return {'success': False, 'error': f'status {resp.status_code}'}
+            data = resp.json() if resp.content else {}
+            # Extração robusta: procurar primeiro campo de texto em qualquer nível
+            def _find_text(node):
+                if isinstance(node, dict):
+                    # campos típicos
+                    for key in ('text', 'body'):
+                        val = node.get(key)
+                        if isinstance(val, str) and val.strip():
+                            return val
+                    for v in node.values():
+                        found = _find_text(v)
+                        if found:
+                            return found
+                elif isinstance(node, list):
+                    for item in node:
+                        found = _find_text(item)
+                        if found:
+                            return found
+                return None
+
+            types_obj = data.get('types') if isinstance(data, dict) else None
+            text = _find_text(types_obj if types_obj is not None else data)
+            return {'success': True, 'text': text or ''}
+        except Exception as e:
+            logger.warning(f"Falha ao buscar template text: {e}")
+            return {'success': False, 'error': str(e)}

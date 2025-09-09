@@ -287,7 +287,7 @@ const ConversationView = () => {
       <div className="conversations-content">
         {loadingConversations ? (
           <div className="loading-conversations">
-            <LoadingSpinner type="content" />
+            <LoadingSpinner type="page" />
           </div>
         ) : conversations.length > 0 ? (
           Array.isArray(conversations) && conversations.map((conversation) => {
@@ -385,7 +385,7 @@ const ConversationView = () => {
           {/* Mensagens */}
           <div className="messages-container" ref={messagesContainerRef}>
             {loadingMessages ? (
-              <LoadingSpinner type="content" />
+              <LoadingSpinner type="page" />
             ) : error ? (
               <div className="error-message">{error}</div>
             ) : renderedMessages.length > 0 ? (
@@ -436,7 +436,7 @@ const ConversationView = () => {
   )
 
   if (loadingConversations) {
-    return <LoadingSpinner type="content" />
+    return <LoadingSpinner type="page" />
   }
 
   return (

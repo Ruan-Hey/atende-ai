@@ -836,7 +836,7 @@ const ConfiguracoesEmpresa = () => {
   }
 
   if (loading && selectedEmpresa && selectedEmpresa !== 'nova-empresa') {
-    return <LoadingSpinner type="content" />
+    return <LoadingSpinner type="page" />
   }
 
   return (

@@ -14,6 +14,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import Usuarios from './components/Usuarios'
 import ConfiguracoesEmpresa from './components/ConfiguracoesEmpresa'
 import APIManager from './components/APIManager'
+import Reminders from './components/Reminders'
 
 // Força a inclusão do componente no build
 console.log('ConfiguracoesEmpresa component loaded:', ConfiguracoesEmpresa)
@@ -113,6 +114,11 @@ function AppRoutes() {
           <Route path="/admin/empresa/:empresa/configuracoes" element={
             <ProtectedRoute>
               <ConfiguracoesEmpresa />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/empresa/:empresa/lembretes" element={
+            <ProtectedRoute>
+              <Reminders />
             </ProtectedRoute>
           } />
           <Route path="/conversation/:empresa" element={

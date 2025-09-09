@@ -113,6 +113,17 @@ const Sidebar = ({ isOpen = false, isMobile = false, onClose }) => {
             </li>
             <li>
               <Link 
+                to={user?.is_superuser ? "/admin/empresa/tinyteams/lembretes" : `/admin/empresa/${user?.empresa_slug}/lembretes`} 
+                className={location.pathname.includes('/lembretes') ? 'active' : ''}
+              >
+                <svg className="icon" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6V9a6 6 0 1 0-12 0v7l-2 2v1h16v-1l-2-2z"/>
+                </svg>
+                Lembretes
+              </Link>
+            </li>
+            <li>
+              <Link 
                 to={user?.is_superuser ? "/admin/empresa/tinyteams/logs" : `/admin/empresa/${user?.empresa_slug}/logs`} 
                 className={location.pathname.includes('/logs') ? 'active' : ''}
               >

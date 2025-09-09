@@ -21,3 +21,5 @@ langchain-openai>=0.1.0
 langchain-community>=0.1.0
 langgraph>=0.1.0
 # pywebpush removido - migrado para email 
+pytz
+python-dateutil
