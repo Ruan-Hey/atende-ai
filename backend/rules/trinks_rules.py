@@ -1750,6 +1750,7 @@ REGRAS CRÍTICAS DE PRIORIDADE:
 7. Use o contexto anterior para informações NÃO mencionadas na mensagem atual, ESPECIALMENTE profissional e procedimento da última mensagem do bot
 8. NUNCA mantenha dados antigos se novos foram explicitamente mencionados
 9. REGRA ESPECIAL: Se a mensagem atual só mencionar data/horário mas NÃO mencionar profissional/procedimento, SEMPRE extraia profissional e procedimento da última mensagem do bot disponível no contexto
+10. Avaliação Gratuita é um procedimento também no tinks, caso encontre no historico de mensagem pode extrarir
 
 REGRAS DE LIMPEZA DE CACHE:
 1. SEMPRE que mencionar NOVO profissional → clear_fields: ["profissional_id", "horario"]
