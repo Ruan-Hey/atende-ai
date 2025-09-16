@@ -3647,10 +3647,33 @@ async def get_notification_settings(
 ):
     """Retorna as configurações de notificação do usuário"""
     try:
+        # Quando get_current_user cai no fallback (schema antigo), os atributos
+        # de notificação podem não existir. Buscar do banco se possível e usar
+        # getattr como segurança.
+        db = next(get_db())
+        user = None
+        try:
+            user = db.query(Usuario).filter(Usuario.id == getattr(current_user, 'id', None)).first()
+        except Exception:
+            user = None
+        finally:
+            try:
+                db.close()
+            except Exception:
+                pass
+
+        notifications_enabled = bool(
+            getattr(user, 'notifications_enabled', getattr(current_user, 'notifications_enabled', False))
+        )
+        smart_agent_error_notifications = bool(
+            getattr(user, 'smart_agent_error_notifications', getattr(current_user, 'smart_agent_error_notifications', False))
+        )
+        user_email = getattr(user, 'email', getattr(current_user, 'email', None))
+
         return {
-            "notifications_enabled": current_user.notifications_enabled,
-            "smart_agent_error_notifications": current_user.smart_agent_error_notifications,
-            "user_email": current_user.email
+            "notifications_enabled": notifications_enabled,
+            "smart_agent_error_notifications": smart_agent_error_notifications,
+            "user_email": user_email
         }
     except Exception as e:
         logger.error(f"Erro ao obter configurações de notificação: {e}")
