@@ -3689,19 +3689,55 @@ async def update_notification_settings(
         data = await request.json()
         
         db = next(get_db())
-        user = db.query(Usuario).filter(Usuario.id == current_user.id).first()
+        user = None
+        try:
+            user = db.query(Usuario).filter(Usuario.id == current_user.id).first()
+        except Exception as e:
+            # Se falhar (ex.: schema antigo), vamos tentar via SQL cru
+            logger.warning(f"ORM select falhou em /api/notifications/settings: {e}. Tentando SQL cru.")
+            try:
+                row = db.execute(text("SELECT id FROM usuarios WHERE id = :id LIMIT 1"), {"id": getattr(current_user, 'id', None)}).fetchone()
+                if row:
+                    class SimpleUser: pass
+                    user = SimpleUser(); user.id = row[0]
+            except Exception as e2:
+                logger.error(f"SQL cru select também falhou: {e2}")
         
         if not user:
             raise HTTPException(status_code=404, detail="Usuário não encontrado")
         
         # Atualizar configurações
-        if 'notifications_enabled' in data:
-            user.notifications_enabled = data['notifications_enabled']
-        
-        if 'smart_agent_error_notifications' in data:
-            user.smart_agent_error_notifications = data['smart_agent_error_notifications']
-        
-        db.commit()
+        try:
+            if hasattr(user, 'notifications_enabled'):
+                if 'notifications_enabled' in data:
+                    user.notifications_enabled = bool(data['notifications_enabled'])
+            if hasattr(user, 'smart_agent_error_notifications'):
+                if 'smart_agent_error_notifications' in data:
+                    user.smart_agent_error_notifications = bool(data['smart_agent_error_notifications'])
+            # Caso seja um SimpleUser sem atributos (fallback), usar SQL cru
+            if not hasattr(user, 'notifications_enabled') or not hasattr(user, 'smart_agent_error_notifications'):
+                db.execute(text(
+                    "UPDATE usuarios SET notifications_enabled = :n, smart_agent_error_notifications = :s WHERE id = :id"
+                ), {
+                    'n': bool(data.get('notifications_enabled', False)),
+                    's': bool(data.get('smart_agent_error_notifications', False)),
+                    'id': user.id
+                })
+            db.commit()
+        except Exception as update_error:
+            logger.warning(f"ORM update falhou, tentando SQL cru: {update_error}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            db.execute(text(
+                "UPDATE usuarios SET notifications_enabled = :n, smart_agent_error_notifications = :s WHERE id = :id"
+            ), {
+                'n': bool(data.get('notifications_enabled', False)),
+                's': bool(data.get('smart_agent_error_notifications', False)),
+                'id': getattr(user, 'id', getattr(current_user, 'id', None))
+            })
+            db.commit()
         db.close()
         
         logger.info(f"✅ Configurações de notificação atualizadas para usuário {current_user.id}")
@@ -3710,8 +3746,8 @@ async def update_notification_settings(
             "message": "Configurações atualizadas com sucesso!",
             "status": "success",
             "settings": {
-                "notifications_enabled": user.notifications_enabled,
-                "smart_agent_error_notifications": user.smart_agent_error_notifications
+                "notifications_enabled": bool(data.get('notifications_enabled', False)),
+                "smart_agent_error_notifications": bool(data.get('smart_agent_error_notifications', False))
             }
         }
         
