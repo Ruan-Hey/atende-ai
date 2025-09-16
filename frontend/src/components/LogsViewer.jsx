@@ -13,227 +13,82 @@ const LogsViewer = () => {
   const [filterLevel, setFilterLevel] = useState('all')
   const [notificationsEnabled, setNotificationsEnabled] = useState(false)
   const [notificationLoading, setNotificationLoading] = useState(false)
-  const [pushSubscription, setPushSubscription] = useState(null)
+  // ===============================
+  // Notificações por e-mail
+  // ===============================
 
-
-  // ============================================================================
-  // SISTEMA DE PUSH NOTIFICATIONS
-  // ============================================================================
-
-  // Registrar Service Worker
-  const registerServiceWorker = async () => {
-    try {
-      if ('serviceWorker' in navigator && 'PushManager' in window) {
-        const registration = await navigator.serviceWorker.register('/sw.js')
-        console.log('✅ Service Worker registrado:', registration)
-        return registration
-      } else {
-        console.warn('⚠️ Service Worker ou Push Manager não suportado')
-        return null
-      }
-    } catch (error) {
-      console.error('❌ Erro ao registrar Service Worker:', error)
-      return null
-    }
-  }
-
-
-
-  // Solicitar permissão de notificações
-  const requestNotificationPermission = async () => {
-    try {
-      if ('Notification' in window) {
-        const permission = await Notification.requestPermission()
-        return permission === 'granted'
-      }
-      return false
-    } catch (error) {
-      console.error('❌ Erro ao solicitar permissão:', error)
-      return false
-    }
-  }
-
-  // Criar subscription para push
-  const createPushSubscription = async (registration) => {
-    try {
-      const response = await apiService.getVapidPublicKey()
-      const vapidKey = response.public_key
-      
-      if (!vapidKey) return null
-
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: vapidKey
-      })
-
-      console.log('✅ Push subscription criada:', subscription)
-      return subscription
-    } catch (error) {
-      console.error('❌ Erro ao criar subscription:', error)
-      return null
-    }
-  }
-
-  // Ativar notificações push
-  const enablePushNotifications = async () => {
-    try {
-      console.log('🔔 Ativando notificações push...')
-      
-      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-        alert('❌ Seu navegador não suporta notificações push')
-        return
-      }
-
-      // Verificar permissão
-      const permission = await Notification.requestPermission()
-      if (permission !== 'granted') {
-        alert('❌ Permissão negada para notificações')
-        return
-      }
-
-      console.log('✅ Permissão concedida, registrando Service Worker...')
-      
-      // Registrar Service Worker
-      const registration = await navigator.serviceWorker.register('/sw.js')
-      console.log('✅ Service Worker registrado:', registration)
-
-      // Aguardar Service Worker estar ativo
-      await navigator.serviceWorker.ready
-      console.log('✅ Service Worker pronto')
-
-      // Obter subscription existente ou criar nova
-      let subscription = await registration.pushManager.getSubscription()
-      
-      if (!subscription) {
-        console.log('📡 Criando nova subscription...')
-        
-        // Obter VAPID public key do backend
-        const vapidResponse = await apiService.getVapidPublicKey()
-        if (!vapidResponse.public_key) {
-          throw new Error('Não foi possível obter chave VAPID')
-        }
-
-        // Criar subscription
-        subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: vapidResponse.public_key
-        })
-        console.log('✅ Push subscription criada:', subscription)
-      } else {
-        console.log('✅ Push subscription já existente:', subscription)
-      }
-
-      // Enviar subscription para o backend
-      await apiService.subscribeToNotifications(subscription)
-      
-      // Atualizar estado
-      console.log('🔄 Atualizando estado...')
-      setPushSubscription(subscription)
-      setNotificationsEnabled(true)
-      localStorage.setItem('push_notifications_enabled', 'true')
-      
-      console.log('✅ Estado atualizado - notificationsEnabled:', true)
-      console.log('✅ Estado atualizado - pushSubscription:', subscription)
-      
-      alert('✅ Notificações push ativadas com sucesso!')
-      
-    } catch (error) {
-      console.error('❌ Erro ao ativar notificações:', error)
-      alert(`Erro ao ativar notificações: ${error.message}`)
-    }
-  }
-
-  // Desativar notificações push
-  const disablePushNotifications = async () => {
+  const loadNotificationSettings = async () => {
     try {
       setNotificationLoading(true)
-
-      if (pushSubscription) {
-        // Remover subscription
-        await pushSubscription.unsubscribe()
-        await apiService.unsubscribeFromNotifications()
-      }
-
-      // Atualizar estado
-      setPushSubscription(null)
-      setNotificationsEnabled(false)
-      localStorage.setItem('push_notifications_enabled', 'false')
-      
-      alert('✅ Notificações push desativadas!')
-      
+      const settings = await apiService.getNotificationSettings()
+      const enabledFlag = (
+        (settings?.notifications_enabled ?? settings?.notificationsEnabled) &&
+        (settings?.smart_agent_error_notifications ?? settings?.smartAgentErrorNotifications)
+      )
+      setNotificationsEnabled(!!enabledFlag)
     } catch (error) {
-      console.error('❌ Erro ao desativar notificações:', error)
-      alert('Erro ao desativar notificações push')
+      console.error('❌ Erro ao carregar configurações de notificação:', error)
     } finally {
       setNotificationLoading(false)
     }
   }
 
-  // Testar notificação
-  const testPushNotification = async () => {
+  const enableEmailNotifications = async () => {
     try {
-      console.log('🧪 Iniciando teste de notificação...')
-      console.log('🔍 Estado notificationsEnabled:', notificationsEnabled)
-      
-      if (!notificationsEnabled) {
-        console.error('❌ Notificações não estão ativadas')
-        alert('Ative as notificações primeiro!')
-        return
-      }
-
-      console.log('📡 Chamando API de teste...')
-      const response = await apiService.testNotification()
-      console.log('📡 Resposta da API:', response)
-      
-      if (response.status === 'success') {
-        console.log('✅ Teste bem-sucedido!')
-        alert('🚀 Push notification REAL enviado! Verifique se apareceu no navegador.')
-      } else if (response.status === 'warning') {
-        console.warn('⚠️ Aviso:', response.message)
-        alert(response.message)
-      } else {
-        console.error('❌ Falha no teste:', response)
-        alert('❌ Falha ao enviar notificação de teste')
-      }
+      setNotificationLoading(true)
+      await apiService.updateNotificationSettings({
+        notifications_enabled: true,
+        smart_agent_error_notifications: true
+      })
+      setNotificationsEnabled(true)
+      alert('✅ Notificações por e-mail ativadas!')
     } catch (error) {
-      console.error('❌ Erro ao testar notificação:', error)
-      console.error('Stack trace:', error.stack)
-      alert('Erro ao testar notificação')
+      console.error('❌ Erro ao ativar notificações por e-mail:', error)
+      alert('Erro ao ativar notificações por e-mail')
+    } finally {
+      setNotificationLoading(false)
     }
   }
 
-  // Verificar estado inicial das notificações
-  useEffect(() => {
-    const checkNotificationStatus = async () => {
-      try {
-        // Verificar se já tem subscription salva
-        const saved = localStorage.getItem('push_notifications_enabled')
-        console.log('🔍 Estado salvo no localStorage:', saved)
-        
-        if (saved === 'true') {
-          setNotificationsEnabled(true)
-          console.log('✅ Estado restaurado do localStorage')
-          
-          // Verificar se Service Worker está ativo
-          if ('serviceWorker' in navigator) {
-            const registration = await navigator.serviceWorker.getRegistration()
-            if (registration && registration.active) {
-              console.log('✅ Service Worker já está ativo')
-            }
-          }
-        }
-      } catch (error) {
-        console.error('❌ Erro ao verificar status das notificações:', error)
-      }
+  const disableEmailNotifications = async () => {
+    try {
+      setNotificationLoading(true)
+      await apiService.updateNotificationSettings({
+        notifications_enabled: false,
+        smart_agent_error_notifications: false
+      })
+      setNotificationsEnabled(false)
+      alert('✅ Notificações por e-mail desativadas!')
+    } catch (error) {
+      console.error('❌ Erro ao desativar notificações por e-mail:', error)
+      alert('Erro ao desativar notificações por e-mail')
+    } finally {
+      setNotificationLoading(false)
     }
+  }
 
-    checkNotificationStatus()
-  }, [])
+  const testEmailNotification = async () => {
+    try {
+      if (!notificationsEnabled) {
+        alert('Ative as notificações por e-mail primeiro!')
+        return
+      }
+      const response = await apiService.testNotification()
+      if (response.status === 'success') {
+        alert('✅ E-mail de teste enviado! Verifique sua caixa de entrada.')
+      } else {
+        alert(response.message || '❌ Falha ao enviar e-mail de teste')
+      }
+    } catch (error) {
+      console.error('❌ Erro ao testar e-mail:', error)
+      alert('Erro ao testar e-mail de notificação')
+    }
+  }
 
-  // Log sempre que o estado mudar
+  // Carregar estado inicial de notificações por e-mail
   useEffect(() => {
-    console.log('🔄 Estado notificationsEnabled mudou para:', notificationsEnabled)
-  }, [notificationsEnabled])
+    loadNotificationSettings()
+  }, [])
 
   // Carregar dados iniciais
   useEffect(() => {
@@ -388,19 +243,16 @@ const LogsViewer = () => {
           </select>
         </div>
 
-        {/* ============================================================================ */}
-        {/* SISTEMA DE PUSH NOTIFICATIONS */}
-        {/* ============================================================================ */}
-        
+        {/* Botão de notificações (agora por e-mail) */}
         <div className="filter-group">
           <label>🔔 Notificações Push:</label>
           <div className="btn-group" role="group">
             {!notificationsEnabled ? (
               <button
                 className="btn btn-secondary"
-                onClick={enablePushNotifications}
+                onClick={enableEmailNotifications}
                 disabled={notificationLoading}
-                title="Ativar notificações push no navegador"
+                title="Ativar notificações por e-mail"
                 style={{ minWidth: '120px' }}
               >
                 {notificationsEnabled ? 'Desativar' : 'Ativar'}
@@ -410,16 +262,16 @@ const LogsViewer = () => {
               <>
                 <button
                   className="btn btn-warning"
-                  onClick={testPushNotification}
-                  title="Testar notificação push"
+                  onClick={testEmailNotification}
+                  title="Enviar e-mail de teste"
                 >
                   🧪 Testar
                 </button>
                 <button
                   className="btn btn-secondary"
-                  onClick={disablePushNotifications}
+                  onClick={disableEmailNotifications}
                   disabled={notificationLoading}
-                  title="Desativar notificações push"
+                  title="Desativar notificações por e-mail"
                   style={{ minWidth: '120px' }}
                 >
                   Desativar

@@ -263,38 +263,16 @@ class ApiService {
     return this.authenticatedRequest(`/api/admin/empresas/${empresaId}/apis`)
   }
 
-  // Notificações - Alternar (simples)
-  async toggleNotifications(empresaId, action) {
-    return this.authenticatedRequest('/api/notifications/toggle', {
+  // Notificações por e-mail - obter configurações do usuário
+  async getNotificationSettings() {
+    return this.authenticatedRequest('/api/notifications/settings')
+  }
+
+  // Notificações por e-mail - atualizar configurações do usuário
+  async updateNotificationSettings(settings) {
+    return this.authenticatedRequest('/api/notifications/settings', {
       method: 'POST',
-      body: JSON.stringify({
-        empresa_id: empresaId,
-        action: action
-      })
-    })
-  }
-
-  // ============================================================================
-  // PUSH NOTIFICATIONS - SISTEMA COMPLETO
-  // ============================================================================
-
-  // Obter chave pública VAPID
-  async getVapidPublicKey() {
-    return this.authenticatedRequest('/api/notifications/vapid-public-key')
-  }
-
-  // Inscrever para notificações
-  async subscribeToNotifications(subscription) {
-    return this.authenticatedRequest('/api/notifications/subscribe', {
-      method: 'POST',
-      body: JSON.stringify({ subscription })
-    })
-  }
-
-  // Remover inscrição
-  async unsubscribeFromNotifications() {
-    return this.authenticatedRequest('/api/notifications/unsubscribe', {
-      method: 'POST'
+      body: JSON.stringify(settings)
     })
   }
 

@@ -140,8 +140,8 @@ class Usuario(Base):
     is_superuser = Column(Boolean, default=False)
     empresa_id = Column(Integer, ForeignKey('empresas.id'), nullable=True)
     # Configurações de notificação
-    notifications_enabled = Column(Boolean, default=True)  # Usuário ativa/desativa notificações
-    smart_agent_error_notifications = Column(Boolean, default=True)  # Notificações de erro do Smart Agent
+    notifications_enabled = Column(Boolean, default=False)  # Usuário ativa/desativa notificações
+    smart_agent_error_notifications = Column(Boolean, default=False)  # Notificações de erro do Smart Agent
     created_at = Column(TIMESTAMP, server_default=func.now())
     empresa = relationship('Empresa')
     __table_args__ = (UniqueConstraint('email', name='_usuario_email_uc'),)
