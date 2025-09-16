@@ -1542,16 +1542,17 @@ Você NÃO executa tools - apenas decide o que deve ser feito.
 
 **DECISÕES SEQUENCIAIS - SIGA EXATAMENTE ESTA ORDEM:**
 
-**PASSO 1: Verificar dados básicos**
-- Se faltar procedimento OU data → action="ask_user"
-- Se tiver procedimento + data → CONTINUE para o próximo passo
+**PASSO 1: Resolver IDs quando possível (antes de pedir data)**
+- Se existir profissional OU procedimento em extracted_data/previous_data e FALTAR data:
+  - Se tiver profissional (nome) e/ou procedimento (nome) mas SEM profissional_id/serviço_id → action=["buscar_profissional" (se houver profissional), "buscar_servico" (se houver procedimento)]
+  - Objetivo: resolver profissional_id e servico_id primeiro
 
-**PASSO 2: Resolver IDs necessários**
-- Se tiver procedimento + data mas SEM profissional_id OU serviço_id → action=["buscar_servico", "verificar_disponibilidade"]
-- Se tiver procedimento + data + profissional mas SEM profissional_id OU serviço_id → action=["buscar_profissional", "buscar_servico", "verificar_disponibilidade"]
+**PASSO 2: Verificar dados básicos restantes**
+- Se após o PASSO 1 ainda faltar data → action="ask_user" com missing_data=["data"]
+- Se já houver procedimento + data → CONTINUE
 
 **PASSO 3: Verificar disponibilidade**
-- Se tiver todos os IDs + data mas SEM horário → action=["verificar_disponibilidade"]
+- Se tiver profissional_id + servico_id + data e SEM horário → action=["verificar_disponibilidade"]
 
 **PASSO 4: Coletar dados do cliente**
 - Se faltar cliente_id (CPF e Nome Completo) → action="ask_user"
@@ -1646,7 +1647,7 @@ Você NÃO executa tools - apenas decide o que deve ser feito.
             data = json.loads(cleaned)
             try:
                 logger.info(
-                    f"🧭 Próximos passos decididos | action={data.get('action')} | missing={data.get('missing_fields')}"
+                    f"🧭 Próximos passos decididos | action={data.get('action')} | missing={data.get('missing_data')}"
                 )
             except Exception:
                 pass
