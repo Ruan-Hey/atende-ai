@@ -1972,6 +1972,42 @@ RESPONDA APENAS em JSON válido."""
         # ✅ Retornar string pronta para o usuário
         return formatted_response
 
+    def _compute_missing_data(self, intent: str, extracted_data: Dict[str, Any]) -> List[str]:
+        """Calcula, de forma determinística, quais campos ainda faltam com base no intent.
+
+        Regras pragmáticas para não interromper o fluxo:
+        - agendar_consulta:
+          - Priorizar pedir 'data' primeiro se ausente.
+          - Se 'data' presente, não pedir cliente/horário aqui; o fluxo de disponibilidade/confirmacão cuida disso.
+        - cancelar_consulta / reagendar_consulta: manter comportamento existente quando aplicável.
+        """
+        try:
+            missing: List[str] = []
+
+            if intent == "agendar_consulta":
+                # Prioridade máxima: data
+                if not extracted_data.get("data"):
+                    return ["data"]
+                # Se quiser evoluir: após data + ids, horário pode ser sugerido via disponibilidade
+                return []
+
+            if intent == "cancelar_consulta":
+                # Exemplo mínimo: priorize CPF/identificador do cliente
+                if not extracted_data.get("cpf") and not extracted_data.get("cliente_id"):
+                    missing.append("cpf")
+                return missing
+
+            if intent == "reagendar_consulta":
+                if not extracted_data.get("data_atual") or not extracted_data.get("nova_data"):
+                    return [f for f in ["data_atual", "nova_data"] if not extracted_data.get(f)]
+                return []
+
+            # Intent genérica: não pedir nada por padrão
+            return missing
+        except Exception:
+            # Em caso de erro, não bloquear conversa
+            return []
+
     def _format_company_knowledge(self) -> str:
         """Formata as knowledge da empresa para uso no prompt"""
         try:
