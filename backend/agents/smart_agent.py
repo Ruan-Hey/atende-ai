@@ -449,14 +449,9 @@ class SmartAgent:
                 if isinstance(action, list):
                     logger.info(f"🔄 Action é array com {len(action)} passos: {action}")
                     
-                    # ✅ NOVO: Verificar se é array com apenas "ask_user"
-                    if len(action) == 1 and action[0] == "ask_user":
-                        logger.info("👤 Array contém apenas ask_user - tratando como caso especial")
-                        # ✅ ask_user vai DIRETO para o prompt da empresa
-                        result = self._handle_ask_user_direct(business_rules, merged_data, next_steps, context, intent)
-                    else:
-                        logger.info("🔧 Array contém tools - executando múltiplas actions")
-                        result = self._execute_multiple_actions(action, merged_data, next_steps, context)
+                    # ✅ Executar múltiplas actions; 'ask_user' será tratado no pós-steps
+                    logger.info("🔧 Executando múltiplas actions (ask_user será tratado após cálculo de faltas)")
+                    result = self._execute_multiple_actions(action, merged_data, next_steps, context)
                 else:
                     logger.info(f"🔧 Action é string única: {action}")
                     
@@ -469,63 +464,37 @@ class SmartAgent:
                         logger.info("🔧 Action é tool - executando action única")
                         result = self._execute_single_action(action, merged_data, context)
                 
-                # ✅ NOVO: Analisar resultados e gerar resposta formatada
-                # ✅ Verificar se é ask_user para evitar análise desnecessária
-                if isinstance(action, list) and len(action) == 1 and action[0] == "ask_user":
-                    logger.info("👤 ask_user detectado - pulando análise desnecessária")
-                    # ✅ ask_user já retorna resposta formatada pronta (string)
-                    # result já é a string formatada, não precisa de .get()
-                elif isinstance(action, str) and action == "ask_user":
-                    logger.info("👤 ask_user detectado - pulando análise desnecessária")
-                    # ✅ ask_user já retorna resposta formatada pronta (string)
-                    # result já é a string formatada, não precisa de .get()
-                elif isinstance(result, dict) and result.get('status') != 'erro':
-                    # ✅ Verificar se é resultado de múltiplas actions
+                # ✅ NOVO: Sempre usar o formatador com missing_data calculado
+                if isinstance(result, dict) and result.get('status') != 'erro':
+                    # Calcular faltas com base no intent e dados mesclados
+                    calc_missing = self._compute_missing_data(intent, merged_data)
+                    # Unir com missing_data sugerido pelo decisor
+                    suggested_missing = []
+                    if isinstance(next_steps, dict):
+                        suggested_missing = next_steps.get('missing_data', []) or []
+                    missing_data = []
+                    for item in (suggested_missing + calc_missing):
+                        if item not in missing_data:
+                            missing_data.append(item)
+                    # Preparar results para o formatador
                     if result.get('status') == 'actions_executadas':
-                        logger.info("🔧 Múltiplas actions executadas - analisando resultados completos...")
-                        
-                        # ✅ Usar TODOS os resultados das actions
-                        analysis_data = {
-                            'results': result.get('results', {}),
-                            'extracted_data': merged_data,
-                            'business_rules': business_rules,
-                            'context': context
-                        }
-                        
-                        # ✅ Chamar direto a LLM principal (sem análise intermediária)
-                        logger.info("✅ Chamando direto a LLM principal com prompt da empresa...")
-                        formatted_response = self._analyze_with_company_llm(
-                            f"Processar intent: {intent}",
-                            analysis_data
-                        )
-                        logger.info(f"✅ Resposta formatada pela empresa: {formatted_response}")
-                        result = formatted_response
+                        results_payload = result.get('results', {})
                     else:
-                        logger.info("🔧 Action única executada - analisando resultado...")
-                        
-                        # ✅ Para action única, chamar direto a LLM principal
-                        analysis_data = {
-                            'results': {'single_action': result},
-                            'extracted_data': merged_data,
-                            'business_rules': business_rules,
-                            'context': context
-                        }
-                        
-                        # ✅ Chamar direto a LLM principal (sem análise intermediária)
-                        logger.info("✅ Chamando direto a LLM principal com prompt da empresa...")
-                        formatted_response = self._analyze_with_company_llm(
-                            f"Processar intent: {intent}",
-                            analysis_data
-                        )
-                        logger.info(f"✅ Resposta formatada pela empresa: {formatted_response}")
-                        result = formatted_response
-                else:
-                    # ✅ FALLBACK: Se não houver regras de negócio, usar resultado bruto
-                    logger.info("🔄 Usando resultado bruto (sem regras de negócio)")
-                    if isinstance(result, dict):
-                        result = f"✅ Actions executadas com sucesso. Status: {result.get('status')}"
-                    else:
-                        result = str(result)
+                        results_payload = {'single_action': result}
+                    formatter_payload = {
+                        'results': results_payload,
+                        'extracted_data': merged_data,
+                        'business_rules': business_rules,
+                        'missing_data': missing_data,
+                        'context': context
+                    }
+                    logger.info("✅ Chamando formatador com missing_data calculado")
+                    formatted_response = self._generate_response_with_company_prompt(
+                        intent,
+                        formatter_payload,
+                        context
+                    )
+                    result = formatted_response
             else:
                 # Para manter simplicidade: usar a mensagem pronta da LLM de próximos passos
                 result = next_steps.get("agent_response") or "Certo, me diga por favor o próximo detalhe (data/horário/CPF)."
