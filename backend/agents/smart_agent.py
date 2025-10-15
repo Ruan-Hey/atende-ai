@@ -2141,8 +2141,20 @@ TIPO DE AÇÃO:
 DADOS DA AÇÃO:
 {json.dumps(tools_data, indent=2, ensure_ascii=False, default=str) if tools_data else 'Nenhum dado de ação'}
 
+MISSING_DATA (se houver):
+{json.dumps((tools_data or {}).get('missing_data', []), indent=2, ensure_ascii=False, default=str)}
+
 INSTRUÇÕES:
 Analise a mensagem do usuário e responda de acordo com o prompt da empresa, considerando o contexto da conversa e as regras de negócio.
+
+PROIBIÇÕES (críticas):
+- NUNCA use respostas genéricas como "Vou processar sua solicitação", "Vou verificar", "Estou processando" ou similares.
+- NUNCA inclua a palavra "processar" como um reconhecimento vazio. Sua resposta deve ser imediatamente útil.
+
+REGRAS ESPECÍFICAS PARA AGENDAMENTO:
+- Se a intenção envolver agendamento e houver data presente, mas faltar horário (ex.: missing_data contém "horario" OU extracted_data tem "data" e "horario" ausente):
+  - Pergunte diretamente o horário preferido OU ofereça 2–3 opções claras.
+  - Não aguarde confirmação técnica nem informe que vai processar; vá direto à pergunta/alternativas.
 
 IMPORTANTE - MÚLTIPLAS MENSAGENS:
 Se você receber múltiplas mensagens (como agora), NÃO responda cada uma separadamente.
