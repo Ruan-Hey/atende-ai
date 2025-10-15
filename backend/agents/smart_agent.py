@@ -1074,7 +1074,54 @@ class SmartAgent:
                 horarios = disponibilidade.get('available_slots', [])
                 servico = resultado.get('buscar_servico', {})
                 profissional = resultado.get('buscar_profissional', {})
-                
+
+                # ✅ Se o cliente pediu um horário específico e ele não está disponível,
+                # sugerir o próximo horário disponível (no mesmo dia; se não houver, usar looping da tool)
+                requested_time = None
+                try:
+                    requested_time = (data or {}).get('horario') or (getattr(self, '_last_enriched_extracted_data', {}) or {}).get('horario')
+                except Exception:
+                    requested_time = None
+
+                suggestion = None
+                next_date_from_loop = None
+                loop_slots = []
+
+                try:
+                    if requested_time:
+                        # Normalizar formatos 'HH:MM' dos slots
+                        normalized_slots = [s[:5] if isinstance(s, str) and len(s) >= 5 else str(s) for s in horarios]
+                        if requested_time[:5] not in normalized_slots:
+                            # Encontrar próximo slot maior que o solicitado
+                            def to_minutes(t: str) -> int:
+                                try:
+                                    hh, mm = t[:5].split(":")
+                                    return int(hh) * 60 + int(mm)
+                                except Exception:
+                                    return 99999
+
+                            requested_min = to_minutes(requested_time)
+                            future_slots = sorted(normalized_slots, key=to_minutes)
+                            same_day_candidates = [t for t in future_slots if to_minutes(t) > requested_min]
+
+                            if same_day_candidates:
+                                suggestion = {
+                                    'date': data.get('data'),
+                                    'time': same_day_candidates[0]
+                                }
+                            else:
+                                # Sem slot no mesmo dia após o solicitado → usar próximo dia do looping se disponível
+                                loop_info = disponibilidade.get('looping_info', {})
+                                next_date_from_loop = disponibilidade.get('next_available_date') or loop_info.get('next_available_date')
+                                loop_slots = disponibilidade.get('available_slots') if disponibilidade.get('available') and disponibilidade.get('looping_used') else (loop_info.get('available_slots') or [])
+                                if next_date_from_loop and loop_slots:
+                                    suggestion = {
+                                        'date': next_date_from_loop,
+                                        'time': (loop_slots[0][:5] if isinstance(loop_slots[0], str) else str(loop_slots[0]))
+                                    }
+                except Exception:
+                    pass
+
                 dados_para_llm = {
                     'horarios_disponiveis': horarios,
                     'servico': servico,
@@ -1082,7 +1129,11 @@ class SmartAgent:
                     'data': data.get('data'),
                     'context': context
                 }
-                
+
+                # Incluir sugestão quando aplicável
+                if suggestion:
+                    dados_para_llm['sugestao_proximo_horario'] = suggestion
+
                 return self._generate_response_with_company_prompt(
                     "verificar_disponibilidade",
                     dados_para_llm,
@@ -1978,7 +2029,7 @@ RESPONDA APENAS em JSON válido."""
         Regras pragmáticas para não interromper o fluxo:
         - agendar_consulta:
           - Priorizar pedir 'data' primeiro se ausente.
-          - Se 'data' presente, não pedir cliente/horário aqui; o fluxo de disponibilidade/confirmacão cuida disso.
+          - Se 'data' presente e 'horario' ausente, solicitar 'horario'.
         - cancelar_consulta / reagendar_consulta: manter comportamento existente quando aplicável.
         """
         try:
@@ -1988,8 +2039,10 @@ RESPONDA APENAS em JSON válido."""
                 # Prioridade máxima: data
                 if not extracted_data.get("data"):
                     return ["data"]
-                # Se quiser evoluir: após data + ids, horário pode ser sugerido via disponibilidade
-                return []
+                # Se já temos data mas falta horário, sinalizar como faltante
+                if not extracted_data.get("horario"):
+                    missing.append("horario")
+                return missing
 
             if intent == "cancelar_consulta":
                 # Exemplo mínimo: priorize CPF/identificador do cliente
