@@ -1,9 +1,9 @@
-fastapi==0.115.5
+fastapi==0.110.0
 uvicorn==0.23.2
 python-dotenv==1.0.0
 
 # FastAPI 0.115 usa Pydantic v2
-pydantic==2.9.2
+pydantic==2.5.3
 requests==2.31.0
 aiofiles==23.2.1
 python-multipart==0.0.9

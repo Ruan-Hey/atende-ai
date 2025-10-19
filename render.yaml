@@ -1,13 +1,11 @@
 services:
-  # Backend API
+  # Backend API (Dockerized)
   - type: web
     name: atende-ai-backend
-    env: python
-    buildCommand: cd backend && pip install --upgrade pip setuptools wheel && pip install -r requirements.txt
-    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
+    env: docker
+    plan: starter
+    dockerfilePath: backend/Dockerfile
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.9
       - key: DATABASE_URL
         sync: false
       - key: REDIS_URL
