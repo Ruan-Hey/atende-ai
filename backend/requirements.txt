@@ -16,9 +16,9 @@ psycopg2-binary>=2.9.0
 SQLAlchemy>=1.4.0
 passlib[bcrypt]
 python-jose[cryptography]
-langchain>=0.1.0
-langchain-openai>=0.1.0
-langchain-community>=0.1.0
+langchain==0.1.20
+langchain-openai==0.0.8
+langchain-community==0.0.37
 langgraph>=0.1.0
 # pywebpush removido - migrado para email 
 pytz
