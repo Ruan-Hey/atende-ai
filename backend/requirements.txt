@@ -1,9 +1,9 @@
-fastapi==0.103.2
+fastapi==0.115.5
 uvicorn==0.23.2
 python-dotenv==1.0.0
 
-# Alinhar com FastAPI 0.103 (Pydantic v1)
-pydantic==1.10.13
+# FastAPI 0.115 usa Pydantic v2
+pydantic==2.9.2
 requests==2.31.0
 aiofiles==23.2.1
 python-multipart==0.0.9
@@ -24,7 +24,7 @@ SQLAlchemy==1.4.52
 passlib[bcrypt]==1.7.4
 python-jose[cryptography]==3.3.0
 
-# LangChain stack (versões alinhadas)
+# LangChain stack (compatível com Pydantic v2)
 langchain==0.1.20
 langchain-openai==0.1.7
 langchain-community==0.0.33
