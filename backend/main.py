@@ -560,7 +560,8 @@ def preview_empresa_reminders(empresa_slug: str, reminder_id: int = Query(None),
         from services.unified_config_service import get_trinks_config
         trinks_cfg = get_trinks_config(session, empresa.id)
         if not trinks_cfg:
-            return {"items": []}
+            logger.error(f"Preview reminders: configuração Trinks ausente para empresa {empresa.slug} ({empresa.id})")
+            return {"items": [], "error": "Sem configuração da Trinks para esta empresa"}
 
         empresa_config = {
             'empresa_id': empresa.id,
@@ -575,7 +576,11 @@ def preview_empresa_reminders(empresa_slug: str, reminder_id: int = Query(None),
 
         # Janela de tempo
         from services.trinks_provider import TrinksProvider
-        provider = TrinksProvider(empresa_config)
+        try:
+            provider = TrinksProvider(empresa_config)
+        except Exception as e:
+            logger.error(f"Preview reminders: erro ao criar TrinksProvider: {e}")
+            return {"items": [], "error": f"Falha ao inicializar provider: {str(e)}"}
         # Reusar lógica de janela do worker
         tz = pytz.timezone(rem.timezone or 'America/Sao_Paulo')
         now = datetime.now(tz)
@@ -583,7 +588,11 @@ def preview_empresa_reminders(empresa_slug: str, reminder_id: int = Query(None),
         start_iso = target.isoformat()
         end_iso = (target + timedelta(days=1)).isoformat()
 
-        appointments = provider.list_appointments_range(start_iso, end_iso)
+        try:
+            appointments = provider.list_appointments_range(start_iso, end_iso)
+        except Exception as e:
+            logger.error(f"Preview reminders: erro ao listar agendamentos: {e}")
+            return {"items": [], "error": f"Falha ao consultar agenda: {str(e)}"}
 
         # Deduplicar por cliente pegando primeiro horário
         by_client = {}
@@ -615,7 +624,8 @@ def preview_empresa_reminders(empresa_slug: str, reminder_id: int = Query(None),
                         preview_text = ft.get('text') or ''
             finally:
                 s2.close()
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Preview reminders: não foi possível obter template Twilio: {e}")
             preview_text = ''
         if by_client:
             from integrations.trinks_service import TrinksService
