@@ -5,8 +5,39 @@ except ImportError:
     from langchain.chat_models import ChatOpenAI
 try:
     from langchain.memory import ConversationBufferWindowMemory
-except ImportError:
-    from langchain_community.memory import ConversationBufferWindowMemory
+except Exception:
+    try:
+        from langchain_community.memory import ConversationBufferWindowMemory
+    except Exception:
+        # Fallback mínimo caso a classe não exista nas libs instaladas
+        class _SimpleMessage:
+            def __init__(self, content: str):
+                self.content = content
+
+        class _SimpleChatMemory:
+            def __init__(self, k: int = 20):
+                self.k = k
+                self.messages = []
+
+            def _trim(self):
+                try:
+                    if self.k and len(self.messages) > 2 * self.k:
+                        self.messages = self.messages[-2 * self.k:]
+                except Exception:
+                    pass
+
+            def add_user_message(self, content: str):
+                self.messages.append(_SimpleMessage(content))
+                self._trim()
+
+            def add_ai_message(self, content: str):
+                self.messages.append(_SimpleMessage(content))
+                self._trim()
+
+        class ConversationBufferWindowMemory:
+            def __init__(self, k: int = 20, return_messages: bool = True):
+                self.chat_memory = _SimpleChatMemory(k)
+            
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_core.tools import tool as lc_tool
 import logging
