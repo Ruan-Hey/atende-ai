@@ -5,7 +5,20 @@ try:
     from langchain_openai import ChatOpenAI  # novo
 except Exception:
     from langchain.chat_models import ChatOpenAI  # fallback legacy
-from langchain.schema import SystemMessage, HumanMessage
+try:
+    from langchain_core.messages import SystemMessage, HumanMessage
+except Exception:
+    try:
+        from langchain.schema import SystemMessage, HumanMessage  # legacy
+    except Exception:
+        # Fallback mínimo se nenhuma das duas estiver disponível
+        class _BaseMessage:
+            def __init__(self, content: str):
+                self.content = content
+        class SystemMessage(_BaseMessage):
+            pass
+        class HumanMessage(_BaseMessage):
+            pass
 from enum import Enum
 import logging
 
