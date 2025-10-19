@@ -52,6 +52,32 @@ def get_db():
 _smart_agents_cache = {}
 _last_cache_cleanup = time.time()
 
+# =========================================================================
+# LOG DE VERSÕES CRÍTICAS NO STARTUP (para detectar drift em produção)
+# =========================================================================
+try:
+    import fastapi as _fastapi_pkg
+    import pydantic as _pydantic_pkg
+    import sqlalchemy as _sqlalchemy_pkg
+    import openai as _openai_pkg
+    import langchain as _langchain_pkg
+    import langchain_openai as _lc_openai_pkg
+    import langchain_community as _lc_comm_pkg
+    import langgraph as _langgraph_pkg
+    logger.info(
+        "Versions | fastapi=%s | pydantic=%s | sqlalchemy=%s | openai=%s | langchain=%s | lc_openai=%s | lc_comm=%s | langgraph=%s",
+        getattr(_fastapi_pkg, '__version__', 'unknown'),
+        getattr(_pydantic_pkg, '__version__', 'unknown'),
+        getattr(_sqlalchemy_pkg, '__version__', 'unknown'),
+        getattr(_openai_pkg, '__version__', 'unknown'),
+        getattr(_langchain_pkg, '__version__', 'unknown'),
+        getattr(_lc_openai_pkg, '__version__', 'unknown'),
+        getattr(_lc_comm_pkg, '__version__', 'unknown'),
+        getattr(_langgraph_pkg, '__version__', 'unknown'),
+    )
+except Exception as _ver_err:
+    logger.warning(f"Falha ao logar versões críticas: {_ver_err}")
+
 # ============================================================================
 # FUNÇÕES DE NOTIFICAÇÃO POR EMAIL
 # ============================================================================

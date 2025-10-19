@@ -1,25 +1,35 @@
-fastapi
-uvicorn
-python-dotenv
+fastapi==0.103.2
+uvicorn==0.23.2
+python-dotenv==1.0.0
 
-pydantic
-requests
-aiofiles
-python-multipart
-openai
-gspread
-google-auth
-google-auth-oauthlib
-google-auth-httplib2
-google-api-python-client 
-psycopg2-binary>=2.9.0
-SQLAlchemy>=1.4.0
-passlib[bcrypt]
-python-jose[cryptography]
-langchain>=0.1.0
-langchain-openai>=0.1.0
-langchain-community>=0.1.0
-langgraph>=0.1.0
-# pywebpush removido - migrado para email 
-pytz
-python-dateutil
+# Alinhar com FastAPI 0.103 (Pydantic v1)
+pydantic==1.10.13
+requests==2.31.0
+aiofiles==23.2.1
+python-multipart==0.0.9
+
+# OpenAI SDK novo (client OpenAI e chat.completions)
+openai==1.43.0
+
+# Google stack
+gspread==5.12.4
+google-auth==2.23.4
+google-auth-oauthlib==1.1.0
+google-auth-httplib2==0.2.0
+google-api-python-client==2.108.0 
+
+# DB e auth
+psycopg2-binary==2.9.9
+SQLAlchemy==1.4.52
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0
+
+# LangChain stack (versões alinhadas)
+langchain==0.1.20
+langchain-openai==0.1.7
+langchain-community==0.0.33
+langgraph==0.1.9
+
+# Outros utilitários
+pytz==2024.1
+python-dateutil==2.9.0.post0
