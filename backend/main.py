@@ -271,16 +271,20 @@ allowed_origins = [
     "http://localhost:5175",
     "http://127.0.0.1:5173",
     "http://127.0.0.1:5175",
-    "https://app.tinyteams.app",
+    # Produção
     "https://tinyteams.app",
+    "https://www.tinyteams.app",
+    "https://app.tinyteams.app",
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=r"https://.*\\.tinyteams\\.app$",
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
+    expose_headers=["Authorization"],
 )
 
 # Instanciar serviços
