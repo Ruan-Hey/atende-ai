@@ -1542,18 +1542,17 @@ Você NÃO executa tools - apenas decide o que deve ser feito.
 
 **DECISÕES SEQUENCIAIS - SIGA EXATAMENTE ESTA ORDEM:**
 
-**PASSO 1: Resolver IDs quando possível (antes de pedir data)**
-- Se existir profissional OU procedimento em extracted_data/previous_data e FALTAR data:
-  - Se tiver profissional (nome) e/ou procedimento (nome) mas SEM profissional_id/serviço_id → action=["buscar_profissional" (se houver profissional), "buscar_servico" (se houver procedimento)]
-  - Objetivo: resolver profissional_id e servico_id primeiro
+**PASSO 1: Resolver IDs quando possível (antes de verificar disponibilidade)**
+- Se existir profissional OU procedimento em extracted_data/previous_data e os IDs (profissional_id/serviço_id) estiverem faltando → action=["buscar_profissional" (se houver profissional), "buscar_servico" (se houver procedimento)]
+- Objetivo: resolver profissional_id e servico_id primeiro (pode ser em paralelo)
 
 **PASSO 2: Verificar dados básicos restantes**
 - Se após o PASSO 1 ainda faltar data → action="ask_user" com missing_data=["data"]
-- Se JÁ houver data e faltar horário → action="ask_user" com missing_data=["horario"].
-  - Importante: quando profissional e/ou procedimento vierem por NOME, você pode buscar IDs em paralelo DEPOIS, mas NÃO avance para disponibilidade sem antes pedir o horário.
+- Se JÁ houver data e faltar horário → action=["verificar_disponibilidade"]. Use os filtros disponíveis (profissional_id/servico_id quando houver) para BUSCAR e SUGERIR horários. Não peça horário antes de consultar a disponibilidade.
 
-**PASSO 3: Verificar disponibilidade**
-- Se tiver profissional_id + servico_id + data e existir um horário definido → action=["verificar_disponibilidade"]
+**PASSO 3: Verificar disponibilidade / confirmar horário**
+- Se já existir horário definido, use-o para validar disponibilidade → action=["verificar_disponibilidade"].
+- Se não houver horário definido, após obter os slots disponíveis, SUGIRA opções ao usuário e aguarde a escolha. Caso ainda assim seja necessário especificar, então use action="ask_user" com missing_data=["horario"].
 
 **PASSO 4: Coletar dados do cliente**
 - Se faltar cliente_id (CPF e Nome Completo) → action="ask_user"
@@ -1591,14 +1590,14 @@ Você NÃO executa tools - apenas decide o que deve ser feito.
 **Exemplo 2: Procedimento + Data + Profissional (SEM IDs e SEM horário)**
 - Input: "quero marcar consulta com Dr. João dia 15"
 - Dados: procedimento="consulta", data="2025-08-15", profissional="Dr. João", profissional_id=None, serviço_id=None, horario=None
-- DECISÃO: action="ask_user", missing_data=["horario"] (IDs podem ser resolvidos em paralelo depois)
-- MOTIVO: Com data presente e horário ausente, DEVE pedir horário antes de seguir para disponibilidade
+- DECISÃO: action=["buscar_profissional", "buscar_servico", "verificar_disponibilidade"]
+- MOTIVO: Resolver IDs e CONSULTAR disponibilidade para sugerir horários antes de perguntar um específico
 
 **Exemplo 3: Todos os IDs + Data (SEM horário)**
 - Input: "já tenho o serviço e profissional, só preciso do horário"
 - Dados: profissional_id="123", serviço_id="456", data="2025-08-20", horario=None
-- DECISÃO: action="ask_user", missing_data=["horario"]
-- MOTIVO: Mesmo com IDs + data, com horário ausente deve pedir o horário para então verificar disponibilidade
+- DECISÃO: action=["verificar_disponibilidade"]
+- MOTIVO: Com data presente e IDs resolvidos, consulte a disponibilidade e sugira horários
 
 **Exemplo 4: Faltam dados do cliente**
 - Input: "perfeito, quero confirmar às 15h"
@@ -1627,9 +1626,9 @@ Você NÃO executa tools - apenas decide o que deve ser feito.
 **NUNCA execute tools diretamente - apenas decida quais devem ser executadas.**
 
 ## LEMBRE-SE
-- **SEMPRE execute as tools necessárias ANTES de pedir dados do usuário, EXCETO quando intent=agendar_consulta tiver DATA presente e HORARIO ausente. Neste caso, PEÇA o horário primeiro (action="ask_user", missing_data=["horario"]).**
-- **NUNCA retorne missing_data vazio quando intent=agendar_consulta tiver data e horario=None.**
-- **NUNCA pule para disponibilidade sem horário quando profissional/procedimento vierem por nome; IDs podem ser resolvidos em paralelo.**
+- **SEMPRE execute as tools necessárias ANTES de pedir dados do usuário. QUANDO intent=agendar_consulta tiver DATA presente e HORÁRIO ausente, PRIMEIRO consulte a disponibilidade (action=["verificar_disponibilidade"]) e SUGIRA horários; só peça um horário se necessário.**
+- **É permitido consultar disponibilidade sem horário, desde que o serviço esteja identificado (servico_id) e, quando possível, com filtro de profissional.**
+- **Resolva IDs em paralelo sempre que possível (buscar_profissional/buscar_servico) antes ou junto da disponibilidade.**
 - **A ordem dos passos é CRÍTICA - siga exatamente a sequência**
 """
 
