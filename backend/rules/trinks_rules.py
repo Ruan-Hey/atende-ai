@@ -1552,6 +1552,8 @@ Você NÃO executa tools - apenas decide o que deve ser feito.
             - SEMPRE retorne a SEQUÊNCIA COMPLETA de ações na MESMA resposta, como um array ORDENADO, até o ponto em que seja necessário pedir dados ao usuário. Não retorne apenas o próximo passo.
             - PROIBIDO pedir "horário" antes de consultar disponibilidade.
             - Se intent=agendar_consulta com DATA presente e HORÁRIO ausente: após resolver IDs (quando possível), OBRIGATÓRIO incluir "verificar_disponibilidade" na mesma lista de ações; só depois peça o horário ao usuário (de preferência sugerindo 3–5 horários livres encontrados).
+            - NUNCA confirmar/agendar sem CPF e NOME COMPLETO. Depois de definir data e horário válidos, OBRIGATÓRIO pedir cpf e nome (action="ask_user" com missing_data=["cpf","nome"]) e só então executar ["coletar_cliente", "criar_reserva"].
+            - Se o usuário enviar um horário que NÃO foi sugerido nas mensagens anteriores, trate como horário proposto: valide esse horário executando "verificar_disponibilidade" para a data/serviço/profissional. Se indisponível, responda pedindo escolha de horário e SUGIRA 3–5 horários próximos disponíveis (não pergunte aberto).
 
 ## FLUXOS DE DECISÃO
 
@@ -1573,8 +1575,8 @@ Você NÃO executa tools - apenas decide o que deve ser feito.
             - Se tiver servico_id + data (e opcionalmente profissional_id) → action=["verificar_disponibilidade"]
             - Depois de obter disponibilidade, se horário ainda não tiver sido escolhido → action="ask_user" com missing_data=["horario"], sugerindo 3–5 horários livres encontrados.
 
-**PASSO 4: Coletar dados do cliente**
-- Se faltar cliente_id (CPF e Nome Completo) → action="ask_user"
+            **PASSO 4: Coletar dados do cliente (OBRIGATÓRIO antes de confirmar)**
+            - Se faltar cliente_id (CPF e Nome Completo) → action="ask_user" com missing_data=["cpf","nome"]
 
 **PASSO 5: Criar agendamento**
 - Se tiver todos os IDs + data + horário + CPF + Nome → action=["coletar_cliente", "criar_reserva"]
@@ -1618,11 +1620,16 @@ Você NÃO executa tools - apenas decide o que deve ser feito.
             - DECISÃO: ["verificar_disponibilidade"] → depois "ask_user" com missing_data=["horario"], sugerindo horários livres
             - MOTIVO: Com IDs + data e sem horário, verifique disponibilidade primeiro e só então peça o horário com sugestões.
 
-**Exemplo 4: Faltam dados do cliente**
+            **Exemplo 4: Data + horário informado pelo usuário (não sugerido antes)**
+            - Input: "pode ser às 16h"
+            - Dados: data="2025-10-22", horario="16:00" (não apareceu em sugestões anteriores)
+            - DECISÃO: ["verificar_disponibilidade"] para validar 16:00; se indisponível → "ask_user" com missing_data=["horario"], sugerindo 3–5 horários próximos disponíveis.
+
+            **Exemplo 5: Faltam dados do cliente (antes de confirmar)**
 - Input: "perfeito, quero confirmar às 15h"
 - Dados: profissional_id="123", serviço_id="456", data="2025-08-20", horario="15:00", cpf=None, nome=None
-- DECISÃO: action="ask_user"
-- MOTIVO: Tem tudo, só falta CPF e nome do cliente
+            - DECISÃO: action="ask_user" com missing_data=["cpf","nome"] → depois ["coletar_cliente", "criar_reserva"]
+            - MOTIVO: NUNCA confirmar/agendar sem CPF e nome do cliente
 
 ## EXEMPLOS DE DECISÃO - OUTROS INTENTS
 
