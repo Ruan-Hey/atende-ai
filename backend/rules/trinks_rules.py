@@ -1576,7 +1576,9 @@ Você NÃO executa tools - apenas decide o que deve ser feito.
             - Depois de obter disponibilidade, se horário ainda não tiver sido escolhido → action="ask_user" com missing_data=["horario"], sugerindo 3–5 horários livres encontrados.
 
             **PASSO 4: Coletar dados do cliente (OBRIGATÓRIO antes de confirmar)**
-            - Se faltar cliente_id (CPF e Nome Completo) → action="ask_user" com missing_data=["cpf","nome"]
+            - Se JÁ houver profissional_id, servico_id, data e horário VALIDADO (isto é, confirmado por "verificar_disponibilidade" ou constando entre os horários sugeridos recentemente) e ainda NÃO houver cliente_id:
+              → action="ask_user" com missing_data=["cpf","nome"]
+            - Não avance para "criar_reserva" sem ambos CPF e Nome Completo.
 
 **PASSO 5: Criar agendamento**
 - Se tiver todos os IDs + data + horário + CPF + Nome → action=["coletar_cliente", "criar_reserva"]
